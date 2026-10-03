@@ -42,3 +42,41 @@ The current state is a functional prototype for rigid body tracking, but is miss
 ### 5. Control Interface
 - **Current State**: Joint commands are currently sent by manually typing a comma-separated string into a Slicer text box (`0.0, 0.0, 0.0...`).
 - **Action Required**: This is a placeholder. Real interaction requires integrating an external tracker (via OpenIGTLink), a virtual joystick widget, or inverse kinematics (IK) dragging directly within the Slicer 3D view.
+
+## 🛠️ Prerequisites
+
+### Python Dependencies (Physics Server)
+The standalone physics server requires a standard Python environment (Python 3.8+ recommended). Install the required dependencies:
+```bash
+pip install -r surgical_physics_bridge/requirements.txt
+```
+*(Dependencies include: `pybullet`, `numpy`, `scipy`, `pyzmq`)*
+
+### 3D Slicer (Client UI)
+You will need to install **3D Slicer** (version 5.0 or later is recommended). Slicer brings its own embedded Python environment.
+- The `SlicerSurgicalBridge` module will automatically attempt to install `pyzmq` inside Slicer's environment upon first connection if it is not found.
+
+## 🚀 How to Run
+
+### Step 1: Start the Physics Server
+Navigate to the `surgical_physics_bridge` directory and launch the standalone PyBullet server. You must provide a URDF file for the robot.
+
+```bash
+cd surgical_physics_bridge
+python src/server.py --urdf <path_to_your_robot.urdf>
+```
+*Optional Flags:*
+- `--port`: ZMQ port (default is `5555`).
+- `--gui`: Add this flag to open the native PyBullet GUI to visualize the physics engine alongside Slicer.
+
+### Step 2: Load the Slicer Plugin
+1. Open **3D Slicer**.
+2. Go to `Edit` -> `Application Settings` -> `Modules`.
+3. Add the `SlicerSurgicalBridge` folder to your **Additional module paths**.
+4. Restart 3D Slicer.
+5. In the module drop-down, look for **Surgical Physics Bridge** (under the `Simulation` category).
+
+### Step 3: Connect and Interact
+1. In the Slicer module UI, click **"Connect to Physics Server"**. 
+   *(Slicer will now start subscribing to the physics state and updating internal `vtkMRMLLinearTransformNode`s.)*
+2. To send joint commands, enter a comma-separated list of joint angles (e.g., `0.1, -0.5, 1.2, ...`) matching your robot's controlled joints into the `q_des` field and click **"Send Command"**.

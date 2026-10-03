@@ -1,0 +1,266 @@
+/* ============================================================
+   Inter IIT — problem statement house style
+   ink #16130F · paper #FBF9F5 · accent #C1440E
+   muted #6B625A · hairline #E1DACE · tint #F4F1EA
+   Layout: wide left gutter holds section numbers + margin notes.
+   Shared by every problem statement. Do not restyle per document.
+   ============================================================ */
+
+@page {
+  size: A4;
+  margin: 15mm 20mm 14mm 20mm;
+  @bottom-left {
+    content: counter(page);
+    font-family: 'Lato', sans-serif;
+    font-weight: 900;
+    font-size: 8.5pt;
+    color: #C1440E;
+    margin-left: 0;
+  }
+  @bottom-right {
+    content: string(track);
+    font-family: 'Lato', sans-serif;
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #C3B9AD;
+  }
+}
+
+html { background: #e8e6e1; }
+
+body {
+  font-family: 'Bitstream Charter', Charter, Georgia, serif;
+  font-size: 8.8pt;
+  line-height: 1.37;
+  color: #16130F;
+  margin: 0;
+  hyphens: auto;
+}
+
+@media screen {
+  body {
+    max-width: 210mm;
+    margin: 10mm auto;
+    padding: 15mm 20mm;
+    background: #FBF9F5;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  }
+}
+
+p { margin: 0 0 2.1mm 0; text-align: justify; }
+ul, ol { margin: 0 0 2.4mm 0; padding-left: 4.2mm; }
+li { margin-bottom: 1.1mm; }
+li::marker { color: #C1440E; }
+em { font-style: italic; }
+a { color: #C1440E; text-decoration: underline; }
+
+
+/* ---------- MASTHEAD ---------- */
+.mast { margin-bottom: 5.5mm; }
+.mast .bar {
+  height: 2mm;
+  background: #C1440E;
+  margin-bottom: 3.4mm;
+  margin-left: 0;
+  width: 25mm;
+}
+.mast .lvl {
+  float: right;
+  font-family: 'Lato', sans-serif;
+  font-size: 6pt;
+  font-weight: 900;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  padding: 0.9mm 2.2mm 0.7mm 2.2mm;
+  margin-top: -0.6mm;
+}
+.mast .lvl.hard { background: #C1440E; color: #FBF9F5; }
+.mast .lvl.medium { border: 0.3mm solid #C3B9AD; color: #8A8076; }
+
+.mast .eyebrow {
+  font-family: 'Lato', sans-serif;
+  font-size: 6.8pt;
+  font-weight: 900;
+  letter-spacing: 2.6px;
+  text-transform: uppercase;
+  color: #C1440E;
+  margin-bottom: 2.4mm;
+  string-set: track content();
+}
+.mast h1 {
+  font-family: 'Lato', sans-serif;
+  font-weight: 900;
+  font-size: 22pt;
+  line-height: 1;
+  letter-spacing: -0.7px;
+  color: #16130F;
+  margin: 0 0 2.8mm 0;
+}
+.mast .deck {
+  font-size: 9.8pt;
+  line-height: 1.38;
+  color: #4A423A;
+  text-align: left;
+  margin: 0 0 3.4mm 0;
+}
+.mast .deck em { color: #16130F; }
+.mast .facts {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 0.5mm solid #16130F;
+  border-bottom: 0.35mm solid #E1DACE;
+  font-size: 7.6pt;
+}
+.mast .facts td { padding: 1.6mm 4mm 1.6mm 0; vertical-align: baseline; }
+.mast .facts .k {
+  display: block;
+  font-family: 'Lato', sans-serif;
+  font-size: 6pt;
+  font-weight: 900;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #9A8F82;
+  margin-bottom: 0.5mm;
+}
+
+/* ---------- HEADINGS ---------- */
+h2 {
+  font-family: 'Lato', sans-serif;
+  font-weight: 900;
+  font-size: 12pt;
+  letter-spacing: -0.2px;
+  line-height: 1.1;
+  color: #16130F;
+  margin: 5.2mm 0 2.2mm 0;
+  padding-top: 2mm;
+  border-top: 0.45mm solid #16130F;
+  page-break-after: avoid;
+}
+h2 .n {
+  display: inline-block;
+  margin-left: 0;
+  width: auto;
+  margin-right: 4mm;
+  text-align: left;
+  font-size: 11.5pt;
+  color: #C1440E;
+}
+h2 .opt {
+  font-family: 'Lato', sans-serif;
+  font-size: 6.5pt;
+  font-weight: 900;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #C1440E;
+  vertical-align: 2px;
+  margin-left: 1.8mm;
+}
+h3 {
+  font-family: 'Lato', sans-serif;
+  font-size: 6.6pt;
+  font-weight: 900;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+  color: #9A8F82;
+  margin: 3.2mm 0 1.2mm 0;
+  page-break-after: avoid;
+}
+
+/* ---------- MARGIN NOTES ---------- */
+.mn {
+  float: right;
+  clear: right;
+  width: 35%;
+  margin-left: 6mm;
+  margin-right: 0;
+  margin-top: 1.5mm;
+  margin-bottom: 2.5mm;
+  font-family: 'Lato', sans-serif;
+  font-size: 6.6pt;
+  line-height: 1.32;
+  color: #8A8076;
+  text-align: left;
+  border-top: 0.35mm solid #C1440E;
+  padding-top: 1.1mm;
+}
+.mn b { color: #16130F; font-weight: 900; display: block; }
+
+/* ---------- TWO CALLOUT TREATMENTS ONLY ---------- */
+.rules {
+  border-left: 0.6mm solid #C1440E;
+  padding-left: 3.8mm;
+  margin: 2.6mm 0 3mm 0;
+  page-break-inside: avoid;
+}
+.aside {
+  background: #F4F1EA;
+  padding: 2.6mm 3.4mm 2.2mm 3.4mm;
+  margin: 2.6mm 0 3mm 0;
+  page-break-inside: avoid;
+}
+.label {
+  display: block;
+  font-family: 'Lato', sans-serif;
+  font-size: 6.6pt;
+  font-weight: 900;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+  color: #C1440E;
+  margin-bottom: 1.4mm;
+}
+.aside .label { color: #8A8076; }
+.rules, .aside { font-size: 8.4pt; }
+.rules p:last-child, .rules ul:last-child,
+.aside p:last-child, .aside ul:last-child { margin-bottom: 0; }
+
+/* ---------- SPEC / CODE BLOCK ---------- */
+.spec {
+  font-family: 'DejaVu Sans Mono', monospace;
+  font-size: 6.9pt;
+  line-height: 1.48;
+  color: #3D362F;
+  background: #F4F1EA;
+  border-left: 0.6mm solid #C9BFAE;
+  padding: 2.4mm 3.4mm;
+  margin: 2.2mm 0 2.8mm 0;
+  page-break-inside: avoid;
+}
+.spec .c { color: #A79B8E; }
+.spec b { color: #16130F; font-weight: bold; }
+
+/* ---------- TABLES: hairlines only ---------- */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2.2mm 0 3mm 0;
+  font-size: 8.2pt;
+}
+table.data th {
+  font-family: 'Lato', sans-serif;
+  font-size: 6pt;
+  font-weight: 900;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #9A8F82;
+  text-align: left;
+  padding: 0 3mm 1.2mm 0;
+  border-bottom: 0.45mm solid #16130F;
+}
+table.data td {
+  padding: 1.5mm 3mm 1.5mm 0;
+  border-bottom: 0.3mm solid #E1DACE;
+  vertical-align: top;
+  line-height: 1.32;
+}
+table.data td.n { font-weight: bold; width: 38mm; padding-right: 5mm; }
+table.data td.id {
+  font-family: 'Lato', sans-serif;
+  font-weight: 900;
+  font-size: 10pt;
+  color: #C1440E;
+  width: 9mm;
+  padding-right: 3mm;
+}
+table.data th.id { width: 9mm; }

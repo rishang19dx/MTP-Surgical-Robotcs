@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Survey Report — Foundation Models and High-Fidelity Simulation in Next-Generation Medical Robotics</title>
+<link rel="stylesheet" href="ps.css">
+<style>
+/* Cover page only. House palette, no restyling of shared rules. */
+.cover { page-break-after: always; }
+.cover .bar {
+  height: 2mm; background: #C1440E;
+  margin-left: 0; width: 25mm; margin-bottom: 34mm;
+}
+.cover .eyebrow {
+  font-family: 'Lato', sans-serif; font-size: 6.8pt; font-weight: 900;
+  letter-spacing: 2.6px; text-transform: uppercase; color: #C1440E;
+  margin-bottom: 3.4mm;
+}
+.cover h1 {
+  font-family: 'Lato', sans-serif; font-weight: 900; font-size: 26pt;
+  line-height: 1.0; letter-spacing: -0.9px; color: #16130F;
+  margin: 0 0 4.5mm 0;
+}
+.cover .sub {
+  font-family: 'Lato', sans-serif; font-weight: 900; font-size: 11pt;
+  line-height: 1.2; letter-spacing: -0.2px; color: #C1440E;
+  margin: 0 0 6mm 0;
+}
+.cover .deck {
+  font-size: 10.4pt; line-height: 1.4; color: #4A423A;
+  text-align: left; margin: 0 0 12mm 0; max-width: 128mm;
+}
+.cover .deck em { color: #16130F; font-style: italic; }
+.roster {
+  width: 100%; border-collapse: collapse;
+  border-top: 0.5mm solid #16130F; margin-bottom: 10mm;
+}
+.roster td {
+  padding: 2.2mm 4mm 2.2mm 0; vertical-align: baseline;
+  border-bottom: 0.3mm solid #E1DACE; font-size: 9pt;
+}
+.roster td.who { font-weight: bold; width: 62mm; }
+.roster td.id {
+  font-family: 'DejaVu Sans Mono', monospace; font-size: 7.8pt; color: #6B625A;
+}
+.roster caption {
+  caption-side: top; text-align: left;
+  font-family: 'Lato', sans-serif; font-size: 6pt; font-weight: 900;
+  letter-spacing: 1.3px; text-transform: uppercase; color: #9A8F82;
+  padding-bottom: 1.4mm;
+}
+.colophon {
+  border-top: 0.35mm solid #E1DACE; padding-top: 2.6mm;
+  font-size: 9pt; color: #16130F;
+}
+.colophon td { padding: 1.4mm 6mm 1.4mm 0; vertical-align: baseline; font-weight: bold; }
+.colophon .k {
+  display: block; font-family: 'Lato', sans-serif; font-size: 6pt;
+  font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase;
+  color: #9A8F82; margin-bottom: 0.5mm;
+}
+/* numbered pipeline steps */
+ol.steps { padding-left: 0; list-style: none; margin: 0 0 2.6mm 0; counter-reset: st; }
+ol.steps li {
+  position: relative; padding-left: 7mm; margin-bottom: 1.8mm; counter-increment: st;
+}
+ol.steps li::before {
+  content: counter(st);
+  position: absolute; left: 0; top: 0.1mm;
+  font-family: 'Lato', sans-serif; font-weight: 900; font-size: 8pt;
+  color: #C1440E;
+}
+ol.steps b { font-weight: bold; }
+/* phase tag reusing house accent */
+.tag {
+  font-family: 'Lato', sans-serif; font-size: 6pt; font-weight: 900;
+  letter-spacing: 1.3px; text-transform: uppercase;
+  padding: 0.6mm 1.6mm; vertical-align: 1px; margin-left: 1.6mm;
+}
+.tag.opt { border: 0.3mm solid #C3B9AD; color: #8A8076; }
+.tag.core { background: #C1440E; color: #FBF9F5; }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER ==================== -->
+<div class="cover">
+  <div class="bar"></div>
+  <div class="eyebrow">Survey Report &nbsp;/&nbsp; Medical Robotics</div>
+  <h1>Foundation Models and<br>High-Fidelity Simulation in<br>Next-Generation Medical Robotics</h1>
+  <p class="sub">A comprehensive analysis of simulation platforms and Vision-Language-Action (VLA) models for surgical and diagnostic autonomy</p>
+
+  <p class="deck">The field of medical robotics is undergoing a profound transition from purely teleoperated systems—where the robot acts solely as an extension of the human surgeon's hands—toward supervised autonomy and intelligent physical assistance. This report addresses the development of <em>next-generation simulation platforms</em> and the evaluation of advanced learning architectures focusing on sim-to-real transfer, data efficiency, and multimodal learning paradigms.</p>
+
+  <table class="roster">
+    <caption>CS-498P: Major Technical Project (MTP)</caption>
+    <tr><td class="who">Rishang Yadav</td><td class="id">B23173</td></tr>
+  </table>
+
+  <table class="colophon">
+    <tr>
+      <td><span class="k">Supervisor</span>Dr. Deepak Raina</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ==================== BODY ==================== -->
+<div class="mast">
+  <div class="bar"></div>
+  <div class="lvl hard">Survey</div>
+  <div class="eyebrow">Survey Report &nbsp;/&nbsp; Medical Robotics</div>
+  <h1>Foundation Models and High-Fidelity Simulation</h1>
+  <p class="deck">To overcome the barriers of unstructured medical environments and achieve robust, generalizable performance, the convergence of <em>Embodied Artificial Intelligence</em>, <em>advanced physics-based simulation</em>, and <em>large-scale multimodal foundation models</em> is required.</p>
+</div>
+
+<!-- 1 -->
+<h2><span class="n">1</span>Introduction: The Paradigm Shift in Surgical and Diagnostic Autonomy</h2>
+
+<p>The field of medical robotics is undergoing a profound transition from purely teleoperated systems—where the robot acts solely as an extension of the human surgeon's hands—toward supervised autonomy and intelligent physical assistance. Historically, clinical robotics, such as the widely deployed da Vinci Surgical System, have operated at Level 1 on the surgical autonomy scale, providing essential tremor filtration and scaled kinematics but relying entirely on human cognitive and motor control.</p>
+
+<div class="mn"><b>Autonomy Levels</b>Level 2 represents task autonomy, while Level 3 requires conditional autonomy under human supervision.</div>
+<p>The next generation of medical robotics seeks to achieve Level 2 (task autonomy) and Level 3 (conditional autonomy), enabling systems to execute complex, multi-step interventions—such as autonomous suturing, tissue retraction, and intelligent diagnostic ultrasound scanning—while remaining under the supervision of a human clinician.</p>
+
+<div class="mn"><b>Challenges</b>Medical robots operate in unstructured, uncertain, and partially observable environments, making them uniquely challenging compared to industrial robotics.</div>
+<p>Developing autonomous capabilities for medical applications presents a unique set of challenges that diverge significantly from traditional industrial or tabletop robotics. Medical robots operate in highly unstructured, uncertain, and partially observable environments. Tissues are deformable, viscoelastic, and prone to unpredictable dynamic changes, such as bleeding, fluid accumulation, or anatomical shifting during respiration. Furthermore, sensing modalities in the operating room are highly specialized, relying on monocular or stereo endoscopic vision, ultrasound arrays, and complex tool-tissue interaction dynamics rather than standard RGB-D cameras.</p>
+
+<p>To overcome these barriers and achieve robust, generalizable performance, the convergence of Embodied Artificial Intelligence, advanced physics-based simulation, and large-scale multimodal foundation models is required. This report provides an exhaustive analysis addressing two critical objectives in the evolution of medical robotics. First, the development of comprehensive and efficient simulation platforms capable of capturing interaction dynamics, navigation, and imaging across diverse medical tasks. Second, the evaluation and benchmarking of advanced learning architectures—specifically Vision-Language-Action (VLA) models—focusing on sim-to-real transfer, data efficiency, and multimodal learning paradigms.</p>
+
+<!-- 2 -->
+<h2><span class="n">2</span>Objective 1: Next-Generation Simulation Platform Development</h2>
+
+<p>The foundational layer of any Artificial Intelligence training environment for medical robotics is the physics and rendering engine. Training robust policies for surgery or diagnostic scanning requires accurate modeling of soft-tissue deformation, complex tool-tissue contact dynamics, and the precise reproduction of clinical imaging modalities.</p>
+
+<h3>The Physics of Soft Tissue and Contact Dynamics</h3>
+
+<p>Traditional rigid-body physics simulators, such as standard implementations of MuJoCo or PyBullet, are fundamentally ill-equipped to handle the infinite degrees of freedom and non-linear behaviors inherent to biological tissue. To simulate anatomy accurately, modern simulation frameworks have evolved to rely on distinct mathematical and computational approaches, balancing biomechanical fidelity with the computational speed necessary for reinforcement learning.</p>
+
+<div class="mn"><b>FEM vs PBD</b>FEM offers high biomechanical accuracy but is computationally expensive, whereas PBD is fast but sacrifices physical realism during large displacements.</div>
+<p>The Finite Element Method (FEM) has long been the gold standard for biomedical modeling. FEM discretizes the soft body into thousands of small tetrahedrons to compute stress and strain matrices using continuum mechanics. Frameworks like the Simulation Open Framework Architecture (SOFA) utilize hyperelastic material models, such as Neo-Hookean or St. Venant-Kirchhoff, to accurately simulate large deformations, structural integrity, and tissue cutting. However, FEM is exceptionally computationally expensive. Computing the inversion of large stiffness matrices limits the ability to run the thousands of parallel environments required for modern Deep Reinforcement Learning (DRL) algorithms.</p>
+
+<p>Conversely, engines like NVIDIA PhysX (utilized in Isaac Sim and Isaac Lab) employ Position-Based Dynamics (PBD). PBD bypasses complex internal force calculations and directly modifies the positions of simulated particles to satisfy explicit physical constraints, such as volume preservation and distance thresholds. While PBD is unconditionally stable and highly parallelizable on GPUs—allowing for the rapid simulation of cloth, fluids, and basic soft tissues—it sacrifices physical accuracy compared to FEM, particularly when large position displacements or high-velocity interactions occur, making topological changes like cutting mathematically cumbersome.</p>
+
+<div class="mn"><b>Material Point Method</b>MPM combines Lagrangian particles with Eulerian grids, easily handling topological changes like tearing and suturing without re-meshing.</div>
+<p>To reconcile the trade-off between the physical realism of SOFA and the GPU-accelerated speed of Isaac Lab, recent advancements have introduced the Material Point Method (MPM) and Moving Least Squares MPM (MLS-MPM) into surgical simulators. MPM represents tissues as a collection of continuum Lagrangian particles that exchange mass and momentum with a background Eulerian grid, naturally handling topological changes like tearing, cutting, and suturing without the need for complex, real-time tetrahedral re-meshing. Emerging frameworks, such as CRESSim, build upon PhysX 5 to provide a high-performance environment for the da Vinci Research Kit (dVRK), enabling the simulation of contact-rich tasks like blood suction and tissue grasping by leveraging hybrid rigid-soft coupling.</p>
+
+<h3>High-Fidelity Medical Imaging Simulation</h3>
+
+<p>Beyond the physical mechanics of tissue, a medical robotics simulation platform must accurately render the highly specific sensory feedback utilized by clinicians. Optical rendering pipelines using standard rasterization or basic ray tracing fail to capture the complex, noise-heavy realities of stereoscopic endoscopy and ultrasonography.</p>
+
+<h4>Robotic Ultrasound: The SonoGym Framework</h4>
+
+<div class="mn"><b>SonoGym</b>A dual-track simulation architecture for training AI agents for robotic ultrasound procedures.</div>
+<p>Ultrasound (US) is an indispensable clinical modality due to its real-time capabilities and non-invasive nature, making it ideal for orthopedic surgeries, needle insertion guidance, and anatomical reconstruction. However, raw US images are characterized by speckle noise, acoustic shadowing, and reverberation artifacts. The SonoGym simulation platform represents a state-of-the-art framework specifically designed to train AI agents for robotic ultrasound procedures. SonoGym integrates common robotic manipulators, such as the KUKA Med and Franka Panda, interfacing them with highly realistic patient models derived from the TotalSegmentator dataset, which incorporates 3D CT volumes and anatomical label maps.</p>
+
+<p>To bridge the visual sim-to-real gap, SonoGym employs a dual-track simulation architecture:</p>
+
+<table class="data">
+  <tr><th>Simulation Approach</th><th>Mechanism</th><th>Advantages</th><th>Limitations</th></tr>
+  <tr><td class="n">Physics-Based (Model-Based)</td><td>GPU-accelerated ray casting computes acoustic impedance, reflection, and backscattering by traversing a CT volume. It calculates acoustic energy attenuation and convolves the reflection with a Point Spread Function (PSF).</td><td>Explicitly models the physics of sound propagation; highly deterministic and controllable.</td><td>Computationally intensive; may lack the nuanced organic textures seen in real clinical scans.</td></tr>
+  <tr><td class="n">Generative (Learning-Based)</td><td>Utilizes generative adversarial networks (GANs), such as pix2pix architectures, to directly translate 2D slices extracted from a CT volume into realistic ultrasound representations.</td><td>Achieves high photorealism, effectively capturing complex domain-specific artifacts and speckle distributions.</td><td>Susceptible to generative hallucinations; requires large datasets of paired CT-US imagery for training.</td></tr>
+</table>
+
+<p>By applying intensity histogram matching and training on large-scale paired ex-vivo CT-US datasets, the generative approach in SonoGym achieves Structural Similarity Index Measures (SSIM) of 0.3940 and Learned Perceptual Image Patch Similarity (LPIPS) scores of 0.2415, outputting highly realistic US images at parallelized speeds suitable for DRL training.</p>
+
+<h4>Endoscopic Video Synthesis and Action-Conditioned World Models</h4>
+
+<p>For laparoscopic and open surgeries, visual rendering must account for the unique optical properties of endoscopes, including intense localized lighting, constrained fields of view, and frequent occlusions from biological fluids. Instead of relying on manual rendering pipelines, the field is rapidly shifting toward the use of Video World Models.</p>
+
+<div class="mn"><b>Cosmos-H</b>An action-conditioned video diffusion model that infers tissue dynamics directly from latent surgical data distributions.</div>
+<p>The Cosmos-H-Surgical-Simulator is an action-conditioned video diffusion model fine-tuned on surgical data spanning multiple robotic platforms. Built upon the Cosmos-Predict 2.5 architecture, this 2-billion-parameter latent video diffusion transformer accepts a single initial context frame of a surgical scene alongside a sequence of proposed kinematic actions. It autoregressively generates future video frames that visually depict the outcome of those actions. This represents a paradigm shift from traditional FEM physics simulators. Instead of mathematically calculating tissue deformation, the world model implicitly infers tissue dynamics, specular lighting changes, and instrument-tissue interactions directly from its latent understanding of the surgical data distribution.</p>
+
+<p>Evaluations of the Cosmos-H-Surgical-Simulator utilizing L1 (mean absolute error) and SSIM metrics demonstrate that the model maintains visual fidelity over 72-frame autoregressive rollouts. While benchtop scenes maintain low L1 and high SSIM due to controlled lighting and static backgrounds, tissue-based scenes exhibit higher variance, reflecting the inherent stochasticity and visual complexity of predicting in-body environments. Furthermore, specialized domain-adapted iterations, such as the cosmos3-nanoh-surgical-dvrk checkpoint hosted on Hugging Face, optimize the nano-scale world model explicitly for dVRK endoscopic scenes. This model focuses heavily on short-horizon kinematic consistency and near-future tool motion prediction, utilizing a native 20D dVRK action representation and 16-frame action chunks to validate simulation behavior in visually constrained environments.</p>
+
+<!-- 3 -->
+<h2><span class="n">3</span>Objective 2: Learning, Benchmarking, and The Data Foundation</h2>
+
+<div class="mn"><b>Data Bottleneck</b>Historically limited by strict safety protocols and privacy rules, surgical data was siloed to single institutions.</div>
+<p>The most significant barrier to the development of generalized artificial intelligence for medical robotics has been a structural data bottleneck. Unlike the general robotics community, which has amassed millions of trajectories in consolidated corpora like the Open X-Embodiment dataset, medical robotics data collection is severely constrained. Navigating stringent clinical safety protocols, Institutional Review Board (IRB) approvals, patient privacy regulations, and the technical complexity of logging high-frequency kinematics from proprietary surgical platforms has historically limited datasets to single-institution, single-embodiment silos. Early benchmarks like JIGSAWS offered merely three hours of data, fundamentally restricting the generalization capabilities of learned policies.</p>
+
+<h3>Aggregating Global Surgical Data: Open-H-Embodiment</h3>
+
+<p>The Open-H-Embodiment dataset systematically resolves this bottleneck, serving as the critical infrastructure for training surgical foundation models. Representing the largest open dataset of paired medical robotic video and synchronized kinematics to date, Open-H comprises 770 hours of data, encompassing over 124,000 trajectories aggregated from 49 global institutions.</p>
+
+<p>The corpus exhibits unparalleled diversity across multiple dimensions, establishing the variance required for robust representation learning:</p>
+
+<table class="data">
+  <tr><th>Data Dimension</th><th>Scope within Open-H-Embodiment</th><th>Significance for Policy Learning</th></tr>
+  <tr><td class="n">Embodiment Diversity</td><td>Spans 20 distinct hardware platforms, including surgical systems (CMR Versius, da Vinci Si/Xi, MIRA, Maestro, BiTrack, dVRK), flexible endoscopes, and general manipulators adapted for healthcare (Franka Panda, UR5e, KUKA).</td><td>Enables cross-embodiment transfer experiments, forcing the model to learn universal physical interactions rather than overfitting to the idiosyncratic forward kinematics of a single robot.</td></tr>
+  <tr><td class="n">Task &amp; Realism Spectrum</td><td>Ranges from digital simulation and phantom benchtop tasks (peg transfer, needle pickup) to full, multi-hour clinical procedures recorded in live human operating rooms (e.g., 172 hours of cholecystectomy, 169 hours of prostatectomy).</td><td>Supports progressive model validation; allows foundation models to learn basic manipulation primitives before transferring those skills to highly unstructured in vivo clinical workflows.</td></tr>
+  <tr><td class="n">Multimodal Richness</td><td>Features stereo endoscopic feeds, wrist-mounted camera perspectives, synchronized B-mode ultrasound, depth maps, and synchronized eye-gaze tracking of human operators.</td><td>Provides the dense, multi-perspective sensory input required for models to construct accurate 3D spatial representations and implicitly estimate depth from 2D pixel arrays.</td></tr>
+</table>
+
+<p>To ensure this disparate data is usable by downstream models, the Open-H initiative standardizes all kinematic trajectories using the LeRobot v2.1 format. Furthermore, to support temporally extended, non-Markovian clinical procedures, the dataset incorporates phase-level and gesture-level annotations for hundreds of hours of clinical data, enabling models to contextualize actions within the broader arc of a surgical intervention.</p>
+
+<h3>The Evolution of Vision-Language-Action (VLA) Models</h3>
+
+<p>The aggregation of the Open-H dataset has catalyzed the development of large-scale Vision-Language-Action (VLA) models tailored specifically to the medical domain. These architectures aim to fuse high-level semantic reasoning—derived from vast pre-training on text and images—with low-level continuous robotic control.</p>
+
+<h4>From Autoregressive Decoding to Flow Matching</h4>
+
+<div class="mn"><b>Compounding Errors</b>Autoregressive token generation fails in surgery because an early spatial error cannot be revised.</div>
+<p>Early VLA architectures, such as RT-2 and OpenVLA, relied on autoregressive decoding mechanisms. Visual and linguistic inputs are processed by a Vision-Language Model (VLM), which predicts continuous action trajectories by discretizing the action space into "action tokens" and outputting them sequentially. While highly effective at semantic reasoning, autoregressive decoding poses severe limitations in contact-rich surgical environments. Because tokens are generated sequentially, an error in an early token (e.g., an incorrect spatial coordinate) cannot be revised in subsequent iterations of the same generation step. In delicate surgical tasks where millimeter-level precision is required, this compounding error mechanism frequently leads to catastrophic task failure.</p>
+
+<div class="mn"><b>Flow Matching</b>Replaces autoregressive decoding by refining continuous action chunks in parallel, allowing models to globally self-correct.</div>
+<p>To circumvent this, the field has pivoted toward continuous diffusion and flow-matching architectures. Models like π0 and the GR00T-H series utilize a discrete diffusion or flow-matching transformer head. Rather than predicting actions token-by-token, flow-matching architectures generate an entire action chunk (e.g., a trajectory of 50 timesteps) in parallel. The model begins with pure noise and iteratively refines the continuous-value action vectors over multiple denoising steps. This iterative refinement allows the model to globally self-correct the trajectory before execution, leading to substantially smoother, more accurate, and more resilient surgical maneuvers. Other emerging approaches, such as the LingBot-VA-Suture model, decouple visual dynamics modeling from action control entirely. Operating as a world action model, LingBot-VA utilizes a conditional flow matching mechanism to predict chunks of future latent visual states while simultaneously decoding the corresponding end-effector actions via inverse dynamics.</p>
+
+<h4>GR00T-H: The Foundational Surgical VLA</h4>
+
+<p>Leveraging the Open-H dataset, researchers developed GR00T-H, a 3-billion-parameter Vision-Language-Action model specifically optimized for medical robotics. GR00T-H builds upon the NVIDIA Isaac GR00T-N1.7 architecture. It utilizes a Cosmos-Reason2-2B backbone to encode multi-view image observations (such as concurrent endoscopic and wrist cameras) alongside natural language instructions. The encoded tokens are subsequently processed by a flow-matching Diffusion Transformer (DiT), which denoises the continuous robotic actions.</p>
+
+<p>To handle the multi-embodiment nature of the Open-H dataset, GR00T-H implements embodiment-specific action heads. While the core VLM backbone learns generalized representations of tissue manipulation, depth estimation, and surgical logic, distinct Multi-Layer Perceptrons (MLPs) decode the final velocity predictions for specific robotic platforms (e.g., dVRK versus CMR Versius).</p>
+
+<div class="mn"><b>SutureBot Benchmark</b>GR00T-H achieved a 25% end-to-end success rate, whereas baseline models failed entirely (0%).</div>
+<p>Extensive evaluations on the SutureBot benchmark—a highly structured, long-horizon suturing task comprising needle pickup, handover, tissue piercing, extraction, and knot-tying—demonstrated the superiority of the GR00T-H architecture. Baseline autoregressive models and pure imitation learning Action Chunking Transformers (ACT) failed entirely, completing 0% of the end-to-end trials. In contrast, GR00T-H achieved a 25% end-to-end success rate. The model's robustness was further validated in an ex vivo clinical setting utilizing skin-on pork belly. Over a 29-subtask sequence requiring needle throwing, wound opening, and suture cutting, GR00T-H achieved an overall average sub-task success rate of 64%. The model exhibited near-perfect execution on structured manipulation primitives but demonstrated lower efficacy on steps requiring fine-contact tissue coordination, such as cutting, illuminating the specific boundary where current visual-kinematic models struggle to replicate tactile feedback.</p>
+
+<p>Crucially, GR00T-H exhibited remarkable data efficiency. When fine-tuned on only 33% of a target dataset, GR00T-H matched the performance of specialized ACT models trained on the full dataset, proving that prior exposure to the massive Open-H corpus instills strong, transferrable surgical priors.</p>
+
+<!-- 4 -->
+<h2><span class="n">4</span>Addressing the Sim-to-Real Gap and Hierarchical Control</h2>
+
+<p>Deploying foundation models directly to physical robots in the operating room presents immediate safety and precision challenges. To bridge the gap between high-level surgical planning and low-level physical control, hierarchical frameworks and specialized kinematic representations are essential.</p>
+
+<h3>Overcoming Hardware Hysteresis with Hybrid-Relative Actions</h3>
+
+<div class="mn"><b>Hybrid-Relative Actions</b>Bypasses hardware inaccuracies (like cable stretch) by predicting translations relative to the camera and rotations relative to the end-effector.</div>
+<p>A persistent challenge in bridging the sim-to-real gap, or transferring policies between different surgical robots, is hardware inaccuracy. Cable-driven robotic systems, such as the widely used da Vinci Research Kit (dVRK), suffer from severe mechanical hysteresis, cable stretch, and potentiometer inaccuracies, particularly in their passive setup joints. A policy trained to output absolute Cartesian coordinates (camera-centric actions) will fail catastrophically when deployed on the physical robot, as the robot's internal proprioceptive estimation of its end-effector position frequently diverges by several centimeters from physical reality.</p>
+
+<p>To resolve this, advanced imitation learning frameworks have adopted Hybrid-Relative Action representations. By predicting differential spatial translations relative to the static endoscope camera tip, while simultaneously predicting delta rotations relative to the moving end-effector frame, the policy mathematically bypasses the inaccurate joints of the robotic arm. As demonstrated in the Surgical Robot Transformer (SRT) evaluations across tissue lifting, needle handover, and knot-tying tasks, policies trained on hybrid-relative actions can seamlessly adapt to physical disruptions—such as a researcher manually altering the setup joints mid-operation—while absolute-action policies immediately crash. This representation forms the fundamental requirement for scaling models across datasets that lack pristine, calibrated kinematics.</p>
+
+<h3>The SRT-H Hierarchical Architecture</h3>
+
+<div class="mn"><b>SRT-H</b>Uses a High-Level language policy for semantic error correction and a Low-Level policy for direct kinematic control.</div>
+<p>The Hierarchical Surgical Robot Transformer (SRT-H) framework exemplifies the integration of language models for real-time error correction. Operating on the complex task of clipping and cutting the cystic duct and artery during an ex vivo cholecystectomy, the SRT-H framework separates the control problem into two interacting policies:</p>
+
+<ol class="steps">
+  <li><b>High-Level (HL) Policy:</b> Utilizing a Swin Transformer vision encoder paired with a Transformer Decoder, the HL policy analyzes a temporal history of endoscopic frames and outputs natural language commands. Crucially, the HL policy acts as a real-time supervisor. If it detects a deviation (e.g., the instrument grasps the wrong tissue or overshoots the duct), it generates corrective language instructions (e.g., "move left arm towards me") rather than nominal task instructions.</li>
+  <li><b>Low-Level (LL) Policy:</b> An EfficientNet-based network processes the real-time visual feed and conditions its output on the language embeddings generated by the HL policy (via Feature-wise Linear Modulation, or FiLM, layers). The LL policy directly decodes the 20-dimensional kinematic vector necessary to drive the robot arms.</li>
+</ol>
+
+<p>This hierarchical structure allows the system to self-correct during long-horizon tasks. In extensive ex vivo trials, SRT-H demonstrated a 100% success rate across eight unseen porcine gallbladders, successfully executing 17 distinct subtasks and autonomously generating an average of six self-corrections per procedure. Ablation studies confirmed that the removal of the high-level language correction module resulted in a severe degradation of recovery capabilities, emphasizing the necessity of semantic oversight in unpredictable clinical environments.</p>
+
+<!-- 5 -->
+<h2><span class="n">5</span>Benchmarking Frameworks and MDP Formulations</h2>
+
+<p>As foundation models scale, establishing rigorous, standardized benchmarks becomes imperative to quantify progress and identify architectural bottlenecks. In the medical domain, generic robotic benchmarks are insufficient to test the nuances of clinical intervention.</p>
+
+<h3>SurgVLA-Bench</h3>
+
+<div class="mn"><b>SurgVLA-Bench</b>A hierarchical taxonomy of surgical tasks spanning from Atomic (Level 1) to Composite (Level 3) coordination.</div>
+<p>The SurgVLA-Bench represents the first comprehensive evaluation framework for Vision-Language-Action models in laparoscopic environments. Built upon the SurRoL simulator, the benchmark establishes a clinically relevant, hierarchical taxonomy of surgical tasks:</p>
+
+<ul>
+  <li><strong>Level 1 (Atomic Tasks):</strong> Basic targeting and acquisition, such as picking up a surgical needle or applying electrocoagulation to a specific, unobstructed blood spot on an organ.</li>
+  <li><strong>Level 2 (Conditional Tasks):</strong> Introduces visual distractors and dynamic decision-making. For example, the policy must identify and clip a specific bleeding vessel segment while actively ignoring adjacent, non-bleeding vasculature.</li>
+  <li><strong>Level 3 (Composite Tasks):</strong> Requires multi-step spatial reasoning and complex tool coordination, such as a complete hemostasis procedure involving grasping gauze, transporting it across the anatomical cavity, and applying sustained pressure to a target hemorrhage site.</li>
+</ul>
+
+<p>Evaluations on SurgVLA-Bench reveal that while current VLAs possess strong semantic localization capabilities (easily identifying anatomical targets), they consistently fail at the point of physical contact due to the constrained endoscopic field of view, frequent instrument occlusions, and the ultra-high precision required for tool-tissue interaction.</p>
+
+<h3>Evaluating Reinforcement Learning in Diagnostic Robotics</h3>
+
+<div class="mn"><b>MDP Formulations</b>Diagnostic ultrasound requires specialized MDPs: POMDPs for navigation, and Constrained MDPs for safe drilling.</div>
+<p>In diagnostic and image-guided applications, specifically robotic ultrasound, evaluation metrics and Markov Decision Process (MDP) formulations differ significantly from surgical manipulation. The SonoGym framework evaluates agents across three specific mathematical formulations to capture the unique constraints of ultrasound tasks:</p>
+
+<ol class="steps">
+  <li><b>US Navigation (POMDP):</b> The objective is to move the probe along the skin to locate an unknown target anatomy using solely the real-time US image as feedback. This is formulated as a Partially Observable Markov Decision Process. Deep RL algorithms like Proximal Policy Optimization (PPO) demonstrate high stability and superior rotation tracking compared to Imitation Learning baselines, which often suffer from higher positional variance.</li>
+  <li><b>Bone Surface Reconstruction (Submodular MDP):</b> This task requires optimizing the sweep path of the probe to generate a dense 3D reconstruction of a vertebra. Because the reward relies on the history of unique spatial points already scanned (a non-additive trajectory reward), the problem is mathematically formulated as a submodular MDP. Submodular PPO agents significantly outperform heuristic, open-loop scanning paths, generating efficient, circular sweep patterns that maximize volumetric coverage while simultaneously minimizing the total trajectory length.</li>
+  <li><b>US-Guided Surgery (State-Wise Constrained MDP):</b> Involving the safe driving of a surgical drill into a vertebra while adhering to strict anatomical boundaries, this task demands rigorous safety constraints. By incorporating Safe Reinforcement Learning architectures (e.g., SafeRPlan utilizing safety filters), policies ensure high "safe ratio" compliance. The state-wise constrained MDP maintains conservative margins around critical tissues, heavily penalizing any trajectory deviation that threatens to breach defined anatomical safety corridors, a capability that standard Action Chunking Transformers often fail to replicate reliably.</li>
+</ol>
+
+<!-- 6 -->
+<h2><span class="n">6</span>Future Research Directions</h2>
+
+<div class="mn"><b>Predictive Control</b>Deploying world models online within MPC to dynamically select safe trajectories in real-time.</div>
+<p>The rapid convergence of high-fidelity simulation, massive open-source data aggregation, and flow-matching foundation models opens several critical pathways for future research in medical robotics.</p>
+
+<ol class="steps">
+  <li><b>Unified World Models for Predictive Control:</b> Current world models, such as the Cosmos-H-Surgical-Simulator and cosmos3-nanoh-surgical-dvrk, are primarily utilized for offline video generation, synthetic data generation, and automated policy validation. The next technological frontier involves deploying these models online as predictive engines within a Model Predictive Control (MPC) framework. By autoregressively predicting the visual and physical outcomes of thousands of potential action sequences in real-time, the robotic system can dynamically select trajectories that avoid tissue damage or excessive suture tension, effectively functioning as an intuitive "clinical imagination" engine.</li>
+  <li><b>Integrating Haptic and Tactile Modalities:</b> While the Open-H dataset provides unprecedented visual and kinematic diversity, true surgical mastery requires tactile feedback. The integration of force-torque sensors and vision-based tactile sensors (e.g., GelSight) into the VLA tokenization pipeline is essential. Future neural architectures must utilize cross-attention mechanisms to fuse visual occlusion events with sudden spikes in tactile impedance. This multimodal fusion will govern tasks requiring delicate force modulation, such as tissue dissection, suturing tensioning, and the detection of pathological anomalies beneath the tissue surface.</li>
+  <li><b>Continual Learning and Surgeon-in-the-Loop Interventions:</b> Medical environments are non-stationary; anatomical presentations vary wildly between patient demographics, and surgical tools degrade mechanically over time. Systems must move beyond static post-training phases. Implementing continual learning algorithms based on real-time DAgger loops—where a supervising surgeon can verbally or manually correct a deviating policy (as demonstrated in the SRT-H framework)—will allow systems to dynamically update their latent representations without undergoing computationally exhaustive complete retraining cycles.</li>
+  <li><b>Advancing Differentiable Simulation:</b> To fully close the sim-to-real gap, simulators must evolve beyond discrete physics engines. The integration of fully differentiable frameworks (e.g., Taichi, Brax), operating alongside Physics-Informed Neural Networks (PINNs), will allow simulation parameters—such as tissue elasticity, Poisson's ratio, and friction coefficients—to be automatically optimized using gradient descent on real-world surgical footage. This continuous alignment between the virtual and physical environments will dramatically accelerate the generation of zero-shot transferrable policies, ensuring that simulation platforms remain perfectly synchronized with the physical reality of the operating room.</li>
+</ol>
+
+<!-- 7 -->
+<h2><span class="n">7</span>Conclusion</h2>
+
+<p>The pursuit of autonomy in medical robotics has fundamentally shifted from the design of narrow, task-specific, hand-crafted control algorithms to the deployment of generalized, data-driven foundation models. This transition is underpinned by massive collaborative data initiatives, most notably Open-H-Embodiment, which provide the critical mass of multimodal, cross-embodiment data required to train Vision-Language-Action policies like GR00T-H. Simultaneously, advanced simulation frameworks like SonoGym and Cosmos-H, leveraging hybrid physics engines, deep generative rendering, and latent world models, have democratized the ability to safely train and benchmark these policies in highly realistic clinical scenarios.</p>
+
+<div class="rules">
+  <span class="label">Summary</span>
+  <p>As architectural paradigms evolve from autoregressive token generation to continuous flow matching, and as hierarchical control structures increasingly allow for semantic error correction, the robustness of automated surgical manipulation continues to rise. While fully autonomous, unmonitored surgery remains a distant prospect, the integration of these technologies establishes the groundwork for sophisticated, AI-driven surgical copilots capable of standardizing clinical outcomes, alleviating provider fatigue, and democratizing access to precision healthcare globally.</p>
+</div>
+
+</body>
+</html>

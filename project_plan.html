@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project Plan — Foundation Models and High-Fidelity Simulation in Next-Generation Medical Robotics</title>
+<link rel="stylesheet" href="ps.css">
+<style>
+/* Cover page only. House palette, no restyling of shared rules. */
+.cover { page-break-after: always; }
+.cover .bar {
+  height: 2mm; background: #C1440E;
+  margin-left: 0; width: 25mm; margin-bottom: 34mm;
+}
+.cover .eyebrow {
+  font-family: 'Lato', sans-serif; font-size: 6.8pt; font-weight: 900;
+  letter-spacing: 2.6px; text-transform: uppercase; color: #C1440E;
+  margin-bottom: 3.4mm;
+}
+.cover h1 {
+  font-family: 'Lato', sans-serif; font-weight: 900; font-size: 26pt;
+  line-height: 1.0; letter-spacing: -0.9px; color: #16130F;
+  margin: 0 0 4.5mm 0;
+}
+.cover .sub {
+  font-family: 'Lato', sans-serif; font-weight: 900; font-size: 11pt;
+  line-height: 1.2; letter-spacing: -0.2px; color: #C1440E;
+  margin: 0 0 6mm 0;
+}
+.cover .deck {
+  font-size: 10.4pt; line-height: 1.4; color: #4A423A;
+  text-align: left; margin: 0 0 12mm 0; max-width: 128mm;
+}
+.cover .deck em { color: #16130F; font-style: italic; }
+.roster {
+  width: 100%; border-collapse: collapse;
+  border-top: 0.5mm solid #16130F; margin-bottom: 10mm;
+}
+.roster td {
+  padding: 2.2mm 4mm 2.2mm 0; vertical-align: baseline;
+  border-bottom: 0.3mm solid #E1DACE; font-size: 9pt;
+}
+.roster td.who { font-weight: bold; width: 62mm; }
+.roster td.id {
+  font-family: 'DejaVu Sans Mono', monospace; font-size: 7.8pt; color: #6B625A;
+}
+.roster caption {
+  caption-side: top; text-align: left;
+  font-family: 'Lato', sans-serif; font-size: 6pt; font-weight: 900;
+  letter-spacing: 1.3px; text-transform: uppercase; color: #9A8F82;
+  padding-bottom: 1.4mm;
+}
+.colophon {
+  border-top: 0.35mm solid #E1DACE; padding-top: 2.6mm;
+  font-size: 9pt; color: #16130F;
+}
+.colophon td { padding: 1.4mm 6mm 1.4mm 0; vertical-align: baseline; font-weight: bold; }
+.colophon .k {
+  display: block; font-family: 'Lato', sans-serif; font-size: 6pt;
+  font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase;
+  color: #9A8F82; margin-bottom: 0.5mm;
+}
+/* numbered pipeline steps */
+ol.steps { padding-left: 0; list-style: none; margin: 0 0 2.6mm 0; counter-reset: st; }
+ol.steps li {
+  position: relative; padding-left: 7mm; margin-bottom: 1.8mm; counter-increment: st;
+}
+ol.steps li::before {
+  content: counter(st);
+  position: absolute; left: 0; top: 0.1mm;
+  font-family: 'Lato', sans-serif; font-weight: 900; font-size: 8pt;
+  color: #C1440E;
+}
+ol.steps b { font-weight: bold; }
+/* phase tag reusing house accent */
+.tag {
+  font-family: 'Lato', sans-serif; font-size: 6pt; font-weight: 900;
+  letter-spacing: 1.3px; text-transform: uppercase;
+  padding: 0.6mm 1.6mm; vertical-align: 1px; margin-left: 1.6mm;
+}
+.tag.opt { border: 0.3mm solid #C3B9AD; color: #8A8076; }
+.tag.core { background: #C1440E; color: #FBF9F5; }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER ==================== -->
+<div class="cover">
+  <div class="bar"></div>
+  <div class="eyebrow">Project Plan &nbsp;/&nbsp; Medical Robotics</div>
+  <h1>Foundation Models and<br>High-Fidelity Simulation in<br>Next-Generation Medical Robotics</h1>
+  <p class="sub">Step-by-Step Research Project Plan &amp; Literature Survey</p>
+
+  <p class="deck">In order to execute this vision and target a high-impact publication, the project must be sequentially executed in two major phases: developing a framework that overcomes current simulation bottlenecks, and then deploying that framework to benchmark state-of-the-art VLA architectures.</p>
+
+  <table class="roster">
+    <caption>CS-498P: Major Technical Project (MTP)</caption>
+    <tr><td class="who">Rishang Yadav</td><td class="id">B23173</td></tr>
+  </table>
+
+  <table class="colophon">
+    <tr>
+      <td><span class="k">Supervisor</span>Dr. Deepak Raina</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ==================== BODY ==================== -->
+<div class="mast">
+  <div class="bar"></div>
+  <div class="lvl hard">Project Plan</div>
+  <div class="eyebrow">Project Plan &nbsp;/&nbsp; Medical Robotics</div>
+  <h1>Project Plan &amp; Literature Survey</h1>
+  <p class="deck">In order to execute this vision and target a high-impact publication, the project must be sequentially executed in two major phases: developing a framework that overcomes current simulation bottlenecks, and then deploying that framework to benchmark state-of-the-art VLA architectures.</p>
+</div>
+
+<!-- 1 -->
+<h2><span class="n">1</span>Phase 1: Development of the Simulation Framework</h2>
+
+<p><b>Step 1.1: Overcoming Model-Based (Physics) Limitations with Hybrid Solvers</b></p>
+<ul>
+  <li><b>The Problem:</b> Current simulation heavily relies on either the Finite Element Method (FEM) or Position-Based Dynamics (PBD). Simulators like the SOFA framework use FEM, which provides highly accurate biomechanical modeling but is computationally expensive, making it too slow for large-scale Deep Reinforcement Learning (DRL). Conversely, engines like NVIDIA PhysX or Isaac Lab use PBD, which is fast and GPU-acceleratable but lacks physical realism for complex topological changes like tissue cutting, often relying on non-physical constraints to simulate tissue-suture interactions.</li>
+  <li><b>The Solution:</b> Base the physical simulation on the Material Point Method (MPM) or Moving Least Squares MPM (MLS-MPM). MPM represents soft tissues in a way that naturally preserves physical realism during large deformations, cutting, and suturing without the need for complex re-meshing. Frameworks like CRESSim-MPM demonstrate that combining MPM for soft tissue with PBD for sutures provides stable, GPU-optimized parallel environments necessary for modern AI training.</li>
+  <li><b>Sim-to-Real Alignment:</b> Integrate Differentiable Simulation and Physics-Informed Neural Networks (PINNs). By making the physics solver differentiable (e.g., using Taichi or Brax), gradient descent can automatically tune simulation parameters (like Young's modulus or friction) so that the simulated tissue behaves identically to real-world surgical footage, effectively closing the sim-to-real gap.</li>
+</ul>
+
+<p><b>Step 1.2: Overcoming Learning-Based (World Model) Limitations</b></p>
+<ul>
+  <li><b>The Problem:</b> Purely generative image models produce highly realistic textures but often lack physics-based temporal consistency. Meanwhile, emerging action-conditioned video world models occasionally hallucinate tool geometry, struggle with specular lighting on wet tissues, and degrade in visual quality over long horizons.</li>
+  <li><b>The Solution:</b> Transition from basic generative networks to kinematic Action-Conditioned Video World Models, or World-Action Models (WAMs). WAMs jointly predict future video observations and action chunks, allowing them to act as closed-loop, receding-horizon controllers. The simulation should utilize conditional video diffusion. For example, the Surgical Action World (SAW) model conditions the generative process on multiple lightweight signals: a reference surgical scene, a tissue affordance mask, and 2D tool-tip trajectories, ensuring that tool-tissue interactions remain highly controllable.</li>
+  <li><b>Hybridization:</b> To address the hallucination problem, tightly couple the learning-based renderer with the MPM physics solver. Use the MPM physics engine to compute the ground-truth tool position, tissue deformation boundaries, and collision states, and feed these as strict conditioning masks into the world model's diffusion process.</li>
+</ul>
+
+<!-- 2 -->
+<h2><span class="n">2</span>Phase 1 Literature Survey</h2>
+
+<ul>
+  <li><b>Physics-based Modeling limitations:</b> Studies like AMBF and CRESSim highlight the gap between accurate but slow FEM frameworks (SOFA) and fast but less realistic PBD engines (Isaac Sim, PhysX) for surgical tissue.</li>
+  <li><b>MPM and Hybrid Approaches:</b> Literature on CRESSim-MPM explores using Material Point Method for soft bodies coupled with PBD for sutures to achieve real-time cutting and suturing without meshing bottlenecks.</li>
+  <li><b>Differentiable Simulators:</b> Generative soft robotics utilizes differentiable simulations (Taichi, Brax, SOFA) and Physics-Informed Neural Networks (PINNs) to mathematically align virtual geometries with physical reality.</li>
+  <li><b>Surgical World Models:</b> Recent advancements include Cosmos-H-Surgical-Simulator for multi-embodiment video generation and its dVRK specific variant (cosmos3-nanoh-surgical-dvrk). Other models like Surgical Action World (SAW) reformulate video diffusion by explicitly conditioning on tool trajectories and tissue affordances.</li>
+  <li><b>World-Action Models (WAMs):</b> WAMs decouple visual dynamics modeling from action control and enable joint prediction of future observations and action chunks, performing exceptionally well in bimanual, contact-rich tasks through closed-loop replanning.</li>
+</ul>
+
+<!-- 3 -->
+<h2><span class="n">3</span>Phase 2: Learning and Benchmarking using VLAs</h2>
+
+<ol class="steps">
+  <li><b>Step 2.1: Data Standardization and Kinematic Modeling</b> Hardware platforms like the da Vinci Research Kit (dVRK) suffer from severe mechanical hysteresis and joint inaccuracies. Map all simulation and real-world training data into a "hybrid-relative" action space. By training the policy to predict differential spatial translations relative to the camera and delta rotations relative to the end-effector, the model bypasses hardware inaccuracies and transfers seamlessly from simulation to physical robots.</li>
+  <li><b>Step 2.2: Implement Flow-Matching VLA Architectures</b> Avoid older autoregressive VLA decoding strategies, which generate action tokens sequentially, meaning an early token error cannot be revised, frequently leading to catastrophic task failure in precision tasks. Instead, deploy continuous diffusion or flow-matching transformer architectures (e.g., GR00T-H or π₀). These models predict entire action chunks simultaneously and iteratively denoise them, allowing the policy to globally self-correct before physical execution.</li>
+  <li><b>Step 2.3: Hierarchical Control for Real-Time Correction</b> To manage the unpredictability of complex procedures, wrap the VLA in a hierarchical framework, similar to SRT-H. Train a high-level Vision-Language Model to act as a surgical supervisor that analyzes temporal video history and issues semantic language instructions or real-time error corrections (e.g., "move left arm away"). The low-level continuous action policy then conditions on these language embeddings to generate the actual kinematic trajectory, allowing for dynamic recovery from mistakes.</li>
+  <li><b>Step 2.4: Benchmarking and Sim-to-Real Transfer</b> Test the system against established surgical benchmarks (e.g., SutureBot) across a hierarchical taxonomy of Atomic, Conditional, and Composite tasks. For diagnostic tasks like robotic ultrasound, benchmark policies using Submodular MDPs and State-Wise Constrained MDPs to enforce strict safety boundaries.</li>
+</ol>
+
+<!-- 4 -->
+<h2><span class="n">4</span>Conclusion</h2>
+
+<p>The pursuit of autonomy in medical robotics has fundamentally shifted from the design of narrow, task-specific, hand-crafted control algorithms to the deployment of generalized, data-driven foundation models. This transition is underpinned by massive collaborative data initiatives, most notably Open-H-Embodiment, which provide the critical mass of multimodal, cross-embodiment data required to train Vision-Language-Action policies like GR00T-H. Simultaneously, advanced simulation frameworks like SonoGym and Cosmos-H, leveraging hybrid physics engines, deep generative rendering, and latent world models, have democratized the ability to safely train and benchmark these policies in highly realistic clinical scenarios.</p>
+
+<p>As architectural paradigms evolve from autoregressive token generation to continuous flow matching, and as hierarchical control structures increasingly allow for semantic error correction, the robustness of automated surgical manipulation continues to rise. While fully autonomous, unmonitored surgery remains a distant prospect, the integration of these technologies establishes the groundwork for sophisticated, AI-driven surgical copilots capable of standardizing clinical outcomes, alleviating provider fatigue, and democratizing access to precision healthcare globally.</p>
+
+<!-- 5 -->
+<h2><span class="n">5</span>Works Cited</h2>
+
+<ol class="steps" style="font-size: 9pt;">
+  <li><b>A Realistic Surgical Simulator for Non-Rigid and Contact-Rich</b>, <a href="https://arxiv.org/html/2404.05888v2">https://arxiv.org/html/2404.05888v2</a></li>
+  <li><b>(PDF) A Realistic Surgical Simulator for Non-Rigid and Contact-Rich</b>, <a href="https://www.researchgate.net/publication/382604479_A_Realistic_Surgical_Simulator_for_Non-Rigid_and_Contact-Rich_Manipulation_in_Surgeries_with_the_da_Vinci_Research_Kit">https://www.researchgate.net/publication/382604479_...</a></li>
+  <li><b>Generative Design for Soft Robotics (2026) - RoboCloud Hub</b>, <a href="https://robocloud-dashboard.vercel.app/learn/blog/generative-soft-robotics">https://robocloud-dashboard.vercel.app/learn/blog/generative-soft-robotics</a></li>
+  <li><b>CRESSim–MPM: A Material Point Method Library for Surgical Soft</b>, <a href="https://arxiv.org/html/2502.18437v3">https://arxiv.org/html/2502.18437v3</a></li>
+  <li><b>(PDF) The PBD Model Based Simulation for Soft Tissue Deformation</b>, <a href="https://www.researchgate.net/publication/344564834_The_PBD_Model_Based_Simulation_for_Soft_Tissue_Deformation_in_Virtual_Surgery">https://www.researchgate.net/publication/344564834_...</a></li>
+  <li><b>chrisvoncsefalvay/cosmos3-nanoh-surgical-dvrk - Hugging Face</b>, <a href="https://huggingface.co/chrisvoncsefalvay/cosmos3-nanoh-surgical-dvrk">https://huggingface.co/chrisvoncsefalvay/cosmos3-nanoh-surgical-dvrk</a></li>
+  <li><b>DFM-VLA: Iterative Action Refinement for Robot Manipulation ... - arXiv</b>, <a href="https://arxiv.org/html/2603.26320v4">https://arxiv.org/html/2603.26320v4</a></li>
+  <li><b>Simulation of Surgical Suturing Using Position-Based Dynamics and</b>, <a href="https://arxiv.org/pdf/2607.27494">https://arxiv.org/pdf/2607.27494</a></li>
+  <li><b>CRESSim-MPM: A Material Point Method Library for Surgical Soft</b>, <a href="https://www.researchgate.net/publication/389351524_CRESSim-MPM_A_Material_Point_Method_Library_for_Surgical_Soft_Body_Simulation_with_Cutting_and_Suturing">https://www.researchgate.net/publication/389351524_...</a></li>
+  <li><b>Open-H-Embodiment: A Large-Scale Dataset for Enabling ... - arXiv</b>, <a href="https://arxiv.org/html/2604.21017v1">https://arxiv.org/html/2604.21017v1</a></li>
+  <li><b>Pretrained to Imagine, Fine-Tuned to Act: The Rise of World-Action</b>, <a href="https://developer.nvidia.com/blog/pretrained-to-imagine-fine-tuned-to-act-the-rise-of-world-action-models/">https://developer.nvidia.com/blog/pretrained-to-imagine-fine-tuned-to-act-the-rise-of-world-action-models/</a></li>
+  <li><b>A World-Action Model for Data-Efficient Surgical Robot Learning</b>, <a href="https://arxiv.org/pdf/2608.11204">https://arxiv.org/pdf/2608.11204</a></li>
+  <li><b>SAW: Toward a Surgical Action World Model via Controllable ... - arXiv</b>, <a href="https://arxiv.org/pdf/2603.13024">https://arxiv.org/pdf/2603.13024</a></li>
+  <li><b>SAW: Toward a Surgical Action World Model via Controllable and</b>, <a href="https://arxiv.org/html/2603.13024v1">https://arxiv.org/html/2603.13024v1</a></li>
+  <li><b>SRT-H: A Hierarchical Framework for Autonomous Surgery via</b>, <a href="https://www.alphaxiv.org/abs/2505.10251">https://www.alphaxiv.org/abs/2505.10251</a></li>
+  <li><b>SRT-H: A Hierarchical Framework for Autonomous Surgery ... - arXiv</b>, <a href="https://arxiv.org/abs/2505.10251">https://arxiv.org/abs/2505.10251</a></li>
+  <li><b>(PDF) SonoGym: High Performance Simulation for Challenging</b>, <a href="https://www.researchgate.net/publication/393333458_SonoGym_High_Performance_Simulation_for_Challenging_Surgical_Tasks_with_Robotic_Ultrasound">https://www.researchgate.net/publication/393333458_...</a></li>
+  <li><b>Semantic Action Contracts for Risk-Aware Robot Intervention</b>, <a href="https://openreview.net/attachment?id=epAYjMbKiq&name=pdf">https://openreview.net/attachment?id=epAYjMbKiq&name=pdf</a></li>
+</ol>
+
+</body>
+</html>

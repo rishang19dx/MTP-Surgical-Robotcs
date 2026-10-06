@@ -1,36 +1,20 @@
 import time
-import zmq
-import json
 import argparse
+import pyigtl
+import numpy as np
+import json
 from pybullet_backend import PyBulletBackend
-
-def np_encoder(object):
-    import numpy as np
-    if isinstance(object, np.generic):
-        return object.item()
-    elif isinstance(object, np.ndarray):
-        return object.tolist()
-    raise TypeError(f"Object of type {type(object)} is not JSON serializable")
 
 def main():
     parser = argparse.ArgumentParser(description="Standalone Surgical Physics Server")
     parser.add_argument('--urdf', type=str, required=True, help="Path to robot URDF")
-    parser.add_argument('--port', type=int, default=5555, help="ZMQ Publisher port")
+    parser.add_argument('--port', type=int, default=18944, help="OpenIGTLink Server port")
     parser.add_argument('--gui', action='store_true', help="Enable PyBullet GUI")
     args = parser.parse_args()
 
-    # ZMQ Setup
-    context = zmq.Context()
-    socket_pub = context.socket(zmq.PUB)
-    socket_pub.bind(f"tcp://*:{args.port}")
-    
-    socket_sub = context.socket(zmq.SUB)
-    socket_sub.bind(f"tcp://*:{args.port + 1}")
-    socket_sub.setsockopt_string(zmq.SUBSCRIBE, "CMD")
-    socket_sub.setsockopt(zmq.RCVTIMEO, 0)
-
-    
-    print(f"Starting Physics Server on port {args.port}...")
+    # OpenIGTLink Server Setup
+    server = pyigtl.OpenIGTLinkServer(port=args.port)
+    print(f"Starting Physics Server (OpenIGTLink) on port {args.port}...")
 
     # Physics Backend Setup
     backend = PyBulletBackend(gui=args.gui)
@@ -47,17 +31,19 @@ def main():
     
     try:
         while True:
-            # 1. Receive control commands
-            try:
-                while True:
-                    msg = socket_sub.recv_string(flags=zmq.NOBLOCK)
-                    if msg.startswith("CMD "):
-                        cmd_data = json.loads(msg[4:])
+            # 1. Receive control commands from IGTL
+            for message in server.get_messages():
+                if isinstance(message, pyigtl.StringMessage) and message.device_name == "CMD":
+                    try:
+                        cmd_data = json.loads(message.string)
                         if "q_des" in cmd_data:
                             backend.set_joint_command(cmd_data["q_des"])
-            except zmq.Again:
-                pass
-            
+                    except json.JSONDecodeError:
+                        pass
+                # Could also support NDArrayMessage for direct joint targets
+                elif isinstance(message, pyigtl.NDArrayMessage) and message.device_name == "q_des":
+                    backend.set_joint_command(message.ndarray.tolist())
+
             # 2. Step Physics
             backend.step(dt)
             
@@ -66,13 +52,19 @@ def main():
             if current_time - last_publish_time >= publish_interval:
                 poses = backend.get_link_poses()
                 
-                message = {
-                    "timestamp": current_time,
-                    "poses": poses
-                }
+                # Send Transforms for all links
+                for link_name, pose_matrix in poses.items():
+                    # pyigtl TransformMessage expects a 4x4 matrix
+                    transform_msg = pyigtl.TransformMessage(np.array(pose_matrix), device_name=link_name)
+                    server.send_message(transform_msg)
                 
-                # Use JSON for simplicity in prototyping, could use MessagePack/Protobuf for scaling
-                socket_pub.send_string("STATE " + json.dumps(message, default=np_encoder))
+                # Send deformed vertices if soft anatomy is loaded
+                vertices = backend.get_deformed_vertices()
+                if vertices is not None:
+                    # Send vertices as an NDArrayMessage
+                    vert_msg = pyigtl.NDArrayMessage(vertices.astype(np.float32), device_name="DeformedAnatomy")
+                    server.send_message(vert_msg)
+
                 last_publish_time = current_time
                 
             # Sleep to match real-time
@@ -81,10 +73,8 @@ def main():
     except KeyboardInterrupt:
         print("Stopping physics server...")
     finally:
+        server.stop()
         backend.disconnect()
-        socket_pub.close()
-        socket_sub.close()
-        context.term()
 
 if __name__ == "__main__":
     main()

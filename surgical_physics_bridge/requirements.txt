@@ -1,4 +1,4 @@
 pybullet>=3.2.0
 numpy>=1.20.0
 scipy>=1.7.0
-pyzmq>=24.0.0
+pyigtl>=0.4.1

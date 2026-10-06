@@ -5,13 +5,12 @@ This repository contains the ongoing work for bridging **3D Slicer** with a **Py
 ## 🏗️ What is Implemented
 
 - **Client-Server Architecture**:
-  - A decoupled ZeroMQ (ZMQ) network bridge separating the physics engine (Python) and the 3D Slicer UI.
-  - The physics server publishes simulation state at ~50 Hz, and subscribes to incoming control commands.
+  - A decoupled OpenIGTLink network bridge separating the physics engine (Python) and the 3D Slicer UI.
+  - The physics server publishes simulation state (robot link transforms and deformable mesh vertices) at ~50 Hz, and receives incoming control commands.
 - **Slicer Plugin (`SlicerSurgicalBridge`)**:
-  - Contains a UI widget to connect/disconnect to the server.
-  - Subscribes to the physics server to receive robotic link poses.
-  - Dynamically creates and updates `vtkMRMLLinearTransformNode`s based on incoming link poses in real-time.
-  - Provides a UI to send desired joint configurations (`q_des`) back to the simulation.
+  - Developed as a high-performance **C++ Loadable Slicer Module**.
+  - Uses `vtkMRMLIGTLConnectorNode` to handle OpenIGTLink sockets natively in a background thread without freezing the UI.
+  - Exposes Python APIs for UI logic while relying on C++ for heavy binary data processing.
 - **PyBullet Physics Backend (`pybullet_backend.py`)**:
   - **Robot Loading**: Ability to load URDF robots.
   - **Soft Body Anatomy**: Experimental support for Neo-Hookean deformable soft bodies using `p.loadSoftBody()`.
@@ -23,13 +22,12 @@ This repository contains the ongoing work for bridging **3D Slicer** with a **Py
 
 The current state is a functional prototype for rigid body tracking, but is missing critical features to be considered a complete surgical simulator:
 
-### 1. Deformable Mesh Synchronization
-- **Current State**: While PyBullet is generating soft body simulations and calculating deformed vertices (`get_deformed_vertices()`), this data is **not** being transmitted over ZMQ, nor is 3D Slicer consuming it.
-- **Action Required**: The ZMQ state message needs to include vertex arrays. The Slicer plugin must be updated to retrieve these arrays and dynamically update the `vtkPolyData` of a `vtkMRMLModelNode` in real-time. 
+### 1. Deformable Mesh Synchronization (Client Side)
+- **Current State**: PyBullet generates soft body simulations and the server successfully transmits the deformed vertices (`get_deformed_vertices()`) via OpenIGTLink `NDArrayMessage`s.
+- **Action Required**: The Slicer C++ plugin must be updated to process these incoming arrays and dynamically update the `vtkPolyData` of a `vtkMRMLModelNode` in real-time. 
 
-### 2. Network Optimization (JSON vs Binary)
-- **Current State**: The ZMQ bridge transmits data using JSON strings. 
-- **Action Required**: JSON is too slow and bloated for sending high-density mesh vertex data at 50Hz. The pipeline must be upgraded to use a binary serialization protocol like **MessagePack** or **Protocol Buffers (Protobuf)** to maintain real-time performance when transmitting soft-body deformations.
+### 2. Network Optimization (JSON vs Binary) -> [IMPLEMENTED IN PHASE 1]
+- **Status**: Completed. We transitioned from ZMQ/JSON to the **OpenIGTLink** protocol (via `pyigtl` on the server and `SlicerOpenIGTLinkIF` on the client) for high-performance binary serialization of transforms and high-density mesh vertex data.
 
 ### 3. Haptics and Contact Forces
 - **Current State**: `pybullet_backend.py` extracts contact points and normal forces (`get_contacts()`), but this data is not exposed to the server loop or sent to Slicer.
@@ -50,12 +48,16 @@ The standalone physics server requires a standard Python environment (Python 3.8
 ```bash
 pip install -r surgical_physics_bridge/requirements.txt
 ```
-*(Dependencies include: `pybullet`, `numpy`, `scipy`, `pyzmq`)*
+*(Dependencies include: `pybullet`, `numpy`, `scipy`, `pyigtl`)*
 
 ### 3D Slicer (Client UI)
-You will need to install **3D Slicer** (version 5.0 or later is recommended). Slicer brings its own embedded Python environment.
-- The `SlicerSurgicalBridge` module will automatically attempt to install `pyzmq` inside Slicer's environment upon first connection if it is not found.
-
+You will need to install **3D Slicer** (version 5.0 or later is recommended). 
+Since the `SlicerSurgicalBridge` is a C++ Loadable module, you must build it against your Slicer installation:
+```bash
+mkdir SlicerSurgicalBridge-build && cd SlicerSurgicalBridge-build
+cmake -DSlicer_DIR=/path/to/Slicer-SuperBuild/Slicer-build ../SlicerSurgicalBridge
+make
+```
 ## 🚀 How to Run
 
 ### Step 1: Start the Physics Server
@@ -66,13 +68,14 @@ cd surgical_physics_bridge
 python src/server.py --urdf <path_to_your_robot.urdf>
 ```
 *Optional Flags:*
-- `--port`: ZMQ port (default is `5555`).
+- `--port`: OpenIGTLink port (default is `18944`).
 - `--gui`: Add this flag to open the native PyBullet GUI to visualize the physics engine alongside Slicer.
 
 ### Step 2: Load the Slicer Plugin
-1. Open **3D Slicer**.
-2. Go to `Edit` -> `Application Settings` -> `Modules`.
-3. Add the `SlicerSurgicalBridge` folder to your **Additional module paths**.
+1. Build the C++ module as described in the Prerequisites.
+2. Open **3D Slicer**.
+3. Go to `Edit` -> `Application Settings` -> `Modules`.
+4. Add your `SlicerSurgicalBridge-build/lib/Slicer-5.x/qt-loadable-modules` folder to your **Additional module paths**.
 4. Restart 3D Slicer.
 5. In the module drop-down, look for **Surgical Physics Bridge** (under the `Simulation` category).
 

@@ -40,6 +40,13 @@ def main():
                             backend.set_joint_command(cmd_data["q_des"])
                     except json.JSONDecodeError:
                         pass
+                elif isinstance(message, pyigtl.StringMessage) and message.device_name == "VirtualFixture":
+                    try:
+                        vf_data = json.loads(message.string)
+                        if "vertices" in vf_data and "indices" in vf_data:
+                            backend.set_virtual_fixture(vf_data, vf_data.get("policy", "keep_out"))
+                    except json.JSONDecodeError:
+                        pass
                 # Could also support NDArrayMessage for direct joint targets
                 elif isinstance(message, pyigtl.NDArrayMessage) and message.device_name == "q_des":
                     backend.set_joint_command(message.ndarray.tolist())

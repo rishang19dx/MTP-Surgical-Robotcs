@@ -31,9 +31,8 @@ The current state is a functional prototype for rigid body tracking, but is miss
 ### 3. Haptics and Contact Forces -> [IMPLEMENTED IN PHASE 2]
 - **Status**: Completed. `pybullet_backend.py` extracts contact points and normal forces (`get_contacts()`), and packages them into an OpenIGTLink `ContactForces` NDArrayMessage. The Slicer C++ plugin reconstructs these forces into interactive vector arrows via `vtkPolyData` lines dynamically.
 
-### 4. Virtual Fixtures
-- **Current State**: The `set_virtual_fixture` method exists as a stub. It stores a signed distance field (SDF) and a policy, but the physics `step()` function entirely ignores it.
-- **Action Required**: Virtual fixture constraints (e.g., active safety boundaries, forbidden regions) need to be mathematically enforced during the physics step, modifying the robot's control commands or applying penalty forces before stepping the simulation.
+### 4. Virtual Fixtures -> [IMPLEMENTED IN PHASE 2]
+- **Status**: Completed. The Slicer C++ plugin provides a "Virtual Fixtures" UI to select a `vtkMRMLModelNode` (which can be derived from segmentations). Clicking the export button serializes the full mesh (vertices and indices) into a JSON `StringMessage` via OpenIGTLink. The PyBullet server natively decodes this and spawns a static collision body (`keep_out` policy) that physically blocks the robot from entering the forbidden zone.
 
 ### 5. Control Interface
 - **Current State**: Joint commands are currently sent by manually typing a comma-separated string into a Slicer text box (`0.0, 0.0, 0.0...`).

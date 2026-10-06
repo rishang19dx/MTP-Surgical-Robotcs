@@ -10,7 +10,9 @@
 #include "vtkDataArray.h"
 #include "vtkCellArray.h"
 #include "vtkLine.h"
+#include "vtkMRMLTextNode.h"
 #include <vtkObjectFactory.h>
+#include <sstream>
 
 vtkStandardNewMacro(vtkSlicerSurgicalBridgeLogic);
 
@@ -19,6 +21,7 @@ vtkSlicerSurgicalBridgeLogic::vtkSlicerSurgicalBridgeLogic()
   this->ConnectorNode = nullptr;
   this->TargetModelNode = nullptr;
   this->ForceModelNode = nullptr;
+  this->VFModelNode = nullptr;
   this->DeformedAnatomyNode = nullptr;
   this->ContactForcesNode = nullptr;
 }
@@ -49,6 +52,11 @@ void vtkSlicerSurgicalBridgeLogic::SetTargetModelNode(vtkMRMLModelNode* node)
 void vtkSlicerSurgicalBridgeLogic::SetForceModelNode(vtkMRMLModelNode* node)
 {
   this->ForceModelNode = node;
+}
+
+void vtkSlicerSurgicalBridgeLogic::SetVFModelNode(vtkMRMLModelNode* node)
+{
+  this->VFModelNode = node;
 }
 
 void vtkSlicerSurgicalBridgeLogic::OnMRMLSceneNodeAdded(vtkMRMLNode* node)
@@ -134,6 +142,47 @@ void vtkSlicerSurgicalBridgeLogic::ProcessMRMLNodesEvents(vtkObject* caller, uns
 
 void vtkSlicerSurgicalBridgeLogic::UpdateFromMRMLScene()
 {
+}
+
+void vtkSlicerSurgicalBridgeLogic::SendVirtualFixture()
+{
+  if (!this->ConnectorNode || !this->VFModelNode) return;
+  vtkPolyData* polyData = this->VFModelNode->GetPolyData();
+  if (!polyData || !polyData->GetPoints() || !polyData->GetPolys()) return;
+
+  vtkPoints* points = polyData->GetPoints();
+  vtkCellArray* polys = polyData->GetPolys();
+  
+  std::stringstream ss;
+  ss << "{ \"type\": \"virtual_fixture\", \"policy\": \"keep_out\", \"vertices\": [";
+  for (vtkIdType i = 0; i < points->GetNumberOfPoints(); ++i) {
+    double p[3];
+    points->GetPoint(i, p);
+    ss << "[" << p[0] << "," << p[1] << "," << p[2] << "]";
+    if (i < points->GetNumberOfPoints() - 1) ss << ",";
+  }
+  ss << "], \"indices\": [";
+  
+  vtkIdType npts;
+  const vtkIdType* pts;
+  polys->InitTraversal();
+  bool first = true;
+  while (polys->GetNextCell(npts, pts)) {
+    for (vtkIdType j = 0; j < npts; ++j) {
+      if (!first) ss << ",";
+      ss << pts[j];
+      first = false;
+    }
+  }
+  ss << "] }";
+
+  vtkNew<vtkMRMLTextNode> textNode;
+  textNode->SetName("VirtualFixture");
+  textNode->SetText(ss.str().c_str());
+  this->GetMRMLScene()->AddNode(textNode);
+  
+  this->ConnectorNode->RegisterOutgoingMRMLNode(textNode);
+  this->ConnectorNode->PushNode(textNode);
 }
 
 void vtkSlicerSurgicalBridgeLogic::ConnectToPhysicsServer(const std::string& host, int port)

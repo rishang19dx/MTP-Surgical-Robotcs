@@ -17,6 +17,8 @@ public:
   void SendRobotCommand(const std::string& q_des);
   void SetTargetModelNode(vtkMRMLModelNode* node);
   void SetForceModelNode(vtkMRMLModelNode* node);
+  void SetVFModelNode(vtkMRMLModelNode* node);
+  void SendVirtualFixture();
   
 protected:
   vtkSlicerSurgicalBridgeLogic();
@@ -36,6 +38,7 @@ private:
   vtkMRMLIGTLConnectorNode* ConnectorNode;
   vtkMRMLModelNode* TargetModelNode;
   vtkMRMLModelNode* ForceModelNode;
+  vtkMRMLModelNode* VFModelNode;
   vtkMRMLNode* DeformedAnatomyNode;
   vtkMRMLNode* ContactForcesNode;
 };

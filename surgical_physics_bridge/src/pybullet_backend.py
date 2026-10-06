@@ -158,13 +158,27 @@ class PyBulletBackend(SurgicalSimulationBackend):
                 print(f"Error getting deformed vertices: {e}")
         return None
 
-    def set_virtual_fixture(self, signed_distance_field, policy):
+    def set_virtual_fixture(self, vf_data, policy):
         """
-        Stores the virtual fixture definitions. The actual application of the policy 
-        would occur inside the step() function, modifying commands or applying forces.
+        Stores the virtual fixture definitions and creates a static collision body in PyBullet.
         """
-        self.virtual_fixture_sdf = signed_distance_field
         self.virtual_fixture_policy = policy
+        
+        vertices = vf_data.get("vertices", [])
+        indices = vf_data.get("indices", [])
+        
+        if not vertices or not indices:
+            print("Invalid Virtual Fixture data received.")
+            return
+
+        if policy == "keep_out":
+            try:
+                col_id = p.createCollisionShape(p.GEOM_MESH, vertices=vertices, indices=indices)
+                vis_id = p.createVisualShape(p.GEOM_MESH, vertices=vertices, indices=indices, rgbaColor=[1,0,0,0.3])
+                self.virtual_fixture_body = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=col_id, baseVisualShapeIndex=vis_id)
+                print(f"Virtual Fixture (Keep-Out) created with {len(vertices)} vertices and {len(indices)//3} faces.")
+            except Exception as e:
+                print(f"Error creating Virtual Fixture: {e}")
 
     def disconnect(self):
         p.disconnect(self.physics_client)

@@ -138,6 +138,54 @@
     </widget>
    </item>
    <item>
+    <widget class="ctkCollapsibleButton" name="VirtualFixtureCollapsibleButton">
+     <property name="text">
+      <string>Virtual Fixtures</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_5">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="label_4">
+          <property name="text">
+           <string>VF Model (Keep-Out):</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="qMRMLNodeComboBox" name="vfModelSelector">
+          <property name="nodeTypes">
+           <stringlist>
+            <string>vtkMRMLModelNode</string>
+           </stringlist>
+          </property>
+          <property name="showChildNodeTypes">
+           <bool>false</bool>
+          </property>
+          <property name="addEnabled">
+           <bool>false</bool>
+          </property>
+          <property name="removeEnabled">
+           <bool>false</bool>
+          </property>
+          <property name="noneEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QPushButton" name="sendVFButton">
+        <property name="text">
+         <string>Export Virtual Fixture to Physics Server</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>

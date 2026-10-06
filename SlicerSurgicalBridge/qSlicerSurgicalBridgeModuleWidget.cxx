@@ -35,6 +35,8 @@ void qSlicerSurgicalBridgeModuleWidget::setup() {
   connect(d->sendCommandButton, SIGNAL(clicked()), this, SLOT(onSendCommandClicked()));
   connect(d->targetModelSelector, SIGNAL(currentNodeChanged(vtkMRMLNode*)), this, SLOT(onTargetModelNodeChanged(vtkMRMLNode*)));
   connect(d->forceModelSelector, SIGNAL(currentNodeChanged(vtkMRMLNode*)), this, SLOT(onForceModelNodeChanged(vtkMRMLNode*)));
+  connect(d->sendVFButton, SIGNAL(clicked()), this, SLOT(onSendVFClicked()));
+  connect(d->vfModelSelector, SIGNAL(currentNodeChanged(vtkMRMLNode*)), this, SLOT(onVFModelNodeChanged(vtkMRMLNode*)));
 }
 
 void qSlicerSurgicalBridgeModuleWidget::setMRMLScene(vtkMRMLScene* scene) {
@@ -67,5 +69,19 @@ void qSlicerSurgicalBridgeModuleWidget::onForceModelNodeChanged(vtkMRMLNode* nod
   Q_D(qSlicerSurgicalBridgeModuleWidget);
   if (d->logic()) {
     d->logic()->SetForceModelNode(vtkMRMLModelNode::SafeDownCast(node));
+  }
+}
+
+void qSlicerSurgicalBridgeModuleWidget::onSendVFClicked() {
+  Q_D(qSlicerSurgicalBridgeModuleWidget);
+  if (d->logic()) {
+    d->logic()->SendVirtualFixture();
+  }
+}
+
+void qSlicerSurgicalBridgeModuleWidget::onVFModelNodeChanged(vtkMRMLNode* node) {
+  Q_D(qSlicerSurgicalBridgeModuleWidget);
+  if (d->logic()) {
+    d->logic()->SetVFModelNode(vtkMRMLModelNode::SafeDownCast(node));
   }
 }

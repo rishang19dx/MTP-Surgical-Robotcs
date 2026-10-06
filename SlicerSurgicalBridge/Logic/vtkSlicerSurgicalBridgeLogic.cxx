@@ -8,6 +8,8 @@
 #include "vtkPolyData.h"
 #include "vtkPoints.h"
 #include "vtkDataArray.h"
+#include "vtkCellArray.h"
+#include "vtkLine.h"
 #include <vtkObjectFactory.h>
 
 vtkStandardNewMacro(vtkSlicerSurgicalBridgeLogic);
@@ -16,7 +18,9 @@ vtkSlicerSurgicalBridgeLogic::vtkSlicerSurgicalBridgeLogic()
 {
   this->ConnectorNode = nullptr;
   this->TargetModelNode = nullptr;
+  this->ForceModelNode = nullptr;
   this->DeformedAnatomyNode = nullptr;
+  this->ContactForcesNode = nullptr;
 }
 
 vtkSlicerSurgicalBridgeLogic::~vtkSlicerSurgicalBridgeLogic()
@@ -42,12 +46,19 @@ void vtkSlicerSurgicalBridgeLogic::SetTargetModelNode(vtkMRMLModelNode* node)
   this->TargetModelNode = node;
 }
 
+void vtkSlicerSurgicalBridgeLogic::SetForceModelNode(vtkMRMLModelNode* node)
+{
+  this->ForceModelNode = node;
+}
+
 void vtkSlicerSurgicalBridgeLogic::OnMRMLSceneNodeAdded(vtkMRMLNode* node)
 {
   if (!node) return;
   std::string name = node->GetName() ? node->GetName() : "";
   if (name == "DeformedAnatomy") {
     vtkSetAndObserveMRMLNodeMacro(this->DeformedAnatomyNode, node);
+  } else if (name == "ContactForces") {
+    vtkSetAndObserveMRMLNodeMacro(this->ContactForcesNode, node);
   }
 }
 
@@ -76,6 +87,47 @@ void vtkSlicerSurgicalBridgeLogic::ProcessMRMLNodesEvents(vtkObject* caller, uns
       }
       points->Modified();
       polyData->Modified();
+    }
+  } else if (caller == this->ContactForcesNode && event == vtkCommand::ModifiedEvent) {
+    if (!this->ForceModelNode) return;
+    vtkDoubleArray* dataArray = nullptr;
+    if (auto tableNode = vtkMRMLTableNode::SafeDownCast(this->ContactForcesNode)) {
+      if (tableNode->GetTable() && tableNode->GetTable()->GetNumberOfColumns() > 0) {
+        dataArray = vtkDoubleArray::SafeDownCast(tableNode->GetTable()->GetColumn(0));
+      }
+    }
+    
+    if (dataArray) {
+      vtkNew<vtkPolyData> polyData;
+      vtkNew<vtkPoints> points;
+      vtkNew<vtkCellArray> lines;
+      
+      int numContacts = dataArray->GetNumberOfValues() / 7;
+      for (int i = 0; i < numContacts; ++i) {
+        double p[3] = { dataArray->GetValue(i*7 + 0), dataArray->GetValue(i*7 + 1), dataArray->GetValue(i*7 + 2) };
+        double n[3] = { dataArray->GetValue(i*7 + 3), dataArray->GetValue(i*7 + 4), dataArray->GetValue(i*7 + 5) };
+        double f = dataArray->GetValue(i*7 + 6);
+        
+        // Only draw non-zero forces
+        if (f > 1e-4) {
+          // Scale factor for visualization, assuming PyBullet in meters, Slicer in mm
+          // So forces might need significant scaling to be visible. Let's use 10.0 * f
+          double scale = 10.0 * f; 
+          double p2[3] = { p[0] + n[0]*scale, p[1] + n[1]*scale, p[2] + n[2]*scale };
+          
+          vtkIdType pid1 = points->InsertNextPoint(p);
+          vtkIdType pid2 = points->InsertNextPoint(p2);
+          
+          vtkNew<vtkLine> line;
+          line->GetPointIds()->SetId(0, pid1);
+          line->GetPointIds()->SetId(1, pid2);
+          lines->InsertNextCell(line);
+        }
+      }
+      
+      polyData->SetPoints(points);
+      polyData->SetLines(lines);
+      this->ForceModelNode->SetAndObservePolyData(polyData);
     }
   }
 }

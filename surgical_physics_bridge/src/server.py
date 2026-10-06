@@ -65,6 +65,22 @@ def main():
                     vert_msg = pyigtl.NDArrayMessage(vertices.astype(np.float32), device_name="DeformedAnatomy")
                     server.send_message(vert_msg)
 
+                # Send contact forces for haptics/wrench rendering
+                contacts = backend.get_contacts()
+                if contacts:
+                    contact_data = []
+                    for c in contacts:
+                        p = c["position_on_b"]
+                        n = c["contact_normal_on_b"]
+                        f = c["normal_force"]
+                        contact_data.append([p[0], p[1], p[2], n[0], n[1], n[2], f])
+                    contact_array = np.array(contact_data, dtype=np.float32)
+                else:
+                    # Send zero force to clear visualization
+                    contact_array = np.zeros((1, 7), dtype=np.float32)
+                contact_msg = pyigtl.NDArrayMessage(contact_array, device_name="ContactForces")
+                server.send_message(contact_msg)
+
                 last_publish_time = current_time
                 
             # Sleep to match real-time

@@ -16,6 +16,7 @@ public:
   void ConnectToPhysicsServer(const std::string& host, int port);
   void SendRobotCommand(const std::string& q_des);
   void SetTargetModelNode(vtkMRMLModelNode* node);
+  void SetForceModelNode(vtkMRMLModelNode* node);
   
 protected:
   vtkSlicerSurgicalBridgeLogic();
@@ -34,6 +35,8 @@ private:
   
   vtkMRMLIGTLConnectorNode* ConnectorNode;
   vtkMRMLModelNode* TargetModelNode;
+  vtkMRMLModelNode* ForceModelNode;
   vtkMRMLNode* DeformedAnatomyNode;
+  vtkMRMLNode* ContactForcesNode;
 };
 #endif

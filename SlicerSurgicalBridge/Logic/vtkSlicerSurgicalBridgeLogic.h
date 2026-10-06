@@ -5,6 +5,7 @@
 #include <string>
 
 class vtkMRMLIGTLConnectorNode;
+class vtkMRMLModelNode;
 
 class vtkSlicerSurgicalBridgeLogic : public vtkSlicerModuleLogic
 {
@@ -14,6 +15,7 @@ public:
   
   void ConnectToPhysicsServer(const std::string& host, int port);
   void SendRobotCommand(const std::string& q_des);
+  void SetTargetModelNode(vtkMRMLModelNode* node);
   
 protected:
   vtkSlicerSurgicalBridgeLogic();
@@ -23,10 +25,15 @@ protected:
   void RegisterNodes() override;
   void UpdateFromMRMLScene() override;
   
+  void OnMRMLSceneNodeAdded(vtkMRMLNode* node) override;
+  void ProcessMRMLNodesEvents(vtkObject* caller, unsigned long event, void* callData) override;
+  
 private:
   vtkSlicerSurgicalBridgeLogic(const vtkSlicerSurgicalBridgeLogic&);
   void operator=(const vtkSlicerSurgicalBridgeLogic&);
   
   vtkMRMLIGTLConnectorNode* ConnectorNode;
+  vtkMRMLModelNode* TargetModelNode;
+  vtkMRMLNode* DeformedAnatomyNode;
 };
 #endif

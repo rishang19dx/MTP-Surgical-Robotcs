@@ -1,6 +1,7 @@
 #include "qSlicerSurgicalBridgeModuleWidget.h"
 #include "ui_qSlicerSurgicalBridgeModuleWidget.h"
 #include "vtkSlicerSurgicalBridgeLogic.h"
+#include "vtkMRMLModelNode.h"
 
 class qSlicerSurgicalBridgeModuleWidgetPrivate : public Ui_qSlicerSurgicalBridgeModuleWidget
 {
@@ -32,6 +33,7 @@ void qSlicerSurgicalBridgeModuleWidget::setup() {
   
   connect(d->connectButton, SIGNAL(clicked()), this, SLOT(onConnectClicked()));
   connect(d->sendCommandButton, SIGNAL(clicked()), this, SLOT(onSendCommandClicked()));
+  connect(d->targetModelSelector, SIGNAL(currentNodeChanged(vtkMRMLNode*)), this, SLOT(onTargetModelNodeChanged(vtkMRMLNode*)));
 }
 
 void qSlicerSurgicalBridgeModuleWidget::setMRMLScene(vtkMRMLScene* scene) {
@@ -50,5 +52,12 @@ void qSlicerSurgicalBridgeModuleWidget::onSendCommandClicked() {
   if (d->logic()) {
     std::string q_des = d->qDesLineEdit->text().toStdString();
     d->logic()->SendRobotCommand(q_des);
+  }
+}
+
+void qSlicerSurgicalBridgeModuleWidget::onTargetModelNodeChanged(vtkMRMLNode* node) {
+  Q_D(qSlicerSurgicalBridgeModuleWidget);
+  if (d->logic()) {
+    d->logic()->SetTargetModelNode(vtkMRMLModelNode::SafeDownCast(node));
   }
 }

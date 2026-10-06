@@ -22,16 +22,14 @@ This repository contains the ongoing work for bridging **3D Slicer** with a **Py
 
 The current state is a functional prototype for rigid body tracking, but is missing critical features to be considered a complete surgical simulator:
 
-### 1. Deformable Mesh Synchronization (Client Side)
-- **Current State**: PyBullet generates soft body simulations and the server successfully transmits the deformed vertices (`get_deformed_vertices()`) via OpenIGTLink `NDArrayMessage`s.
-- **Action Required**: The Slicer C++ plugin must be updated to process these incoming arrays and dynamically update the `vtkPolyData` of a `vtkMRMLModelNode` in real-time. 
+### 1. Deformable Mesh Synchronization (Client Side) -> [IMPLEMENTED IN PHASE 2]
+- **Status**: Completed. The Slicer C++ plugin now processes incoming OpenIGTLink arrays (`DeformedAnatomy`) and dynamically updates the `vtkPolyData` of a `vtkMRMLModelNode` in real-time without reallocating memory.
 
 ### 2. Network Optimization (JSON vs Binary) -> [IMPLEMENTED IN PHASE 1]
 - **Status**: Completed. We transitioned from ZMQ/JSON to the **OpenIGTLink** protocol (via `pyigtl` on the server and `SlicerOpenIGTLinkIF` on the client) for high-performance binary serialization of transforms and high-density mesh vertex data.
 
-### 3. Haptics and Contact Forces
-- **Current State**: `pybullet_backend.py` extracts contact points and normal forces (`get_contacts()`), but this data is not exposed to the server loop or sent to Slicer.
-- **Action Required**: Force and contact data needs to be published back to the client. This is essential if the project intends to support haptic feedback devices (like Geomagic Touch) or visual force-feedback indicators in Slicer.
+### 3. Haptics and Contact Forces -> [IMPLEMENTED IN PHASE 2]
+- **Status**: Completed. `pybullet_backend.py` extracts contact points and normal forces (`get_contacts()`), and packages them into an OpenIGTLink `ContactForces` NDArrayMessage. The Slicer C++ plugin reconstructs these forces into interactive vector arrows via `vtkPolyData` lines dynamically.
 
 ### 4. Virtual Fixtures
 - **Current State**: The `set_virtual_fixture` method exists as a stub. It stores a signed distance field (SDF) and a policy, but the physics `step()` function entirely ignores it.

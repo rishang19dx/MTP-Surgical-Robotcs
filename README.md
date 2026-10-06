@@ -18,23 +18,23 @@ This repository contains the ongoing work for bridging **3D Slicer** with a **Py
   - **Coordinate Conversion**: Integrates a translation layer (`convert_pose_pb_to_slicer`) to map between PyBullet's and Slicer's coordinate systems.
   - **Joint Control**: Standard positional joint motor control for robot manipulation.
 
+## 🎯 Completed Phases
+
+The following features have been successfully implemented:
+
+### Phase 1: Architectural Overhaul & Data Transport
+- **Network Optimization (JSON vs Binary)**: Transitioned from ZMQ/JSON to the **OpenIGTLink** protocol (via `pyigtl` on the server and `SlicerOpenIGTLinkIF` on the client) for high-performance binary serialization of transforms and high-density mesh vertex data.
+
+### Phase 2: Feature Completeness for Surgical Simulation
+- **Deformable Mesh Synchronization (Client Side)**: The Slicer C++ plugin now processes incoming OpenIGTLink arrays (`DeformedAnatomy`) and dynamically updates the `vtkPolyData` of a `vtkMRMLModelNode` in real-time without reallocating memory.
+- **Haptics and Contact Forces**: `pybullet_backend.py` extracts contact points and normal forces (`get_contacts()`), packaging them into an OpenIGTLink `ContactForces` NDArrayMessage. The Slicer C++ plugin reconstructs these forces into interactive vector arrows via `vtkPolyData` lines dynamically.
+- **Virtual Fixtures**: The Slicer C++ plugin provides a "Virtual Fixtures" UI to select a `vtkMRMLModelNode`. Clicking the export button serializes the full mesh (vertices and indices) into a JSON `StringMessage` via OpenIGTLink. The PyBullet server natively decodes this and spawns a static collision body (`keep_out` policy) that physically blocks the robot from entering the forbidden zone.
+
 ## 🚧 What is Left / Critical Evaluation
 
-The current state is a functional prototype for rigid body tracking, but is missing critical features to be considered a complete surgical simulator:
+The simulator now handles soft bodies, haptics, and virtual fixtures, but one major component remains for real-time human interaction:
 
-### 1. Deformable Mesh Synchronization (Client Side) -> [IMPLEMENTED IN PHASE 2]
-- **Status**: Completed. The Slicer C++ plugin now processes incoming OpenIGTLink arrays (`DeformedAnatomy`) and dynamically updates the `vtkPolyData` of a `vtkMRMLModelNode` in real-time without reallocating memory.
-
-### 2. Network Optimization (JSON vs Binary) -> [IMPLEMENTED IN PHASE 1]
-- **Status**: Completed. We transitioned from ZMQ/JSON to the **OpenIGTLink** protocol (via `pyigtl` on the server and `SlicerOpenIGTLinkIF` on the client) for high-performance binary serialization of transforms and high-density mesh vertex data.
-
-### 3. Haptics and Contact Forces -> [IMPLEMENTED IN PHASE 2]
-- **Status**: Completed. `pybullet_backend.py` extracts contact points and normal forces (`get_contacts()`), and packages them into an OpenIGTLink `ContactForces` NDArrayMessage. The Slicer C++ plugin reconstructs these forces into interactive vector arrows via `vtkPolyData` lines dynamically.
-
-### 4. Virtual Fixtures -> [IMPLEMENTED IN PHASE 2]
-- **Status**: Completed. The Slicer C++ plugin provides a "Virtual Fixtures" UI to select a `vtkMRMLModelNode` (which can be derived from segmentations). Clicking the export button serializes the full mesh (vertices and indices) into a JSON `StringMessage` via OpenIGTLink. The PyBullet server natively decodes this and spawns a static collision body (`keep_out` policy) that physically blocks the robot from entering the forbidden zone.
-
-### 5. Control Interface
+### 1. Control Interface
 - **Current State**: Joint commands are currently sent by manually typing a comma-separated string into a Slicer text box (`0.0, 0.0, 0.0...`).
 - **Action Required**: This is a placeholder. Real interaction requires integrating an external tracker (via OpenIGTLink), a virtual joystick widget, or inverse kinematics (IK) dragging directly within the Slicer 3D view.
 

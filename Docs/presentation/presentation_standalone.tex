@@ -1,0 +1,774 @@
+\documentclass[aspectratio=169, 10pt]{beamer}
+\usepackage[english]{babel}
+\usepackage[absolute,overlay]{textpos}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit, backgrounds}
+
+% --------------------------------------------------- %
+%                  IIT Mandi Theme Colors             %
+% --------------------------------------------------- %
+\definecolor{iitmaroon}{RGB}{140, 29, 34}       % IIT Mandi Maroon #8C1D22
+\definecolor{iittwilight}{RGB}{35, 47, 62}      % Deep Charcoal #232F3E
+\definecolor{accentorange}{RGB}{193, 68, 14}    % Terracotta / Warm Accent #C1440E
+\definecolor{techblue}{RGB}{20, 82, 140}        % Secondary Engineering Blue #14528C
+\definecolor{cardbg}{RGB}{248, 249, 250}        % Crisp clean background
+\definecolor{darktext}{RGB}{30, 30, 30}
+\definecolor{lightgray}{RGB}{230, 233, 238}
+
+\usetheme{Madrid}
+\useinnertheme{rectangles}
+
+% Color assignments
+\setbeamercolor{structure}{fg=iitmaroon}
+\setbeamercolor{normal text}{fg=darktext}
+\setbeamercolor{title}{fg=white, bg=iitmaroon}
+\setbeamercolor{subtitle}{fg=white!90}
+\setbeamercolor{frametitle}{fg=white, bg=iitmaroon}
+\setbeamercolor{framesubtitle}{fg=white!85}
+
+\setbeamercolor{section in head/foot}{fg=white, bg=iittwilight}
+\setbeamercolor{author in head/foot}{fg=white, bg=iitmaroon}
+\setbeamercolor{title in head/foot}{fg=white, bg=iitmaroon!90!black}
+\setbeamercolor{date in head/foot}{fg=white, bg=iittwilight}
+
+% Blocks
+\setbeamercolor{block title}{fg=white, bg=iitmaroon}
+\setbeamercolor{block body}{fg=darktext, bg=cardbg}
+\setbeamercolor{block title alerted}{fg=white, bg=accentorange}
+\setbeamercolor{block body alerted}{fg=darktext, bg=accentorange!8}
+\setbeamercolor{block title example}{fg=white, bg=techblue}
+\setbeamercolor{block body example}{fg=darktext, bg=techblue!8}
+
+% Items
+\setbeamercolor{item}{fg=iitmaroon}
+\setbeamercolor{subitem}{fg=accentorange}
+\setbeamertemplate{itemize items}[square]
+\setbeamertemplate{enumerate items}[default]
+\setbeamertemplate{navigation symbols}{}
+
+% Footline with slide numbering
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshortauthor
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+      \usebeamerfont{title in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}CS399P Mid-Evaluation\hspace*{2em}
+      \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+    \end{beamercolorbox}}%
+  \vskip0pt%
+}
+
+% --------------------------------------------------- %
+%                  Presentation Info                  %
+% --------------------------------------------------- %
+\title[CS399P Mid-Evaluation]{\Large\textbf{Simulation Platform \& Autonomous Framework\\for Next-Generation Medical Robotics}}
+\subtitle{\normalsize\textbf{Major Technical Project (MTP) --- Mid-Evaluation}}
+
+\author[Rishang Yadav (B23173)]{
+    \textbf{Rishang Yadav} \quad (\textbf{Roll No: B23173})\\[0.25em]
+    \small Supervisor: \textbf{Dr. Deepak Raina}\\[0.15em]
+    \footnotesize School of Computing and Electrical Engineering (SCEE)
+}
+
+\institute[IIT Mandi]{
+    \small Indian Institute of Technology (IIT) Mandi
+}
+
+\date{October 2026}
+\subject{CS399P MTP Mid-Evaluation Presentation}
+
+\begin{document}
+
+% --------------------------------------------------- %
+% Slide 1: Title Page
+% --------------------------------------------------- %
+\begin{frame}
+  \titlepage
+  \note{
+    \textbf{Speaker Notes (Title Page):}\\
+    - Introduce yourself: Rishang Yadav, Roll No. B23173, working under Dr. Deepak Raina in SCEE, IIT Mandi.\\
+    - Project Title: Developing a high-performance simulation platform and autonomous ultrasound framework for next-generation medical robotics.\\
+    - Set the stage: This mid-evaluation covers the development of our simulation bridge, physical acoustic pipeline, and the architectural foundation for AI training.
+  }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 2: Motivation & Problem Statement
+% --------------------------------------------------- %
+\begin{frame}{Motivation: The Healthcare AI Dilemma}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Why Real-World Data Fails}
+                \begin{itemize}
+                    \item Modern AI requires \textbf{thousands of diverse trials} to master contact-rich interaction.
+                    \item Collecting physical patient datasets is:
+                    \begin{itemize}
+                        \item \textbf{High Risk:} Cannot risk patient safety.
+                        \item \textbf{Resource Intensive:} Clinical scans are costly and time-limited.
+                        \item \textbf{Hard to Standardize:} Anatomical variation across patients.
+                    \end{itemize}
+                    \item \textbf{Physics-faithful simulation is the mandatory pre-condition for medical robot learning.}
+                \end{itemize}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{alertblock}{Ultrasound: The Benchmark Task}
+                \begin{itemize}
+                    \item Ultrasound is non-invasive and radiation-free.
+                    \item However, image acquisition is \textbf{strictly coupled to physical contact}:
+                    \begin{itemize}
+                        \item Sub-optimal angle $\to$ \textbf{acoustic shadow / blackout}.
+                        \item Insufficient normal force $\to$ \textbf{acoustic decoupling}.
+                        \item Excessive pressure $\to$ \textbf{tissue deformation / pain}.
+                    \end{itemize}
+                    \item Requires tight, simultaneous coordination of \textbf{probe pose, contact force, and image interpretation}.
+                \end{itemize}
+            \end{alertblock}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Motivation):}\\
+        - Point out why standard robotics data collection pipelines fail in healthcare: trial-and-error on living patients is impossible.\\
+        - Explain why robotic ultrasound is our chosen benchmark: unlike optical cameras where pulling back 2 cm still gives an image, ultrasound requires steady normal force; losing contact yields complete acoustic noise.\\
+        - Therefore, simulation must accurately model physical contact dynamics and acoustic wave formation together.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 3: Two Project Objectives
+% --------------------------------------------------- %
+\begin{frame}{Project Objectives}
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.3cm and 0.5cm,
+        objbox1/.style={rectangle, draw=iitmaroon, fill=iitmaroon!8, thick, rounded corners=4pt, align=center, font=\small, inner sep=4pt, text width=6.0cm},
+        objbox2/.style={rectangle, draw=techblue, fill=techblue!8, thick, rounded corners=4pt, align=center, font=\small, inner sep=4pt, text width=6.0cm},
+        subbox/.style={rectangle, draw=darktext!30, fill=white, rounded corners=3pt, align=left, font=\scriptsize, inner sep=4pt, text width=5.6cm},
+        flowarr/.style={-{Stealth[scale=1.1]}, very thick, draw=accentorange}
+    ]
+        % Left: Objective 1
+        \node[objbox1] (obj1) {
+            \textbf{\textcolor{iitmaroon}{OBJECTIVE 1: Build the Simulation Platform}}\\[0.15em]
+            \footnotesize\textit{Realistic Virtual Environment for Medical Robotics}
+        };
+        
+        \node[subbox, below=0.2cm of obj1] (sub1) {
+            \textbullet\ \textbf{Tissue Contact \& Forces:} Realistic probe pressure at 1000 Hz\\
+            \textbullet\ \textbf{Ultrasound Physics:} Real-time B-scans with shadows from CT\\
+            \textbullet\ \textbf{Hospital Software Link:} Live streaming into 3D Slicer\\
+            \textbullet\ \textbf{Safety Boundaries:} Virtual keep-out zones for sensitive organs
+        };
+
+        % Right: Objective 2
+        \node[objbox2, right=1.6cm of obj1] (obj2) {
+            \textbf{\textcolor{techblue}{OBJECTIVE 2: Train \& Benchmark AI Models}}\\[0.15em]
+            \footnotesize\textit{Autonomous Scanning \& Evaluation Testbed}
+        };
+        
+        \node[subbox, below=0.2cm of obj2] (sub2) {
+            \textbullet\ \textbf{Active 3D Scanning:} Guide the probe to map full organs\\
+            \textbullet\ \textbf{Smooth Control:} Learn safe probe trajectories (e.g., diffusion)\\
+            \textbullet\ \textbf{Multimodal AI:} Test models using both images and force feedback\\
+            \textbullet\ \textbf{Benchmarking:} Measure scan speed and quality against baselines
+        };
+
+        % Dynamic Flow Connector
+        \draw[flowarr] (obj1.east) -- node[above, font=\scriptsize\bfseries, text=accentorange, align=center] {Safe Training Data} 
+                                      node[below, font=\tiny, text=darktext] {(Ultrasound + Forces)} (obj2.west);
+    \end{tikzpicture}
+
+    \vspace{0.25cm}
+    \begin{block}{\centering \textbf{How the Two Objectives Connect}}
+        \scriptsize
+        \textbf{Objective 1} builds the safe, physics-based simulator to generate realistic ultrasound and force data. \textbf{Objective 2} uses this simulated data to train, test, and benchmark autonomous scanning algorithms before deploying on physical robots.
+    \end{block}
+    \note{
+        \textbf{Speaker Notes (Objectives):}\\
+        - Keep it simple: Our project has two straightforward goals.\\
+        - First, we build a realistic simulator (Objective 1) because training robots on real patients is impossible. It models probe contact forces and generates live ultrasound images with realistic wave shadows directly inside 3D Slicer.\\
+        - Second, we use this simulator as a safe training ground (Objective 2) to teach robots how to scan autonomously and compare different AI approaches fairly.\\
+        - The first two months focused on getting the simulator working and setting up the active scanning formulation.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 4: Literature Survey (Part 1): Simulators
+% --------------------------------------------------- %
+\begin{frame}{Literature Survey (1/2): Robotic Ultrasound \& Simulators}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\textbf{SonoGym (Ao et al., 2025)}}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Overview:} Benchmark for robotic ultrasound using NVIDIA IsaacLab and clinical CT scans.
+                    \item \textbf{Core Strengths:} Fast GPU-parallel RL environment (IsaacLab) for 2D probe tracking and drilling.
+                    \item \textcolor{accentorange}{\textbf{Key Limitations:}}
+                    \begin{itemize}\itemsep=2pt
+                        \item \textbf{Bypasses Contact Dynamics:} Assumes an ideal controller keeps probe glued to skin; no continuous force-coupled acoustic mechanics.
+                        \item \textbf{Static Anatomy:} Patient model is rigid; zero tissue deformation under probe pressure.
+                        \item \textbf{No Clinical UI:} Headless/IsaacLab RL setup; completely disconnected from clinical surgical suites (no 3D Slicer).
+                        \item \textbf{2D GAN Ultrasound:} Lacks physical acoustic ray tracing (cannot compute wave attenuation or off-axis bone shadows).
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\textbf{Slicer Bridges (AMBF, SlicerROS2)}}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Overview:} Frameworks bridging physics simulators to 3D Slicer for medical visualization.
+                    \item \textbf{Core Strengths:} Demonstrates the clinical value of 3D Slicer as an open-source surgical UI.
+                    \item \textcolor{accentorange}{\textbf{Key Limitations:}}
+                    \begin{itemize}\itemsep=2pt
+                        \item \textbf{Middleware Complexity:} Relies on heavy ROS/ROS2 communication pipelines.
+                        \item \textbf{Serialization Latency:} Multi-process ROS serialization introduces latency and jitter during high-rate control.
+                        \item \textbf{Setup Overhead:} Requires multi-node Linux daemons unsuited for clinical workstations.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Literature Survey - Part 1):}\\
+        - In this first literature review slide, we focus on medical ultrasound simulation environments.\\
+        - SonoGym is our primary reference: built on NVIDIA IsaacLab, it demonstrated GPU-parallel RL for probe tracking. However, it has fundamental limitations: (1) it explicitly assumes an ideal controller keeps contact glued to the skin, bypassing contact force physics; (2) its patient model is completely rigid without tissue deformation; (3) it has zero integration with clinical software like 3D Slicer; and (4) its 2D GAN ultrasound lacks physical wave propagation.\\
+        - SlicerROS2 proved that 3D Slicer is the right medical interface, but running ROS2 introduces significant IPC latency and setup bloat on clinical computers.\\
+        - These gaps directly guided our work: direct OpenIGTLink sockets and GPU-based physical ray acoustics.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 5: Literature Survey (Part 2): Surgical AI
+% --------------------------------------------------- %
+\begin{frame}{Literature Survey (2/2): Surgical Learning \& World Models}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\textbf{Surgical VLAs: SRT \& SRT-H (2024)}}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Overview:} Vision-Language-Action models and diffusion policies for surgical manipulation.
+                    \item \textbf{Key Takeaways:}
+                    \begin{itemize}\itemsep=2pt
+                        \item Demonstrates that action chunking and language conditioning yield smooth, reactive motions.
+                        \item High-level language commands enable intuitive supervisory control.
+                    \end{itemize}
+                    \item \textcolor{accentorange}{\textbf{Key Limitations:}}
+                    \begin{itemize}\itemsep=2pt
+                        \item Tested exclusively on rigid manipulation (peg-transfer and block tasks).
+                        \item Lacks continuous physical contact compliance and non-optical acoustic perception.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{block}{\textbf{Surgical World Models (Cosmos-H, SAW)}}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Overview:} Video diffusion world models predicting future surgical scenes conditioned on robot actions.
+                    \item \textbf{Key Takeaways:}
+                    \begin{itemize}\itemsep=2pt
+                        \item Demonstrates the ability of generative models to emulate procedural workflows.
+                    \end{itemize}
+                    \item \textcolor{accentorange}{\textbf{Key Limitations:}}
+                    \begin{itemize}\itemsep=2pt
+                        \item \textbf{Geometric Hallucination:} Generative video models hallucinate anatomical boundaries without rigid physical constraints.
+                        \item \textbf{Computational Burden:} High inference latency prevents real-time closed-loop control.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Literature Survey - Part 2):}\\
+        - In this second literature slide, we examine advanced surgical AI models.\\
+        - Surgical Robot Transformers (SRT and SRT-H) show that diffusion action chunking works brilliantly for surgical robots, but their tasks were purely rigid (peg transfer). They do not incorporate contact-dependent imaging like ultrasound.\\
+        - Surgical World Models like Cosmos-H show the promise of generative modeling, but pure video diffusion hallucinates boundaries and cannot enforce physical collision safety.\\
+        - This motivates our hybrid direction: grounded physics and ray acoustics combined with generative action policies.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 6: What We Are Doing Differently Than Baselines
+% --------------------------------------------------- %
+\begin{frame}{What We Are Doing Differently Than Baselines}
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.2cm and 0.4cm,
+        colhead/.style={rectangle, draw=darktext!50, fill=darktext!8, font=\scriptsize\bfseries, align=center, rounded corners=3pt, text width=4.3cm, minimum height=0.45cm},
+        basebox/.style={rectangle, draw=iittwilight!40, fill=iittwilight!5, font=\tiny, align=left, rounded corners=3pt, text width=4.1cm, inner sep=3.5pt},
+        ourbox/.style={rectangle, draw=techblue!80, fill=techblue!8, font=\tiny, align=left, rounded corners=3pt, text width=4.1cm, inner sep=3.5pt},
+        parr/.style={-{Stealth[scale=0.8]}, thick, draw=accentorange}
+    ]
+        % Column 1: Clinical Interface
+        \node[colhead] (c1) {\textbf{1. Clinical Interface}};
+        \node[basebox, below=0.15cm of c1] (b1) {
+            \textcolor{iittwilight}{\textbf{Established Baselines:}}\\
+            \textbullet\ ROS / ROS2 middleware (SlicerROS2)\\
+            \textbullet\ Multi-process IPC serialization\\
+            \textbullet\ Headless / Omniverse GUI (SonoGym)
+        };
+        \node[ourbox, below=0.3cm of b1] (o1) {
+            \textcolor{techblue}{\textbf{Our Proposed Approach:}}\\
+            \textbullet\ \textbf{Direct OpenIGTLink TCP Sockets}\\
+            \textbullet\ Hospital-standard surgical protocol\\
+            \textbullet\ 1000 Hz physics $\leftrightarrow$ 60 FPS in-place VTK
+        };
+        \draw[parr] (b1.south) -- node[right, font=\tiny\bfseries, text=accentorange] {Direct Socket} (o1.north);
+
+        % Column 2: Ultrasound Generation
+        \node[colhead, right=0.4cm of c1] (c2) {\textbf{2. Ultrasound Generation}};
+        \node[basebox, below=0.15cm of c2] (b2) {
+            \textcolor{iittwilight}{\textbf{Established Baselines:}}\\
+            \textbullet\ 2D pix2pix GAN synthesis (SonoGym)\\
+            \textbullet\ Image-space texture prediction\\
+            \textbullet\ Learned from specific ex-vivo scans
+        };
+        \node[ourbox, below=0.3cm of b2] (o2) {
+            \textcolor{techblue}{\textbf{Our Proposed Approach:}}\\
+            \textbullet\ \textbf{Model-Based GPU Ray Shader}\\
+            \textbullet\ Real-time wave attenuation: $e^{-\alpha f z}$\\
+            \textbullet\ Physical impedance reflections \& speckle
+        };
+        \draw[parr] (b2.south) -- node[right, font=\tiny\bfseries, text=accentorange] {Wave Physics} (o2.north);
+
+        % Column 3: 3D Scanning & Planning
+        \node[colhead, right=0.4cm of c2] (c3) {\textbf{3. 3D Scanning \& Planning}};
+        \node[basebox, below=0.15cm of c3] (b3) {
+            \textcolor{iittwilight}{\textbf{Established Baselines:}}\\
+            \textbullet\ 2D image-plane visual tracking\\
+            \textbullet\ Open-loop blind raster/zigzag sweeps\\
+            \textbullet\ Susceptible to acoustic shadow voids
+        };
+        \node[ourbox, below=0.3cm of b3] (o3) {
+            \textcolor{techblue}{\textbf{Our Proposed Approach:}}\\
+            \textbullet\ \textbf{Active 3D Voxel Reconstruction}\\
+            \textbullet\ Submodular information-gain planner\\
+            \textbullet\ Formulated to steer around bone shadows
+        };
+        \draw[parr] (b3.south) -- node[right, font=\tiny\bfseries, text=accentorange] {Active NBV} (o3.north);
+    \end{tikzpicture}
+
+    \vspace{0.2cm}
+    \begin{block}{\centering \textbf{Core Engineering Differentiators}}
+        \scriptsize
+        We adapt hospital-standard OpenIGTLink sockets to streamline clinical integration, introduce deterministic GPU wave acoustics for physical reflection modeling, and extend from 2D plane tracking to active 3D volumetric reconstruction.
+    \end{block}
+    \note{
+        \textbf{Speaker Notes (What We Do Differently - Visual Comparison):}\\
+        - Walk the committee through the three vertical visual comparisons:\\
+        - 1. Interface: Rather than dragging heavy ROS middleware or operating headlessly in IsaacLab, we stream directly into 3D Slicer over OpenIGTLink binary TCP sockets.\\
+        - 2. Ultrasound: Rather than relying on a 2D GAN that hallucinates boundaries and lacks wave physics, our GPU shader computes real acoustic impedance, depth attenuation, and speckle noise directly from CT tensors.\\
+        - 3. Planning: Rather than simple 2D tracking or blind raster sweeping, our pipeline accumulates 3D voxels with confidence weighting and optimizes Next-Best-Views to eliminate shadows.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 7: Work Accomplished: Slicer Surgical Bridge
+% --------------------------------------------------- %
+\begin{frame}{Work Accomplished: Slicer-PyBullet Surgical Bridge}
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.6cm and 0.8cm,
+        slicerbox/.style={rectangle, draw=techblue, fill=techblue!10, thick, rounded corners=3pt, align=center, font=\scriptsize, inner sep=4pt, text width=3.3cm},
+        pybox/.style={rectangle, draw=iitmaroon, fill=iitmaroon!10, thick, rounded corners=3pt, align=center, font=\scriptsize, inner sep=4pt, text width=3.3cm},
+        netbox/.style={rectangle, draw=accentorange, fill=accentorange!12, dashed, thick, rounded corners=3pt, align=center, font=\scriptsize\bfseries, inner sep=4pt, text width=3.4cm},
+        netarr/.style={-{Stealth[scale=0.9]}, thick, draw=accentorange}
+    ]
+        % Slicer Side
+        \node[slicerbox] (slicer) {
+            \textbf{3D Slicer Interface}\\
+            \textit{\tiny (Surgeon's Clinical Viewport)}\\[0.2em]
+            \textbullet\ \textbf{3D Viewport:} Shows robot \& anatomy\\
+            \textbullet\ \textbf{In-Place VTK:} Lag-free 60 FPS visual\\
+            \textbullet\ \textbf{Force Vectors:} Visual pressure arrows\\
+            \textbullet\ \textbf{Safety Zones:} Surgeon keep-out limits
+        };
+
+        % OpenIGTLink Bridge
+        \node[netbox, right=0.8cm of slicer] (bridge) {
+            \textbf{OpenIGTLink Protocol}\\
+            \textit{\tiny (Hospital-Standard Network Link)}\\[0.3em]
+            \textcolor{techblue}{$\leftarrow$ User Targets \& Safety Zones}\\
+            \textcolor{techblue}{\tiny \textit{(Sent from clinician UI to simulator)}}\\[0.2em]
+            \textcolor{iitmaroon}{$\rightarrow$ Live Robot Poses \& Contact Forces}\\
+            \textcolor{iitmaroon}{\tiny \textit{(Streamed from simulator to UI at 60 FPS)}}
+        };
+
+        % PyBullet Side
+        \node[pybox, right=0.8cm of bridge] (pybullet) {
+            \textbf{Physics Server (PyBullet)}\\
+            \textit{\tiny (Virtual Robot \& Patient World)}\\[0.2em]
+            \textbullet\ \textbf{1000 Hz Loop:} Stable contact dynamics\\
+            \textbullet\ \textbf{Soft Tissue:} Skin deform under probe\\
+            \textbullet\ \textbf{Force Sensing:} Computes contact pressure\\
+            \textbullet\ \textbf{Virtual Fixtures:} Physical barrier stops
+        };
+
+        \draw[netarr] (slicer.east) -- (bridge.west);
+        \draw[netarr] (bridge.east) -- (pybullet.west);
+    \end{tikzpicture}
+
+    \vspace{0.25cm}
+    \begin{columns}[T]
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\centering \textbf{Decoupled Multi-Rate Timing}}
+                \footnotesize
+                \textbullet\ \textbf{Fast Physics (1000 Hz):} Prevents contact explosion.\\
+                \textbullet\ \textbf{Smooth Display (60 FPS):} Clinical UI responsiveness.\\
+                \textbullet\ Rendering hiccups never crash physical simulation.
+            \end{block}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\centering \textbf{In-Place Memory Updates}}
+                \footnotesize
+                \textbullet\ Overwrites existing graphics memory buffers directly.\\
+                \textbullet\ Eliminates deleting and recreating 3D objects.\\
+                \textbullet\ Guarantees zero GUI stutter during long scans.
+            \end{block}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\centering \textbf{Virtual Safety Fixtures}}
+                \footnotesize
+                \textbullet\ Surgeon delineates risk zones directly on 3D CT.\\
+                \textbullet\ Exported as hard physical obstacles in PyBullet.\\
+                \textbullet\ Robot is physically blocked from sensitive anatomy.
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Slicer Bridge Architecture):}\\
+        - The flow diagram illustrates the architecture: PyBullet calculates contact dynamics and kinematics, transmitting binary OpenIGTLink messages over TCP directly to 3D Slicer.\\
+        - Multi-rate decoupling: Contact mechanics require high frequency to prevent numerical instability, whereas visualization requires 60 FPS. Decoupling them ensures rendering hiccups never crash physical simulation.\\
+        - In-place memory: Rather than destroying and re-creating VTK scene nodes every frame, we mutate the coordinate buffer in place, preventing memory churn.\\
+        - Virtual fixtures: Allows clinicians to delineate sensitive anatomical structures (e.g., spinal cord) which PyBullet enforces as physical keep-out obstacles.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 8: Work Accomplished: 3D Ultrasound Pipeline
+% --------------------------------------------------- %
+\begin{frame}{Work Accomplished: 3D Ultrasound Reconstruction Pipeline}
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.4cm and 0.5cm,
+        box/.style={rectangle, draw=techblue, fill=techblue!8, thick, rounded corners=3pt, align=center, font=\scriptsize, inner sep=3pt, text width=2.4cm, minimum height=1.0cm},
+        rbox/.style={rectangle, draw=iitmaroon, fill=iitmaroon!8, thick, rounded corners=3pt, align=center, font=\scriptsize, inner sep=3pt, text width=2.4cm, minimum height=1.0cm},
+        pbox/.style={rectangle, draw=accentorange, fill=accentorange!10, thick, rounded corners=3pt, align=center, font=\scriptsize, inner sep=3pt, text width=2.4cm, minimum height=1.0cm},
+        kbox/.style={rectangle, draw=iittwilight, fill=iittwilight!8, thick, rounded corners=3pt, align=center, font=\scriptsize, inner sep=3pt, text width=2.4cm, minimum height=1.0cm},
+        arr/.style={-{Stealth[scale=0.85]}, thick, draw=iittwilight}
+    ]
+        % Top Row
+        \node[box] (ct) {\textbf{Patient CT Scan}\\[0.15em]\tiny 3D anatomical volume data};
+        \node[box, right=of ct] (gpu) {\textbf{GPU Reslicer}\\[0.15em]\tiny Cuts 2D slice at probe pose};
+        \node[box, right=of gpu] (ray) {\textbf{Acoustic Shader}\\[0.15em]\tiny Simulates sound decay \& noise};
+        \node[rbox, right=of ray] (seg) {\textbf{Confidence Map}\\[0.15em]\tiny Flags bone shadows \& blind spots};
+
+        % Bottom Row
+        \node[kbox, below=0.5cm of ct] (ik) {\textbf{Robot Controller}\\[0.15em]\tiny Moves 7-DoF arm to target};
+        \node[pbox, right=of ik] (nbv) {\textbf{Active View Planner}\\[0.15em]\tiny Picks best angle to see bone};
+        \node[pbox, right=of nbv] (pnet) {\textbf{Uncertainty Map}\\[0.15em]\tiny Spots unmapped / dark areas};
+        \node[rbox, right=of pnet] (accum) {\textbf{3D Voxel Fusion}\\[0.15em]\tiny Stitches 2D slices into 3D volume};
+
+        % Connections
+        \draw[arr] (ct) -- (gpu);
+        \draw[arr] (gpu) -- (ray);
+        \draw[arr] (ray) -- (seg);
+        \draw[arr] (seg.south) -- ++(0,-0.25) -| (accum.north);
+        \draw[arr] (accum) -- (pnet);
+        \draw[arr] (pnet) -- (nbv);
+        \draw[arr] (nbv) -- (ik);
+        \draw[arr, dashed, draw=accentorange, thick] (ik.north) -- (ct.south);
+    \end{tikzpicture}
+
+    \vspace{0.2cm}
+    \begin{columns}[T]
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\centering \textbf{GPU Sound Wave Physics}}
+                \footnotesize
+                \textbullet\ \textbf{Sub-2ms Slicing:} PyTorch trilinear sampling.\\
+                \textbullet\ \textbf{Exponential Decay:} Sound dims with tissue depth.\\
+                \textbullet\ \textbf{Rayleigh Noise:} Authentic ultrasound speckle.\\
+                \textbullet\ Physics-based alternative to black-box GANs.
+            \end{block}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\centering \textbf{3D Volumetric Fusion}}
+                \footnotesize
+                \textbullet\ Stitches 2D frames into a global 3D voxel grid.\\
+                \textbullet\ Uses tracked robot poses to place voxels.\\
+                \textbullet\ \textbf{Confidence Weighing:} Blends clear pixels, discards shadows.\\
+                \textbullet\ Builds a continuous 3D organ volume.
+            \end{block}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \begin{block}{\centering \textbf{Active Shadow Avoidance}}
+                \footnotesize
+                \textbullet\ Prioritizes dark, unmapped regions.\\
+                \textbullet\ Intelligently tilts probe to peer around bone.\\
+                \textbullet\ Avoids wasting time re-scanning flat areas.\\
+                \textbullet\ Formulated for complete organ coverage.
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Ultrasound Pipeline):}\\
+        - Explain the closed loop in the flowchart: We extract 2D CT slices on the GPU in tensor memory, apply physical acoustic attenuation and speckle noise, and calculate confidence.\\
+        - The 3D accumulator projects these slices into a global voxel space using tracked robot forward kinematics, building a continuous volume.\\
+        - The active view planner evaluates spatial uncertainty to determine the next probe trajectory.\\
+        - Note: This is an architectural formulation designed to resolve acoustic shadows; empirical verification is part of our future testing plan.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 9: Autonomous Scanning Formulation
+% --------------------------------------------------- %
+\begin{frame}{Autonomous Scanning: Formulating Active View Selection}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{alertblock}{Limitations of Blind Raster Sweeps}
+                \begin{itemize}
+                    \item Baselines typically rely on \textbf{open-loop zigzag/raster sweeps}:
+                    \begin{itemize}
+                        \item Blindly traverses a planar bounding box.
+                        \item Misses out-of-plane features, steep bone facets, and occluded contours.
+                        \item Wastes scan time re-sweeping already reconstructed regions.
+                    \end{itemize}
+                    \item Real human anatomy is 3D, non-planar, and acoustically complex.
+                \end{itemize}
+            \end{alertblock}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Active Exploration Formulation}
+                \begin{itemize}
+                    \item \textbf{Submodular Objective Design:}
+                    \begin{itemize}
+                        \item Re-scanning an already covered voxel yields diminishing information gain.
+                        \item Formulated to balance new surface coverage against robot motion penalty.
+                    \end{itemize}
+                    \item \textbf{Expected Benefits:}
+                    \begin{itemize}
+                        \item Designed to steer probe tilt around acoustic obstacles (e.g., ribs).
+                        \item Expected to reduce scan duration and eliminate shadow voids.
+                    \end{itemize}
+                    \item \textbf{Status:} Formulation implemented in simulation; systematic testing against baselines planned in future work.
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Active Planning Formulation):}\\
+        - Contrast blind raster scanning with active view planning: raster sweeps repeatedly scan flat regions while missing complex angled surfaces behind acoustic barriers.\\
+        - Explain the principle of diminishing returns: re-scanning covered tissue should yield zero reward, encouraging the robot to explore unmapped areas.\\
+        - Crucially clarify to the committee: This formulation is designed and implemented, but its comparative performance against baselines will be formally tested in the next project phase.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 10: Technical Understanding: Architectural Decisions
+% --------------------------------------------------- %
+\begin{frame}{Technical Understanding: Three Core Decisions}
+    \centering
+    \begin{tikzpicture}[
+        node distance=0.2cm and 0.4cm,
+        dcard/.style={rectangle, draw=darktext!40, fill=white, rounded corners=4pt, inner sep=4pt, text width=4.3cm, align=center},
+        altbox/.style={rectangle, draw=iittwilight!40, fill=iittwilight!5, rounded corners=2pt, font=\tiny, inner sep=3pt, text width=4.0cm, align=left},
+        chobox1/.style={rectangle, draw=iitmaroon!80!black, fill=iitmaroon!8, rounded corners=2pt, font=\tiny, inner sep=3pt, text width=4.0cm, align=left},
+        chobox2/.style={rectangle, draw=techblue!80!black, fill=techblue!8, rounded corners=2pt, font=\tiny, inner sep=3pt, text width=4.0cm, align=left},
+        chobox3/.style={rectangle, draw=accentorange!80!black, fill=accentorange!8, rounded corners=2pt, font=\tiny, inner sep=3pt, text width=4.0cm, align=left},
+        dhead/.style={font=\scriptsize\bfseries, align=center, text width=4.1cm, minimum height=0.45cm}
+    ]
+        % Decision 1
+        \node[dcard] (card1) {
+            \dhead{\textcolor{iitmaroon}{\textbf{1. Network Transport}}}\\[0.2em]
+            \begin{tikzpicture}[node distance=0.15cm]
+                \node[altbox] (r1) {
+                    \textbf{\textcolor{iittwilight}{Alternative: ROS2 / DDS}}\\
+                    Standard robotics middleware; introduces multi-node daemons and IPC serialization.
+                };
+                \node[chobox1, below=0.15cm of r1] (c1) {
+                    \textbf{\textcolor{iitmaroon}{Design Choice: OpenIGTLink TCP}}\\
+                    Native 3D Slicer protocol; direct, lightweight binary streaming between physics and UI.
+                };
+            \end{tikzpicture}
+        };
+
+        % Decision 2
+        \node[dcard, right=0.4cm of card1] (card2) {
+            \dhead{\textcolor{techblue}{\textbf{2. Ultrasound Generation}}}\\[0.2em]
+            \begin{tikzpicture}[node distance=0.15cm]
+                \node[altbox] (r2) {
+                    \textbf{\textcolor{iittwilight}{Alternative: 2D Generative GAN}}\\
+                    Data-driven texture synthesis, but requires retraining per patient and lacks ray wave physics.
+                };
+                \node[chobox2, below=0.15cm of r2] (c2) {
+                    \textbf{\textcolor{techblue}{Design Choice: GPU Ray Physics}}\\
+                    Deterministic wave attenuation and acoustic impedance; evaluates zero-shot on any patient CT.
+                };
+            \end{tikzpicture}
+        };
+
+        % Decision 3
+        \node[dcard, right=0.4cm of card2] (card3) {
+            \dhead{\textcolor{accentorange}{\textbf{3. View Planning Strategy}}}\\[0.2em]
+            \begin{tikzpicture}[node distance=0.15cm]
+                \node[altbox] (r3) {
+                    \textbf{\textcolor{iittwilight}{Alternative: Heuristic Raster Sweeps}}\\
+                    Standard scanning pattern; simple open-loop coverage, but susceptible to persistent shadows.
+                };
+                \node[chobox3, below=0.15cm of r3] (c3) {
+                    \textbf{\textcolor{accentorange}{Design Choice: Submodular NBV}}\\
+                    Evaluates marginal information gain across 3D voxels; formulated to steer around bone.
+                };
+            \end{tikzpicture}
+        };
+    \end{tikzpicture}
+
+    \vspace{0.25cm}
+    \begin{block}{\centering \textbf{Engineering Rationale Summary}}
+        \scriptsize
+        Each architectural decision balances established robotics practices against medical realities: prioritizing clinical workstation compatibility (OpenIGTLink), zero-shot anatomical transfer (GPU ray acoustics), and obstacle-aware coverage (submodular NBV).
+    \end{block}
+    \note{
+        \textbf{Speaker Notes (Technical Understanding - Decision Architecture):}\\
+        - Walk the committee through our three core design choices:\\
+        - Decision 1 (OpenIGTLink): Why not ROS2? 3D Slicer natively supports OpenIGTLink. It allows direct TCP binary socket streaming with sub-millisecond round-trip time, avoiding ROS serialization overhead on clinical workstations.\\
+        - Decision 2 (Physics over GANs): GANs produce plausible textures but hallucinate boundaries and cannot physically model sound attenuation. Our GPU shader models real acoustic physics directly from CT densities.\\
+        - Decision 3 (Submodular Planning): Volumetric coverage is non-Markovian; submodular information gain naturally captures diminishing returns.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 11: Future Direction (Part 1): Testing & Control
+% --------------------------------------------------- %
+\begin{frame}{Future Direction (1/2): Testing \& Interactive Control}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{1. Simulation Pipeline Testing \& Verification}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Multi-Rate Timing Stability:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Stress-test the physics loop under rapid probe contact force transitions and varied penetration depths.
+                        \item Verify collision stability across varied tissue stiffness parameters.
+                    \end{itemize}
+                    \item \textbf{GPU Reslicing Profiling:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Profile slicing and acoustic ray shader throughput across diverse patient CT volume sizes.
+                    \end{itemize}
+                    \item \textbf{OpenIGTLink Streaming Integrity:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Verify continuous packet transmission without frame drops or memory leaks during prolonged sessions.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{block}{2. Interactive Trajectory Initialization}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Clinician-in-the-Loop Setup:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Connect 3D Slicer interactive markups (fiducial points and bounding regions) directly to the simulation.
+                        \item Clinicians can delineate a region of interest (e.g., lumbar vertebra) directly on the 3D viewport.
+                    \end{itemize}
+                    \item \textbf{Kinematic Goal Resolution:}
+                    \begin{itemize}\itemsep=1pt
+                        \item PyBullet inverse kinematics (IK) automatically resolves clinician markups into initial collision-free robot poses.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Future Direction - Part 1):}\\
+        - In the first half of our future roadmap, we focus on engineering verification and interactive clinical controls.\\
+        - Testing is our top priority: we need to systematically verify contact stability under high forces, profile GPU slicing speed across varied CT resolutions, and confirm socket packet integrity.\\
+        - In addition, we will integrate 3D Slicer interactive markups so a clinician can click or drag target points on patient anatomy, allowing PyBullet IK to initialize scanning trajectories automatically.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 12: Future Direction (Part 2): Policy Training
+% --------------------------------------------------- %
+\begin{frame}{Future Direction (2/2): Policy Training \& AI Benchmarking}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{3. AI Policy Training in Simulation}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Generative Action Chunking:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Train Continuous Flow Matching (CFM) and diffusion policies for smooth 6-DoF probe velocity generation.
+                    \end{itemize}
+                    \item \textbf{Active Exploration Optimization:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Train policies using submodular information-gain rewards to dynamically avoid acoustic shadows.
+                    \end{itemize}
+                    \item \textbf{Multi-Patient Training:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Train across multiple patient abdominal/spinal CT volumes to promote generalization.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \begin{block}{4. Comparative Benchmarking Suite}
+                \begin{itemize}\itemsep=3pt
+                    \item \textbf{Systematic Baseline Comparison:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Empirically evaluate active planning against standard raster/zigzag sweeps in simulation.
+                    \end{itemize}
+                    \item \textbf{Evaluation Metrics (Expected):}
+                    \begin{itemize}\itemsep=1pt
+                        \item Reconstructed volume completeness percentage.
+                        \item Acoustic shadow void reduction.
+                        \item Total trajectory length and scan duration.
+                    \end{itemize}
+                    \item \textbf{VLA Observation Testbed:}
+                    \begin{itemize}\itemsep=1pt
+                        \item Structure observation spaces (B-mode ultrasound, contact force history, text prompts) for surgical VLA benchmarking.
+                    \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+    \note{
+        \textbf{Speaker Notes (Future Direction - Part 2):}\\
+        - In the second half of our future roadmap, we focus on policy learning and establishing our simulation benchmarking suite.\\
+        - We will implement diffusion and flow matching policies for smooth action chunking, and train them across diverse patient CT scans.\\
+        - We will then run systematic comparative benchmarks: measuring whether our active view planning successfully reduces acoustic shadows and scan time compared to standard raster sweeps.\\
+        - Finally, the platform will serve as an open benchmark for evaluating multimodal Vision-Language-Action models.
+    }
+\end{frame}
+
+% --------------------------------------------------- %
+% Slide 13: Conclusion & Committee Discussion
+% --------------------------------------------------- %
+\begin{frame}[c]{Conclusion \& Discussion}
+    \centering
+    \begin{block}{Summary of Work Accomplished}
+        \begin{itemize}
+            \item \textbf{High-Performance Slicer Surgical Bridge:} Real-time integration between PyBullet physics and 3D Slicer via OpenIGTLink with in-place VTK updates and virtual safety fixtures.
+            \item \textbf{Autonomous 3D Ultrasound Framework:} GPU-accelerated acoustic physics reslicing, confidence-weighted 3D voxel accumulation, and active view selection formulation.
+            \item \textbf{Foundation for Healthcare AI:} Established a clean, decoupled simulation environment ready for pipeline testing and AI policy benchmarking.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.4cm}
+    {\Huge \textbf{\textcolor{iitmaroon}{Thank You!}}}\\[0.6em]
+    {\large \textbf{Questions \& Discussion}}\\[1.0em]
+    \footnotesize
+    \textbf{Rishang Yadav} (B23173) \quad $\vert$ \quad Supervisor: \textbf{Dr. Deepak Raina}\\
+    School of Computing and Electrical Engineering (SCEE), IIT Mandi
+    \note{
+        \textbf{Speaker Notes (Conclusion):}\\
+        - Summarize the core message: Over the first two months, we developed the essential simulation infrastructure—the zero-ROS Slicer bridge and the physically grounded 3D ultrasound pipeline.\\
+        - Reassure the committee that the platform is now ready for systematic pipeline testing and AI policy benchmarking in the subsequent phase.\\
+        - Open the floor for questions, ready to defend architectural choices.
+    }
+\end{frame}
+
+\end{document}

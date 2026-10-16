@@ -186,6 +186,53 @@
     </widget>
    </item>
    <item>
+    <widget class="ctkCollapsibleButton" name="AutonomousScanCollapsibleButton">
+     <property name="text">
+      <string>Ultrasound Scan &amp; ROI Guidance</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_6">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_5">
+        <item>
+         <widget class="QLabel" name="label_5">
+          <property name="text">
+           <string>Target ROI Markup:</string>
+          </property>
+         </item>
+         <item>
+          <widget class="qMRMLNodeComboBox" name="roiFiducialSelector">
+           <property name="nodeTypes">
+            <stringlist>
+             <string>vtkMRMLMarkupsFiducialNode</string>
+            </stringlist>
+           </property>
+           <property name="showChildNodeTypes">
+            <bool>false</bool>
+           </property>
+           <property name="addEnabled">
+            <bool>false</bool>
+           </property>
+           <property name="removeEnabled">
+            <bool>false</bool>
+           </property>
+           <property name="noneEnabled">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="sendROITargetButton">
+         <property name="text">
+          <string>Dispatch Probe to Target ROI</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>

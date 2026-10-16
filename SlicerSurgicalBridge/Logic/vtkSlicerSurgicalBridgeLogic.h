@@ -15,6 +15,7 @@ public:
   
   void ConnectToPhysicsServer(const std::string& host, int port);
   void SendRobotCommand(const std::string& q_des);
+  void SendROITarget(double x, double y, double z);
   void SetTargetModelNode(vtkMRMLModelNode* node);
   void SetForceModelNode(vtkMRMLModelNode* node);
   void SetVFModelNode(vtkMRMLModelNode* node);

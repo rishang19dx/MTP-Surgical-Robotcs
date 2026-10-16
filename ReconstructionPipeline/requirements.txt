@@ -1,0 +1,21 @@
+# Core Physics & Spatial Tracking
+pybullet>=3.2.0
+pyigtl>=0.4.1
+
+# Math, Kinematics & Optimization
+numpy>=1.22.0
+scipy>=1.8.0
+pinocchio>=2.6.0; platform_system != "Windows"
+
+# Deep Learning & GPU Simulation
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Medical Imaging & 3D Geometry
+nibabel>=5.0.0
+open3d>=0.17.0
+trimesh>=3.20.0
+
+# Configuration & Testing
+pyyaml>=6.0
+pytest>=7.0.0

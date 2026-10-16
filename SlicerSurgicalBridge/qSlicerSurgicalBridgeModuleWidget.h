@@ -22,6 +22,7 @@ protected slots:
   void onForceModelNodeChanged(vtkMRMLNode* node);
   void onSendVFClicked();
   void onVFModelNodeChanged(vtkMRMLNode* node);
+  void onSendROITargetClicked();
 protected:
   void setup() override;
   QScopedPointer<qSlicerSurgicalBridgeModuleWidgetPrivate> d_ptr;

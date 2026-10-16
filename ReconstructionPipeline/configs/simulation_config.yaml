@@ -1,0 +1,47 @@
+# Ultrasound Simulation & Hardware Configuration
+ultrasound:
+  image_height: 200            # Pixels
+  image_width: 150             # Pixels
+  physical_height_mm: 75.0     # Scan depth in mm
+  physical_width_mm: 50.0      # Transducer lateral width in mm
+  spatial_resolution_mm: 0.5   # mm per pixel
+  frequency_mhz: 5.0           # Ultrasound frequency (MHz)
+  initial_energy: 1.0          # Normalized transmission energy E0
+  attenuation_coefficients:
+    soft_tissue: 0.54          # dB / (cm * MHz)
+    bone: 5.0                  # dB / (cm * MHz) - strong acoustic attenuation
+    fluid: 0.005
+    air: 12.0
+  psf:
+    axial_variance_px: 2.0     # Point Spread Function axial width
+    lateral_variance_px: 1.5   # Point Spread Function lateral width
+  speckle:
+    noise_sigma: 0.15
+    noise_density: 0.85
+  bone_segmentation:
+    dropout_probability: 0.15  # Simulates imperfect bone echo detection
+    min_confidence: 0.35
+
+robot:
+  type: "kinova_gen3_7dof"
+  num_dof: 7
+  end_effector_link: "end_effector_link"
+  control_frequency_hz: 100.0
+  joint_limits:
+    velocity_max: [1.39, 1.39, 1.39, 1.39, 1.22, 1.22, 1.22] # rad/s
+  contact:
+    desired_normal_force_n: 5.0
+    max_normal_force_n: 15.0
+
+planning:
+  action_space:
+    delta_x_range_mm: [-5.0, 5.0]
+    delta_y_range_mm: [-5.0, 5.0]
+    delta_yaw_range_deg: [-10.0, 10.0]
+    delta_pitch_range_deg: [-15.0, 15.0]
+  submodular_reward:
+    weight_path_length: 0.01
+    weight_angular_effort: 1.0
+  reconstruction_grid:
+    voxel_size_mm: 1.5
+    roi_bounds_mm: [-60.0, 60.0, -60.0, 60.0, -60.0, 60.0]

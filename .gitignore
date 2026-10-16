@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pytest_cache/
+.pytest_cache/
 
 # C extensions
 *.so
@@ -27,7 +29,16 @@ wheels/
 
 # Virtual environments
 venv/
+.venv/
 .env
+
+# Model checkpoints & large weights
+checkpoints/*.pt
+checkpoints/*.pth
+*.pt
+*.pth
+*.nii
+*.nii.gz
 
 # IDEs and Editors
 .vscode/
@@ -35,3 +46,7 @@ venv/
 *.swp
 *.swo
 .DS_Store
+
+# Temporary outputs
+*.log
+slides_preview/

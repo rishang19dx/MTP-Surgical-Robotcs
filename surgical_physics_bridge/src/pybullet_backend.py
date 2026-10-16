@@ -2,8 +2,13 @@ import pybullet as p
 import pybullet_data
 from typing import Dict, List, Optional
 import numpy as np
-from backend_interface import SurgicalSimulationBackend
-from coordinates import convert_pose_pb_to_slicer
+try:
+    from backend_interface import SurgicalSimulationBackend
+    from coordinates import convert_pose_pb_to_slicer
+except ImportError:
+    from surgical_physics_bridge.src.backend_interface import SurgicalSimulationBackend
+    from surgical_physics_bridge.src.coordinates import convert_pose_pb_to_slicer
+
 
 class PyBulletBackend(SurgicalSimulationBackend):
     def __init__(self, gui=False):

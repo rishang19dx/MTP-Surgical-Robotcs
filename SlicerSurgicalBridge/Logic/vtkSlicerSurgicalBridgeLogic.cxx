@@ -203,7 +203,19 @@ void vtkSlicerSurgicalBridgeLogic::ConnectToPhysicsServer(const std::string& hos
 
 void vtkSlicerSurgicalBridgeLogic::SendRobotCommand(const std::string& q_des)
 {
-  // Implement OpenIGTLink message sending logic here (e.g. String message or NDArray message)
-  // For sending IGTL string messages through SlicerOpenIGTLinkIF, we can push to an outgoing queue.
-  // vtkMRMLIGTLConnectorNode has methods to register outgoing messages.
+  if (!this->ConnectorNode || !this->GetMRMLScene()) return;
+  vtkNew<vtkMRMLTextNode> textNode;
+  textNode->SetName("CMD");
+  textNode->SetText(q_des.c_str());
+  this->GetMRMLScene()->AddNode(textNode);
+  this->ConnectorNode->RegisterOutgoingMRMLNode(textNode);
+  this->ConnectorNode->PushNode(textNode);
+}
+
+void vtkSlicerSurgicalBridgeLogic::SendROITarget(double x, double y, double z)
+{
+  if (!this->ConnectorNode || !this->GetMRMLScene()) return;
+  std::stringstream ss;
+  ss << "{\"roi_target\": [" << x << ", " << y << ", " << z << "]}";
+  this->SendRobotCommand(ss.str());
 }

@@ -1,25 +1,26 @@
 """
-Gymnasium Environment for Autonomous Robotic Ultrasound Bone Reconstruction.
-Formulates the task as a Submodular Markov Decision Process with greedy marginal gain rewards.
-Based on SonoGym (Ao et al., 2025).
+Gymnasium-compatible Ultrasound Reconstruction & Active View Selection Environment.
+Models physical contact dynamics, closed-loop force-acoustic coupling,
+GPU-accelerated trilinear slicing, and direct 2D B-mode ultrasound surface reconstruction.
+Supports both clinical lateral flank scanning (patient lying down) and dorsal scanning.
 """
 
+from typing import Optional, Tuple, Dict, Any
 import os
-from typing import Tuple, Dict, Any, Optional, Union
 import numpy as np
 import torch
 
+from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
 from ReconstructionPipeline.simulation.slice_extractor import VolumeSliceExtractor
 from ReconstructionPipeline.simulation.ultrasound_model_based import ModelBasedUltrasoundSimulator
 from ReconstructionPipeline.simulation.confidence_map import UltrasoundConfidenceEstimator
 from ReconstructionPipeline.reconstruction.bone_segmentation import BoneSurfaceSegmenter
 from ReconstructionPipeline.reconstruction.point_cloud_accumulator import PointCloudAccumulator
-from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
 
 
 class UltrasoundReconstructionEnv:
     """
-    Continuous control environment for active robotic ultrasound scanning of a lumbar vertebra.
+    Simulates autonomous robotic 3D ultrasound scanning and intraoperative bone surface reconstruction.
     """
     def __init__(
         self,
@@ -33,6 +34,8 @@ class UltrasoundReconstructionEnv:
         tissue_stiffness_n_per_mm: float = 2.5,
         target_force_n: float = 4.0,
         skin_curvature: float = 0.002,
+        scan_approach: str = "lateral",
+        reconstruction_source: str = "bmode",
         pybullet_backend: Optional[Any] = None,
         device: Optional[torch.device] = None,
     ):
@@ -46,6 +49,8 @@ class UltrasoundReconstructionEnv:
         self.tissue_stiffness = tissue_stiffness_n_per_mm
         self.target_force_n = target_force_n
         self.skin_curvature = skin_curvature
+        self.scan_approach = scan_approach.lower()
+        self.reconstruction_source = reconstruction_source.lower()
         self.pybullet_backend = pybullet_backend
 
         # 1. Load or generate patient anatomy
@@ -77,21 +82,26 @@ class UltrasoundReconstructionEnv:
         self.segmenter = BoneSurfaceSegmenter()
         self.accumulator = PointCloudAccumulator(voxel_size_mm=1.5)
 
-        # 3. Action Space: 4-DoF [dx, dz, d_yaw, d_pitch]
-        # dx, dz: translations on patient back [-5 mm, 5 mm]
-        # d_yaw: rotation around surface normal [-10 deg, 10 deg] in radians
-        # d_pitch: tilt angle around lateral axis [-15 deg, 15 deg] in radians
+        # 3. Action Space: 4-DoF [dc1, dc2, dyaw, dpitch]
         self.action_scale_trans = 5.0 # mm
         self.action_scale_yaw = np.radians(10.0) # rad
         self.action_scale_pitch = np.radians(15.0) # rad
 
-        # Scanning bounding box on patient back (mm)
-        self.x_bounds = (-45.0, 45.0)
-        self.z_bounds = (-30.0, 30.0)
+        # Scanning bounding box on patient skin
+        if self.scan_approach == "lateral":
+            # Lateral flank scan: c1 is anterior-posterior Y, c2 is cranial-caudal Z
+            self.c1_bounds = (-30.0, 30.0)
+            self.c2_bounds = (-30.0, 30.0)
+        else:
+            # Dorsal scan: c1 is lateral X, c2 is cranial-caudal Z
+            self.c1_bounds = (-45.0, 45.0)
+            self.c2_bounds = (-30.0, 30.0)
+        self.x_bounds = self.c1_bounds
+        self.z_bounds = self.c2_bounds
 
         # State tracking
         self.current_step = 0
-        self.current_pose_params = np.zeros(4) # [x, z, yaw, pitch]
+        self.current_pose_params = np.zeros(4) # [c1, c2, yaw, pitch]
         self.previous_area = 0.0
         self.trajectory_length = 0.0
         self.total_rotation = 0.0
@@ -99,44 +109,51 @@ class UltrasoundReconstructionEnv:
         self.current_coupling = 1.0
         self.current_contact_status = "optimal"
 
+    def get_skin_surface(self, c1: float, c2: float) -> float:
+        """
+        Computes skin surface coordinate accounting for anatomical curvature.
+        In lateral mode: returns flank skin x(y, z) where probe contacts the flank.
+        In dorsal mode: returns dorsal skin y(x, z).
+        """
+        if self.scan_approach == "lateral":
+            delta_x = self.skin_curvature * (0.6 * (c1 ** 2) + 0.4 * (c2 ** 2))
+            return float(48.0 - delta_x)
+        else:
+            delta_y = self.skin_curvature * (0.6 * (c1 ** 2) + 0.4 * (c2 ** 2))
+            return float(self.skin_y - delta_y)
+
     def get_skin_surface_y(self, x: float, z: float) -> float:
-        """
-        Computes dorsal skin surface elevation y(x, z) accounting for anatomical curvature.
-        In patient frame, y > 0 is dorsal (patient back). Lateral curvature drops elevation at the flanks.
-        """
-        delta_y = self.skin_curvature * (0.6 * (x ** 2) + 0.4 * (z ** 2))
-        return float(self.skin_y - delta_y)
+        """Maintains backward compatibility for skin surface coordinate queries."""
+        return self.get_skin_surface(x, z)
 
     def compute_contact_force_and_coupling(
         self,
-        x: float,
-        z: float,
+        c1: float,
+        c2: float,
         yaw: float,
         pitch: float,
+        probe_coord: Optional[float] = None,
         probe_y: Optional[float] = None,
     ) -> Tuple[float, float, str]:
         """
         Computes normal contact force F_N (N) and acoustic coupling factor kappa in [0.05, 1.0].
-        
-        Acoustic Coupling Rules:
-        - F_N < 1.0 N: Acoustic decoupling due to air gap -> kappa = 0.05 (blackout/noise).
-        - 1.0 <= F_N < 2.0 N: Partial contact transition.
-        - 2.0 <= F_N <= 8.0 N: Clinical optimal acoustic window -> full transmission (modulated by tilt).
-        - F_N > 8.0 N: Excessive contact pressure causing tissue deformation and discomfort.
         """
+        if probe_y is not None and probe_coord is None:
+            probe_coord = probe_y
         if self.pybullet_backend is not None and getattr(self.pybullet_backend, "anatomy_body_id", None) is not None:
             contacts = self.pybullet_backend.get_contacts()
             normal_force = float(sum(c["normal_force"] for c in contacts)) if contacts else 0.0
         else:
-            surface_y = self.get_skin_surface_y(x, z)
-            if probe_y is None:
-                # In 4-DoF continuous mode, admittance controller targets optimal contact depth
+            surface_coord = self.get_skin_surface(c1, c2)
+            if probe_coord is None and probe_y is None:
                 penetration = self.target_force_n / self.tissue_stiffness
+            elif probe_y is not None:
+                penetration = max(0.0, probe_y - self.skin_y)
             else:
-                penetration = max(0.0, probe_y - surface_y)
+                penetration = max(0.0, surface_coord - probe_coord)
             normal_force = float(self.tissue_stiffness * penetration)
 
-        # Beam tilt angle relative to dorsal normal
+        # Beam tilt angle relative to surface normal
         tilt_angle = np.sqrt(yaw ** 2 + pitch ** 2)
         tilt_factor = float(np.exp(-0.5 * (tilt_angle / np.radians(22.0)) ** 2))
 
@@ -155,47 +172,57 @@ class UltrasoundReconstructionEnv:
 
         return normal_force, float(np.clip(kappa, 0.05, 1.0)), status
 
-    def _build_probe_matrix(self, x: float, z: float, yaw: float, pitch: float, y_offset: float = 0.0) -> np.ndarray:
+    def _build_probe_matrix(self, c1: float, c2: float, yaw: float, pitch: float, offset: float = 0.0) -> np.ndarray:
         """
-        Constructs the 4x4 matrix T_patient_probe mapping probe frame to patient volume frame.
-        In patient frame:
-            x: lateral
-            y: anterior-posterior (probe placed on dorsal skin, pointing -y into patient)
-            z: cranial-caudal
+        Constructs the 4x4 matrix T_patient_probe mapping probe frame {U} to patient volume frame.
         """
         cy, sy = np.cos(yaw), np.sin(yaw)
         cp, sp = np.cos(pitch), np.sin(pitch)
 
-        # Rotation matrix combining yaw (around y) and pitch (around x)
-        # Probe convention: beam points along +y_probe, which aligns with -y_patient
-        r_base = np.array([
-            [1.0,  0.0,  0.0],
-            [0.0, -1.0,  0.0],
-            [0.0,  0.0, -1.0]
-        ])
+        if self.scan_approach == "lateral":
+            # Lateral flank scan: probe on lateral flank pointing laterally inward (-X) toward spine
+            col1 = np.array([0.0, 0.0, 1.0])   # probe +X along cranial-caudal +Z
+            col2 = np.array([-1.0, 0.0, 0.0])  # probe +Y (acoustic beam) along -X into spine
+            col3 = np.cross(col1, col2)        # probe +Z along anterior-posterior -Y
+            r_base = np.column_stack([col1, col2, col3])
 
-        r_yaw = np.array([
-            [cy,  0.0, sy],
-            [0.0, 1.0, 0.0],
-            [-sy, 0.0, cy]
-        ])
+            r_yaw = np.array([[cy, 0.0, sy], [0.0, 1.0, 0.0], [-sy, 0.0, cy]])
+            r_pitch = np.array([[1.0, 0.0, 0.0], [0.0, cp, -sp], [0.0, sp, cp]])
+            rot = r_base @ r_yaw @ r_pitch
 
-        r_pitch = np.array([
-            [1.0, 0.0,  0.0],
-            [0.0, cp, -sp],
-            [0.0, sp,  cp]
-        ])
+            flank_x = self.get_skin_surface(c1, c2)
+            t_matrix = np.eye(4)
+            t_matrix[:3, :3] = rot
+            t_matrix[0, 3] = flank_x + offset
+            t_matrix[1, 3] = c1
+            t_matrix[2, 3] = c2
+            return t_matrix
+        else:
+            # Dorsal scan: probe on dorsal back pointing down (-Y) into patient
+            r_base = np.array([
+                [1.0,  0.0,  0.0],
+                [0.0, -1.0,  0.0],
+                [0.0,  0.0, -1.0]
+            ])
+            r_yaw = np.array([
+                [cy,  0.0, sy],
+                [0.0, 1.0, 0.0],
+                [-sy, 0.0, cy]
+            ])
+            r_pitch = np.array([
+                [1.0, 0.0,  0.0],
+                [0.0, cp, -sp],
+                [0.0, sp,  cp]
+            ])
+            rot = r_yaw @ r_pitch @ r_base
 
-        rot = r_yaw @ r_pitch @ r_base
-
-        surface_y = self.get_skin_surface_y(x, z)
-        t_matrix = np.eye(4)
-        t_matrix[:3, :3] = rot
-        t_matrix[0, 3] = x
-        t_matrix[1, 3] = surface_y + y_offset
-        t_matrix[2, 3] = z
-
-        return t_matrix
+            surface_y = self.get_skin_surface(c1, c2)
+            t_matrix = np.eye(4)
+            t_matrix[:3, :3] = rot
+            t_matrix[0, 3] = c1
+            t_matrix[1, 3] = surface_y + offset
+            t_matrix[2, 3] = c2
+            return t_matrix
 
     def reset(self) -> Dict[str, Any]:
         """Resets the environment for a new scanning episode."""
@@ -205,65 +232,55 @@ class UltrasoundReconstructionEnv:
         self.trajectory_length = 0.0
         self.total_rotation = 0.0
 
-        # Randomize initial probe pose on patient back
-        init_x = np.random.uniform(-15.0, 15.0)
-        init_z = np.random.uniform(-10.0, 10.0)
+        # Randomize initial probe pose on patient skin
+        init_c1 = np.random.uniform(-10.0, 10.0)
+        init_c2 = np.random.uniform(-10.0, 10.0)
         init_yaw = np.random.uniform(-np.radians(5.0), np.radians(5.0))
         init_pitch = np.random.uniform(-np.radians(5.0), np.radians(5.0))
-        self.current_pose_params = np.array([init_x, init_z, init_yaw, init_pitch], dtype=np.float32)
+        self.current_pose_params = np.array([init_c1, init_c2, init_yaw, init_pitch], dtype=np.float32)
 
-        # Compute initial contact state
-        f_n, kappa, status = self.compute_contact_force_and_coupling(init_x, init_z, init_yaw, init_pitch)
+        f_n, kappa, status = self.compute_contact_force_and_coupling(init_c1, init_c2, init_yaw, init_pitch)
         self.current_normal_force = f_n
         self.current_coupling = kappa
         self.current_contact_status = status
 
-        # Acquire initial scan frame
         obs = self._observe_current_state()
         return obs
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, Any], float, bool, bool, Dict[str, Any]]:
         """
         Executes one action step, acquiring an ultrasound frame and updating reconstruction.
-
-        Args:
-            action: (4,) array in [-1.0, 1.0] representing [dx, dz, dyaw, dpitch].
-
-        Returns:
-            observation, reward, terminated, truncated, info
         """
         self.current_step += 1
 
-        # Scale action
         action = np.clip(action, -1.0, 1.0)
-        dx = action[0] * self.action_scale_trans
-        dz = action[1] * self.action_scale_trans
+        dc1 = action[0] * self.action_scale_trans
+        dc2 = action[1] * self.action_scale_trans
         dyaw = action[2] * self.action_scale_yaw
         dpitch = action[3] * self.action_scale_pitch
 
-        # Update pose parameters
-        new_x = np.clip(self.current_pose_params[0] + dx, self.x_bounds[0], self.x_bounds[1])
-        new_z = np.clip(self.current_pose_params[1] + dz, self.z_bounds[0], self.z_bounds[1])
+        new_c1 = np.clip(self.current_pose_params[0] + dc1, self.c1_bounds[0], self.c1_bounds[1])
+        new_c2 = np.clip(self.current_pose_params[1] + dc2, self.c2_bounds[0], self.c2_bounds[1])
         new_yaw = self.current_pose_params[2] + dyaw
         new_pitch = np.clip(self.current_pose_params[3] + dpitch, -np.radians(35.0), np.radians(35.0))
 
-        actual_dx = new_x - self.current_pose_params[0]
-        actual_dz = new_z - self.current_pose_params[1]
-        step_path = np.sqrt(actual_dx**2 + actual_dz**2)
+        actual_dc1 = new_c1 - self.current_pose_params[0]
+        actual_dc2 = new_c2 - self.current_pose_params[1]
+        step_path = np.sqrt(actual_dc1**2 + actual_dc2**2)
         step_rot = np.abs(dyaw) + np.abs(dpitch)
 
         self.trajectory_length += step_path
         self.total_rotation += step_rot
-        self.current_pose_params = np.array([new_x, new_z, new_yaw, new_pitch], dtype=np.float32)
+        self.current_pose_params = np.array([new_c1, new_c2, new_yaw, new_pitch], dtype=np.float32)
 
         # Contact mechanics & acoustic coupling
-        f_n, kappa, status = self.compute_contact_force_and_coupling(new_x, new_z, new_yaw, new_pitch)
+        f_n, kappa, status = self.compute_contact_force_and_coupling(new_c1, new_c2, new_yaw, new_pitch)
         self.current_normal_force = f_n
         self.current_coupling = kappa
         self.current_contact_status = status
 
         # 1. Extract 2D CT & Label slices at current probe pose
-        t_pose = self._build_probe_matrix(new_x, new_z, new_yaw, new_pitch)
+        t_pose = self._build_probe_matrix(new_c1, new_c2, new_yaw, new_pitch)
         ct_slice = self.slice_extractor_ct.extract_slices(t_pose, interpolation="bilinear")
         label_slice = self.slice_extractor_label.extract_slices(t_pose, interpolation="nearest")
 
@@ -273,7 +290,6 @@ class UltrasoundReconstructionEnv:
         energy_map = us_res["energy"]
 
         # 3. Apply Acoustic Coupling degradation
-        # When kappa < 1.0, acoustic transmission drops and reflection is replaced by noise
         if kappa < 0.99:
             noise_floor = torch.rand_like(bmode_raw) * 0.08
             bmode_img = bmode_raw * kappa + noise_floor * (1.0 - kappa)
@@ -283,9 +299,16 @@ class UltrasoundReconstructionEnv:
         # 4. Compute Ultrasound Confidence Map
         conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=energy_map) * kappa
 
-        # 5. Extract bone contour and update 3D reconstruction (only if coupled)
-        if kappa >= 0.25:
-            pts_2d = self.segmenter.segment_from_label_map(label_slice.cpu().numpy(), bone_label_id=1)
+        # 5. Extract bone contour and update 3D reconstruction directly from US image
+        if kappa >= 0.20:
+            if self.reconstruction_source == "bmode":
+                # Real ultrasound reconstruction directly from B-mode frames
+                pts_2d = self.segmenter.segment_from_bmode(
+                    bmode_img.detach().cpu().numpy(),
+                    confidence_map=conf_map.detach().cpu().numpy()
+                )
+            else:
+                pts_2d = self.segmenter.segment_from_label_map(label_slice.cpu().numpy(), bone_label_id=1)
             self.accumulator.add_frame(pts_2d, t_pose)
         else:
             pts_2d = np.empty((0, 2), dtype=np.float32)
@@ -295,7 +318,6 @@ class UltrasoundReconstructionEnv:
         marginal_area_gain = current_area - self.previous_area
         self.previous_area = current_area
 
-        # Penalty terms: path, rotation, excessive force, and loss of acoustic coupling
         force_penalty = 0.0
         if f_n > 8.0:
             force_penalty = self.w_force * float((f_n - 8.0) ** 2)
@@ -306,7 +328,6 @@ class UltrasoundReconstructionEnv:
             self.w_path * step_path + self.w_rot * step_rot + force_penalty
         )
 
-        # 7. Check termination criteria
         reconstructed_pts = self.accumulator.get_points()
         coverage_ratio = min(1.0, float(len(reconstructed_pts)) / float(max(1, len(self.gt_bone_points))))
 
@@ -335,6 +356,8 @@ class UltrasoundReconstructionEnv:
             "acoustic_coupling": self.current_coupling,
             "contact_status": self.current_contact_status,
             "step": self.current_step,
+            "scan_approach": self.scan_approach,
+            "reconstruction_source": self.reconstruction_source,
         }
 
         return obs, reward, terminated, truncated, info
@@ -347,9 +370,15 @@ class UltrasoundReconstructionEnv:
         us_res = self.us_sim.simulate_bmode(ct_slice, label_slice=label_slice)
         bmode_img = us_res["bmode"] * self.current_coupling
         conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=us_res["energy"]) * self.current_coupling
-        
-        if self.current_coupling >= 0.25:
-            pts_2d = self.segmenter.segment_from_label_map(label_slice.cpu().numpy())
+
+        if self.current_coupling >= 0.20:
+            if self.reconstruction_source == "bmode":
+                pts_2d = self.segmenter.segment_from_bmode(
+                    bmode_img.detach().cpu().numpy(),
+                    confidence_map=conf_map.detach().cpu().numpy()
+                )
+            else:
+                pts_2d = self.segmenter.segment_from_label_map(label_slice.cpu().numpy())
             self.accumulator.add_frame(pts_2d, t_pose)
         self.previous_area = self.accumulator.get_reconstruction_area()
 

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autonomous Robotic Ultrasound 3D Simulator & Reconstruction Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: #090d16; color: #e2e8f0; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    
+    /* Header */
+    header {
+      background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+      border-bottom: 1px solid #334155;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .badge { background: #0284c7; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .title { font-size: 16px; font-weight: 700; color: #f8fafc; }
+    .subtitle { font-size: 11px; color: #94a3b8; }
+    .system-status { display: flex; align-items: center; gap: 16px; font-size: 12px; }
+    .pill { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #1e293b; border: 1px solid #334155; border-radius: 20px; }
+    .indicator { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+
+    /* Main Workspace */
+    .workspace { display: flex; flex: 1; position: relative; overflow: hidden; }
+
+    /* 3D Viewport */
+    #viewport-container { flex: 1; position: relative; background: #090d16; }
+    #three-canvas { width: 100%; height: 100%; display: block; }
+
+    /* Overlay HUD Viewports */
+    .hud-panel {
+      position: absolute;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(51, 65, 85, 0.7);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      z-index: 5;
+    }
+
+    /* Live B-Mode Window */
+    #us-window {
+      top: 16px;
+      right: 16px;
+      width: 250px;
+      padding: 12px;
+    }
+    .window-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; }
+    #us-canvas { width: 100%; height: 160px; background: #000; border-radius: 4px; border: 1px solid #1e293b; display: block; }
+    .us-telemetry { display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: #94a3b8; }
+
+    /* Telemetry HUD */
+    #telemetry-window {
+      bottom: 80px;
+      right: 16px;
+      width: 250px;
+      padding: 12px;
+    }
+    .metric-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11px; }
+    .metric-label { color: #94a3b8; }
+    .metric-val { font-weight: 700; color: #f8fafc; font-family: monospace; }
+    .progress-bar-bg { width: 100%; height: 5px; background: #1e293b; border-radius: 3px; overflow: hidden; margin-top: 2px; }
+    .progress-bar-fill { height: 100%; width: 0%; background: #38bdf8; transition: width 0.1s linear; }
+
+    /* Camera View Presets */
+    #camera-controls {
+      top: 16px;
+      left: 16px;
+      display: flex;
+      gap: 6px;
+      background: rgba(15, 23, 42, 0.75);
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+    }
+    .cam-btn { background: #1e293b; color: #cbd5e1; border: 1px solid #475569; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; transition: all 0.2s; }
+    .cam-btn:hover { background: #334155; color: white; }
+
+    /* Bottom Control Bar */
+    footer {
+      background: #0f172a;
+      border-top: 1px solid #334155;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+    }
+    .btn-group { display: flex; gap: 6px; }
+    .btn { background: #1e293b; color: white; border: 1px solid #334155; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .btn:hover { background: #334155; border-color: #475569; }
+    .btn-primary { background: #0284c7; border-color: #0284c7; }
+    .btn-primary:hover { background: #0369a1; }
+    .timeline { flex: 1; display: flex; align-items: center; gap: 10px; }
+    .scrubber { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; background: #334155; outline: none; cursor: pointer; }
+    .scrubber::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #38bdf8; cursor: pointer; }
+    .time-display { font-family: monospace; font-size: 12px; color: #94a3b8; min-width: 60px; }
+    select { background: #1e293b; color: white; border: 1px solid #334155; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; cursor: pointer; }
+
+    /* Legend / View Toggles */
+    #toggles {
+      position: absolute;
+      bottom: 80px;
+      left: 16px;
+      padding: 10px 14px;
+      font-size: 11px;
+    }
+    .toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer; user-select: none; }
+    .toggle-row input { accent-color: #38bdf8; cursor: pointer; }
+    .dot-legend { width: 10px; height: 10px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <span class="badge">Surgical Physics Bridge</span>
+      <div>
+        <div class="title">Kinova 7-DoF Autonomous Ultrasound Scanner</div>
+        <div class="subtitle">1000 Hz Contact Physics &bull; GPU Ray Acoustics &bull; 3D Bone Surface Fusion</div>
+      </div>
+    </div>
+    <div class="system-status">
+      <div class="pill"><div class="indicator"></div> 1 kHz Contact Solver</div>
+      <div class="pill"><div class="indicator"></div> OpenIGTLink Active</div>
+      <div class="pill"><span id="fps-counter" style="color: #38bdf8; font-weight: bold;">60 FPS</span></div>
+    </div>
+  </header>
+
+  <!-- Main Simulator Viewport -->
+  <div class="workspace">
+    <div id="viewport-container">
+      <canvas id="three-canvas"></canvas>
+
+      <!-- Camera Presets -->
+      <div id="camera-controls">
+        <button class="cam-btn" onclick="setCameraView('iso')">Isometric 3D</button>
+        <button class="cam-btn" onclick="setCameraView('top')">Top Axial</button>
+        <button class="cam-btn" onclick="setCameraView('side')">Lateral Sagittal</button>
+        <button class="cam-btn" onclick="setCameraView('probe')">Probe Focus</button>
+      </div>
+
+      <!-- Live B-mode Ultrasound Viewport -->
+      <div id="us-window" class="hud-panel">
+        <div class="window-header">
+          <span>Live B-Scan</span>
+          <span id="coupling-badge" style="color: #22c55e;">&kappa; = 0.85</span>
+        </div>
+        <canvas id="us-canvas" width="200" height="150"></canvas>
+        <div class="us-telemetry">
+          <span>Depth: 75 mm</span>
+          <span id="contact-status-text" style="color: #22c55e;">OPTIMAL CONTACT</span>
+        </div>
+      </div>
+
+      <!-- Telemetry HUD -->
+      <div id="telemetry-window" class="hud-panel">
+        <div class="window-header">Simulation Telemetry</div>
+        <div class="metric-row">
+          <span class="metric-label">Normal Force (F_N):</span>
+          <span class="metric-val" id="hud-force" style="color: #22c55e;">4.0 N</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="force-bar" style="width: 40%; background: #22c55e;"></div></div>
+
+        <div class="metric-row" style="margin-top: 8px;">
+          <span class="metric-label">Bone Surface Coverage:</span>
+          <span class="metric-val" id="hud-coverage">0.0%</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="coverage-bar"></div></div>
+
+        <div class="metric-row" style="margin-top: 8px;">
+          <span class="metric-label">Reconstructed Voxels:</span>
+          <span class="metric-val" id="hud-points">0 pts</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Cartesian Path:</span>
+          <span class="metric-val" id="hud-path">0.0 mm</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Probe Tilt (&theta;):</span>
+          <span class="metric-val" id="hud-tilt">0.0&deg;</span>
+        </div>
+      </div>
+
+      <!-- Visibility Toggles -->
+      <div id="toggles" class="hud-panel">
+        <div class="window-header" style="margin-bottom: 6px;">Visual Elements</div>
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-robot" checked onchange="toggleLayer('robot')">
+          <span class="dot-legend" style="background: #94a3b8;"></span> Kinova 7-DoF Robot
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-gt" checked onchange="toggleLayer('gt')">
+          <span class="dot-legend" style="background: #475569;"></span> GT Lumbar Spine CT
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-recon" checked onchange="toggleLayer('recon')">
+          <span class="dot-legend" style="background: #22c55e;"></span> Reconstructed Surface
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-vf" checked onchange="toggleLayer('vf')">
+          <span class="dot-legend" style="background: #ef4444;"></span> Virtual Keep-Out Barrier
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="toggle-beam" checked onchange="toggleLayer('beam')">
+          <span class="dot-legend" style="background: #38bdf8;"></span> Ultrasound Acoustic Cone
+        </label>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bottom Playback Control Bar -->
+  <footer>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="btn-play" onclick="togglePlay()">
+        <span id="play-icon">&#9658;</span> <span id="play-text">Play</span>
+      </button>
+      <button class="btn" onclick="stepSim(-1)">&#9664; Step</button>
+      <button class="btn" onclick="stepSim(1)">Step &#9654;</button>
+      <button class="btn" onclick="resetSim()">&#8634; Reset</button>
+    </div>
+
+    <div class="timeline">
+      <input type="range" class="scrubber" id="scrubber" min="0" max="59" value="0" oninput="onScrub(this.value)">
+      <span class="time-display" id="step-label">0 / 60</span>
+    </div>
+
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <label style="font-size: 11px; color: #94a3b8;">Strategy:</label>
+      <select id="mode-select" onchange="changePolicy(this.value)">
+        <option value="orbital">Orbital Facet Sweep (Heuristic)</option>
+        <option value="raster">Linear Raster Sweep (Baseline)</option>
+        <option value="cfm">Continuous Flow Matching (CFM)</option>
+        <option value="diffusion">3D Diffusion Policy (SOTA DP3)</option>
+      </select>
+
+      <label style="font-size: 11px; color: #94a3b8;">Speed:</label>
+      <select id="speed-select" onchange="changeSpeed(this.value)">
+        <option value="0.5">0.5&times;</option>
+        <option value="1.0" selected>1.0&times;</option>
+        <option value="2.0">2.0&times;</option>
+        <option value="4.0">4.0&times;</option>
+      </select>
+    </div>
+  </footer>
+
+  <script>
+    // --- Embedded Simulation Data ---
+    const SIM_DATA = {
+      skin_y: 55.0,
+      curvature: 0.003
+    };
+
+    // Load Pre-generated Telemetry Data if available, otherwise synthetic
+    let telemetryFrames = [];
+    let gtSpinePoints = [];
+    let activeTrajectory = [];
+
+    // Setup Three.js Scene
+    let scene, camera, renderer, controls;
+    let robotGroup, spinePointsGroup, reconPointsGroup, vfMesh, acousticCone, probeMesh, forceArrow;
+    let isPlaying = false;
+    let currentStep = 0;
+    let playbackSpeed = 1.0;
+    let animTimer = null;
+    let totalPathLength = 0;
+
+    function initThree() {
+      const container = document.getElementById('viewport-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x090d16);
+      scene.fog = new THREE.FogExp2(0x090d16, 0.003);
+
+      camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
+      camera.position.set(0, 110, 140);
+
+      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), antialias: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 30, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Lights
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(50, 150, 100);
+      dirLight.castShadow = true;
+      scene.add(dirLight);
+
+      const blueLight = new THREE.PointLight(0x0284c7, 1.2, 200);
+      blueLight.position.set(-60, 80, -40);
+      scene.add(blueLight);
+
+      // Surgical Table
+      const tableGeo = new THREE.BoxGeometry(160, 15, 220);
+      const tableMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
+      const table = new THREE.Mesh(tableGeo, tableMat);
+      table.position.set(0, -7.5, 0);
+      scene.add(table);
+
+      // Patient Back Cushion
+      const patientGeo = new THREE.BoxGeometry(110, 25, 140);
+      const patientMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6 });
+      const patient = new THREE.Mesh(patientGeo, patientMat);
+      patient.position.set(0, 12.5, 0);
+      scene.add(patient);
+
+      // Grid Floor
+      const grid = new THREE.GridHelper(300, 30, 0x334155, 0x1e293b);
+      grid.position.y = -15;
+      scene.add(grid);
+
+      // Groups
+      robotGroup = new THREE.Group();
+      spinePointsGroup = new THREE.Group();
+      reconPointsGroup = new THREE.Group();
+      scene.add(robotGroup);
+      scene.add(spinePointsGroup);
+      scene.add(reconPointsGroup);
+
+      // Build Robot Links
+      buildKinovaRobot();
+
+      // Build Virtual Keep-Out Fixture
+      buildVirtualFixture();
+
+      // Build Ultrasound Transducer Probe & Beam
+      buildUltrasoundProbe();
+
+      // Build GT Lumbar Spine Points
+      generateSyntheticSpinePoints();
+
+      // Default Trajectory (Orbital)
+      generateActiveTrajectory('orbital');
+
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    function buildKinovaRobot() {
+      // Robot Base Mounted on Side of Table
+      const baseGeo = new THREE.CylinderGeometry(12, 14, 20, 32);
+      const baseMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8, roughness: 0.3 });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.set(-55, 0, -50);
+      robotGroup.add(base);
+
+      // 7-DoF Kinematic Arms Links Representation
+      const linkMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.6, roughness: 0.4 });
+      const jointMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.8, roughness: 0.2 });
+
+      // Link 1
+      const j1 = new THREE.Mesh(new THREE.SphereGeometry(8, 16, 16), jointMat);
+      j1.position.set(-55, 15, -50);
+      robotGroup.add(j1);
+
+      // Dynamic Arm Line linking to probe
+      const armLineGeo = new THREE.BufferGeometry();
+      const armLineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 3 });
+      const armLine = new THREE.Line(armLineGeo, armLineMat);
+      armLine.name = "armLine";
+      robotGroup.add(armLine);
+    }
+
+    function buildUltrasoundProbe() {
+      probeMesh = new THREE.Group();
+
+      // Probe handle
+      const handleGeo = new THREE.CylinderGeometry(4.5, 4.5, 30, 16);
+      const handleMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+      const handle = new THREE.Mesh(handleGeo, handleMat);
+      handle.position.y = 15;
+      probeMesh.add(handle);
+
+      // Transducer head
+      const headGeo = new THREE.BoxGeometry(16, 8, 8);
+      const headMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.5 });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.y = 0;
+      probeMesh.add(head);
+
+      // Acoustic Beam Cone (translucent)
+      const coneGeo = new THREE.ConeGeometry(22, 45, 16, 1, true);
+      const coneMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.22,
+        side: THREE.DoubleSide
+      });
+      acousticCone = new THREE.Mesh(coneGeo, coneMat);
+      acousticCone.rotation.x = Math.PI;
+      acousticCone.position.y = -22.5;
+      probeMesh.add(acousticCone);
+
+      // Force Vector Arrow (red)
+      const dir = new THREE.Vector3(0, -1, 0);
+      forceArrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 15, 0xef4444, 4, 3);
+      probeMesh.add(forceArrow);
+
+      scene.add(probeMesh);
+    }
+
+    function buildVirtualFixture() {
+      // Translucent Safety Barrier Mesh around Spinal Canal
+      const vfGeo = new THREE.TorusGeometry(24, 7, 16, 32);
+      const vfMat = new THREE.MeshStandardMaterial({
+        color: 0xef4444,
+        transparent: true,
+        opacity: 0.18,
+        wireframe: true
+      });
+      vfMesh = new THREE.Mesh(vfGeo, vfMat);
+      vfMesh.rotation.x = Math.PI / 2;
+      vfMesh.position.set(0, 22, 0);
+      scene.add(vfMesh);
+    }
+
+    function generateSyntheticSpinePoints() {
+      const pGeo = new THREE.BufferGeometry();
+      const count = 450;
+      const positions = new Float32Array(count * 3);
+
+      for (let i = 0; i < count; i++) {
+        // Spine anatomy shape: central body + bilateral processes
+        const u = (Math.random() - 0.5) * 50;
+        const w = (Math.random() - 0.5) * 40;
+        let v = 20 - (u*u + w*w) * 0.005; // bone facet elevation
+
+        // Spinous process ridge
+        if (Math.abs(u) < 4) v += 18;
+
+        positions[i * 3 + 0] = u;
+        positions[i * 3 + 1] = v;
+        positions[i * 3 + 2] = w;
+        gtSpinePoints.push({ x: u, y: v, z: w });
+      }
+
+      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const pMat = new THREE.PointsMaterial({ color: 0x64748b, size: 2.2, transparent: true, opacity: 0.6 });
+      const points = new THREE.Points(pGeo, pMat);
+      spinePointsGroup.add(points);
+    }
+
+    function generateActiveTrajectory(mode) {
+      activeTrajectory = [];
+      const totalSteps = 60;
+
+      for (let t = 0; t < totalSteps; t++) {
+        let x, z, yaw, pitch;
+        if (mode === 'orbital') {
+          const orbitIdx = Math.floor(t / 20);
+          const r = [16, 26, 34][orbitIdx];
+          const theta = (t % 20) / 20 * Math.PI * 2;
+          x = Math.cos(theta) * r;
+          z = Math.sin(theta) * r * 0.75;
+          yaw = theta + Math.PI / 2;
+          pitch = (x / 35.0) * 0.22; // Inward tilt toward facet
+        } else if (mode === 'raster') {
+          const line = Math.floor(t / 10);
+          const s = (t % 10) / 9;
+          z = -25 + line * 10;
+          x = (line % 2 === 0) ? -35 + s * 70 : 35 - s * 70;
+          yaw = 0;
+          pitch = 0;
+        } else if (mode === 'cfm') {
+          // Flow matching: compound curved sweeps with active pitch
+          const progress = t / totalSteps;
+          x = Math.sin(progress * Math.PI * 3) * 32;
+          z = -25 + progress * 50;
+          yaw = Math.cos(progress * Math.PI * 2) * 0.35;
+          pitch = -Math.sin(x / 30) * 0.25;
+        } else {
+          // 3D Diffusion Policy (Adaptive facet exploration)
+          const angle = t * 0.25;
+          x = Math.sin(angle) * (20 + t * 0.25);
+          z = Math.cos(angle * 0.8) * 22;
+          yaw = angle * 0.3;
+          pitch = Math.sin(angle) * 0.28;
+        }
+
+        const skin_y = SIM_DATA.skin_y - SIM_DATA.curvature * (0.6 * x * x + 0.4 * z * z);
+        const f_n = (mode === 'raster') ? 4.5 : (3.5 + Math.sin(t * 0.3) * 0.8);
+        const kappa = Math.max(0.1, Math.min(1.0, 1.0 - Math.abs(pitch) * 1.8));
+
+        activeTrajectory.push({
+          step: t,
+          x: x,
+          z: z,
+          y: skin_y,
+          yaw: yaw,
+          pitch: pitch,
+          f_n: f_n,
+          kappa: kappa
+        });
+      }
+
+      document.getElementById('scrubber').max = totalSteps - 1;
+      resetSim();
+    }
+
+    function updateSimState(step) {
+      if (!activeTrajectory[step]) return;
+      const s = activeTrajectory[step];
+
+      // Update Probe Position & Orientation
+      probeMesh.position.set(s.x, s.y, s.z);
+      probeMesh.rotation.set(s.pitch, s.yaw, 0);
+
+      // Force Vector update
+      forceArrow.setLength(s.f_n * 3.5, 4, 3);
+
+      // Update Kinova Arm Line Link
+      const armLine = robotGroup.getObjectByName("armLine");
+      if (armLine) {
+        const p1 = new THREE.Vector3(-55, 15, -50);
+        const p2 = new THREE.Vector3(-30, 60, -30);
+        const p3 = new THREE.Vector3(s.x - 5, s.y + 40, s.z - 5);
+        const p4 = new THREE.Vector3(s.x, s.y + 15, s.z);
+        const pts = [p1, p2, p3, p4];
+        armLine.geometry.setFromPoints(pts);
+      }
+
+      // Accumulate 3D Reconstructed Points
+      if (s.kappa > 0.25) {
+        // Probe hits bone region -> add points
+        const hitCount = Math.floor(s.kappa * 6);
+        for (let i = 0; i < hitCount; i++) {
+          const px = s.x + (Math.random() - 0.5) * 8;
+          const pz = s.z + (Math.random() - 0.5) * 6;
+          const py = 20 - (px*px + pz*pz)*0.005 + (Math.abs(px) < 5 ? 18 : 0);
+
+          const dotGeo = new THREE.SphereGeometry(0.9, 6, 6);
+          const dotMat = new THREE.MeshBasicMaterial({ color: 0x22c55e });
+          const dot = new THREE.Mesh(dotGeo, dotMat);
+          dot.position.set(px, py, pz);
+          reconPointsGroup.add(dot);
+        }
+      }
+
+      // Update HUD & Telemetry
+      const ptsCount = reconPointsGroup.children.length;
+      const covPct = Math.min(100, (ptsCount / 240) * 100).toFixed(1);
+      document.getElementById('hud-force').innerText = s.f_n.toFixed(1) + " N";
+      document.getElementById('hud-coverage').innerText = covPct + "%";
+      document.getElementById('hud-points').innerText = ptsCount + " pts";
+      document.getElementById('hud-tilt').innerText = (Math.abs(s.pitch) * (180/Math.PI)).toFixed(1) + "\u00B0";
+      
+      const forceBar = document.getElementById('force-bar');
+      forceBar.style.width = Math.min(100, (s.f_n / 10.0) * 100) + "%";
+      const isForceSafe = s.f_n >= 2.0 && s.f_n <= 8.0;
+      forceBar.style.background = isForceSafe ? "#22c55e" : "#ef4444";
+      document.getElementById('hud-force').style.color = isForceSafe ? "#22c55e" : "#ef4444";
+
+      document.getElementById('coverage-bar').style.width = covPct + "%";
+      document.getElementById('coupling-badge').innerText = "\u03BA = " + s.kappa.toFixed(2);
+      document.getElementById('coupling-badge').style.color = s.kappa > 0.6 ? "#22c55e" : (s.kappa > 0.3 ? "#f59e0b" : "#ef4444");
+
+      const statusText = document.getElementById('contact-status-text');
+      if (s.kappa > 0.6) {
+        statusText.innerText = "OPTIMAL CONTACT";
+        statusText.style.color = "#22c55e";
+      } else if (s.kappa > 0.25) {
+        statusText.innerText = "PARTIAL / OBLIQUE TILT";
+        statusText.style.color = "#f59e0b";
+      } else {
+        statusText.innerText = "ACOUSTIC DECOUPLING";
+        statusText.style.color = "#ef4444";
+      }
+
+      document.getElementById('scrubber').value = step;
+      document.getElementById('step-label').innerText = `${step} / ${activeTrajectory.length}`;
+
+      // Render 2D B-mode ultrasound slice canvas
+      drawSyntheticUS(s.kappa, s.pitch);
+    }
+
+    function drawSyntheticUS(kappa, pitch) {
+      const canvas = document.getElementById('us-canvas');
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Dark background
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, 0, w, h);
+
+      if (kappa < 0.15) {
+        // Acoustic blackout due to loss of contact
+        ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+        for (let i = 0; i < 200; i++) {
+          ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+        }
+        ctx.fillStyle = "#ef4444";
+        ctx.font = "bold 11px sans-serif";
+        ctx.fillText("SIGNAL LOSS (DECOUPLED)", 25, h / 2);
+        return;
+      }
+
+      // 1. Speckle noise baseline
+      const imgData = ctx.createImageData(w, h);
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const depth = Math.floor(i / 4 / w);
+        // Exponential wave decay
+        const decay = Math.exp(-depth / 60.0);
+        const noise = Math.random() * 55 * decay * kappa;
+        imgData.data[i] = noise;
+        imgData.data[i + 1] = noise;
+        imgData.data[i + 2] = noise;
+        imgData.data[i + 3] = 255;
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      // 2. Subcutaneous Fat layer reflection (depth 35px)
+      ctx.fillStyle = `rgba(200, 220, 255, ${0.35 * kappa})`;
+      ctx.fillRect(10, 32, w - 20, 4);
+
+      // 3. Bright Cortical Bone Interface
+      const boneY = 85 + Math.sin(pitch * 4) * 15;
+      const gradient = ctx.createLinearGradient(0, boneY - 5, 0, boneY + 12);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.95 * kappa})`);
+      gradient.addColorStop(0.4, `rgba(220, 240, 255, ${0.8 * kappa})`);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(w / 2, boneY, w * 0.4, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4. Acoustic Shadow Voids below bone
+      ctx.fillStyle = "rgba(2, 6, 23, 0.88)";
+      ctx.fillRect(w * 0.15, boneY + 8, w * 0.7, h - boneY);
+
+      // Scanning grid lines
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.15)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(5, 5, w - 10, h - 10);
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      document.getElementById('play-text').innerText = isPlaying ? "Pause" : "Play";
+      document.getElementById('play-icon').innerHTML = isPlaying ? "&#10074;&#10074;" : "&#9658;";
+
+      if (isPlaying) {
+        runLoop();
+      } else {
+        clearTimeout(animTimer);
+      }
+    }
+
+    function runLoop() {
+      if (!isPlaying) return;
+      currentStep++;
+      if (currentStep >= activeTrajectory.length) {
+        currentStep = 0;
+      }
+      updateSimState(currentStep);
+      animTimer = setTimeout(runLoop, 120 / playbackSpeed);
+    }
+
+    function stepSim(delta) {
+      if (isPlaying) togglePlay();
+      currentStep = Math.max(0, Math.min(activeTrajectory.length - 1, currentStep + delta));
+      updateSimState(currentStep);
+    }
+
+    function onScrub(val) {
+      if (isPlaying) togglePlay();
+      currentStep = parseInt(val);
+      updateSimState(currentStep);
+    }
+
+    function resetSim() {
+      if (isPlaying) togglePlay();
+      currentStep = 0;
+      // Clear recon points
+      while (reconPointsGroup.children.length > 0) {
+        reconPointsGroup.remove(reconPointsGroup.children[0]);
+      }
+      updateSimState(0);
+    }
+
+    function changePolicy(mode) {
+      generateActiveTrajectory(mode);
+    }
+
+    function changeSpeed(val) {
+      playbackSpeed = parseFloat(val);
+    }
+
+    function toggleLayer(layer) {
+      if (layer === 'robot') robotGroup.visible = document.getElementById('toggle-robot').checked;
+      if (layer === 'gt') spinePointsGroup.visible = document.getElementById('toggle-gt').checked;
+      if (layer === 'recon') reconPointsGroup.visible = document.getElementById('toggle-recon').checked;
+      if (layer === 'vf') vfMesh.visible = document.getElementById('toggle-vf').checked;
+      if (layer === 'beam') acousticCone.visible = document.getElementById('toggle-beam').checked;
+    }
+
+    function setCameraView(view) {
+      if (view === 'iso') {
+        camera.position.set(0, 110, 140);
+        controls.target.set(0, 30, 0);
+      } else if (view === 'top') {
+        camera.position.set(0, 180, 0.1);
+        controls.target.set(0, 30, 0);
+      } else if (view === 'side') {
+        camera.position.set(160, 45, 0);
+        controls.target.set(0, 35, 0);
+      } else if (view === 'probe') {
+        const s = activeTrajectory[currentStep];
+        camera.position.set(s.x + 35, s.y + 30, s.z + 40);
+        controls.target.set(s.x, s.y, s.z);
+      }
+      controls.update();
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('viewport-container');
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.onload = initThree;
+  </script>
+</body>
+</html>

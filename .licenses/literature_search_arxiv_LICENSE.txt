@@ -1,0 +1,6 @@
+ArXiv API Terms of Use & Licensing Notification
+Recorded at: 2026-10-21T17:26:30+05:30
+Source: https://info.arxiv.org/help/api/index.html
+
+Notification:
+Users must adhere to the arXiv API Terms of Use, including rate limits (maximum 1 request per 3 seconds), attribution requirements, and checking the specific license terms of individual papers retrieved from arXiv before distribution or reproduction.

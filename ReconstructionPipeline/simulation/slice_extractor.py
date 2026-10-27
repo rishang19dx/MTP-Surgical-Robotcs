@@ -63,9 +63,9 @@ class VolumeSliceExtractor:
 
         # Deformation engine: instantiate default Kelvinlet solver if not provided
         self.deformation_solver = deformation_solver or RegularizedKelvinletDeformation(
-            shear_modulus_kpa=12.0,
-            poissons_ratio=0.48,
-            probe_radius_mm=15.0,
+            shear_modulus_kpa=4.5,
+            poissons_ratio=0.46,
+            probe_radius_mm=14.0,
             device=self.device,
         )
 

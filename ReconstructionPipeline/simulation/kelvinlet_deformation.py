@@ -23,15 +23,15 @@ class RegularizedKelvinletDeformation(nn.Module):
 
     def __init__(
         self,
-        shear_modulus_kpa: float = 12.0,       # mu: shear modulus for soft tissue (kPa)
-        poissons_ratio: float = 0.48,          # nu: nearly incompressible soft tissue
-        probe_radius_mm: float = 15.0,         # epsilon: regularized probe contact radius (mm)
+        shear_modulus_kpa: float = 4.5,        # mu: shear modulus for compliant flank/paraspinal soft tissue (kPa)
+        poissons_ratio: float = 0.46,          # nu: nearly incompressible soft tissue
+        probe_radius_mm: float = 14.0,         # epsilon: regularized probe contact radius (mm)
         max_indentation_mm: float = 15.0,      # Maximum physiological compression clamp
         device: Optional[torch.device] = None,
     ):
         """
         Args:
-            shear_modulus_kpa: Shear modulus mu in kPa (default 12.0 kPa for abdominal/flank tissue).
+            shear_modulus_kpa: Shear modulus mu in kPa (default 4.5 kPa for compliant flank/paraspinal tissue).
             poissons_ratio: Poisson's ratio nu (default 0.48 for biological tissue).
             probe_radius_mm: Regularization scale parameter epsilon (mm) matching probe footprint.
             max_indentation_mm: Clamp on maximum indentation to prevent non-physical distortion.

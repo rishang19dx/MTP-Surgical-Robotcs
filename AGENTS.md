@@ -22,3 +22,10 @@
 3. **In-Place Buffer Mutation**: For deformable meshes and reconstructed point clouds, update pre-allocated VTK C++ memory buffers directly to prevent memory leaks and UI lag.
 4. **Coordinate Frames**: Convert between PyBullet world (meters, Z-up) and 3D Slicer (millimeters, RAS space) using validated transformation utilities (`surgical_physics_bridge/src/coordinates.py`).
 5. **Acoustic Simulation**: Ultrasound B-mode generation is model-based ray tracing (attenuation, impedance reflection, Rayleigh speckle, shadow factor), executing in $< 2$ ms on GPU.
+
+## Mandatory Agent Operating Files
+Every agent working on this codebase MUST strictly adhere to and maintain these three operational files:
+1. **[`DECISIONS.md`](file:///home/rishang/Desktop/Insti_Stuff/MTP/DECISIONS.md)**: Chronological log of all architectural, research, and algorithmic decisions taken by the user or agent. Any new architectural choice, parameter shift, or major design change MUST be recorded here with context, alternatives considered, and rationale.
+2. **[`FLOW.md`](file:///home/rishang/Desktop/Insti_Stuff/MTP/FLOW.md)**: Complete map of execution flows, primary entry points, data pipelines, coordinate conversions, and runtime dependencies. Always consult before modifying entry points or data routes.
+3. **[`QUIZME.md`](file:///home/rishang/Desktop/Insti_Stuff/MTP/QUIZME.md)**: Mandatory pre-implementation grilling protocol. Whenever the user requests a major architectural change, refactoring, or new pipeline capability, the agent MUST halt execution and grill the user on invariants, acoustic mechanics, and trade-offs before writing code.
+

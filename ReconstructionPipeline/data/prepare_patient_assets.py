@@ -114,7 +114,9 @@ class PatientAssetGenerator:
             "label_volume": label_vol,
             "bone_points": bone_points,
             "spacing_mm": spacing_mm,
+            "spacing": spacing_mm,
             "origin_mm": origin_mm,
+            "origin": origin_mm,
             "skin_y_mm": skin_y,
         }
 

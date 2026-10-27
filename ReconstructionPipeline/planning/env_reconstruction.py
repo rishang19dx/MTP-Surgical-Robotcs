@@ -279,10 +279,14 @@ class UltrasoundReconstructionEnv:
         self.current_coupling = kappa
         self.current_contact_status = status
 
-        # 1. Extract 2D CT & Label slices at current probe pose
+        # 1. Extract 2D CT & Label slices at current probe pose (with soft-tissue deformation)
         t_pose = self._build_probe_matrix(new_c1, new_c2, new_yaw, new_pitch)
-        ct_slice = self.slice_extractor_ct.extract_slices(t_pose, interpolation="bilinear")
-        label_slice = self.slice_extractor_label.extract_slices(t_pose, interpolation="nearest")
+        ct_slice = self.slice_extractor_ct.extract_slices(
+            t_pose, interpolation="bilinear", contact_force_n=f_n
+        )
+        label_slice = self.slice_extractor_label.extract_slices(
+            t_pose, interpolation="nearest", contact_force_n=f_n
+        )
 
         # 2. Simulate B-mode ultrasound frame
         us_res = self.us_sim.simulate_bmode(ct_slice, label_slice=label_slice, bone_label_id=1)
@@ -363,10 +367,14 @@ class UltrasoundReconstructionEnv:
         return obs, reward, terminated, truncated, info
 
     def _observe_current_state(self) -> Dict[str, Any]:
-        """Generates observation for the initial state."""
+        """Generates observation for the initial state (with soft-tissue deformation)."""
         t_pose = self._build_probe_matrix(*self.current_pose_params)
-        ct_slice = self.slice_extractor_ct.extract_slices(t_pose)
-        label_slice = self.slice_extractor_label.extract_slices(t_pose, interpolation="nearest")
+        ct_slice = self.slice_extractor_ct.extract_slices(
+            t_pose, interpolation="bilinear", contact_force_n=self.current_normal_force
+        )
+        label_slice = self.slice_extractor_label.extract_slices(
+            t_pose, interpolation="nearest", contact_force_n=self.current_normal_force
+        )
         us_res = self.us_sim.simulate_bmode(ct_slice, label_slice=label_slice)
         bmode_img = us_res["bmode"] * self.current_coupling
         conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=us_res["energy"]) * self.current_coupling

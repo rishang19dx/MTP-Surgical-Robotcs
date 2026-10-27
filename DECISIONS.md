@@ -24,6 +24,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Oct 2026** | `DEC-014` | Deformable Slicing via Backward Eulerian Coordinate Warping | **Accepted** |
 | **Oct 2026** | `DEC-015` | Regularized Kelvinlets as Fast Differentiable Elasticity Prior | **Accepted** |
 | **Oct 2026** | `DEC-016` | Relative Eulerian Warping with Probe Indentation Compensation | **Accepted** |
+| **Oct 2026** | `DEC-017` | Evaluation of SOFA Framework vs Regularized Kelvinlets for Real-Time Soft Body Ultrasound | **Accepted** |
 
 ---
 
@@ -210,3 +211,18 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Transducer face ($\mathbf{x} = \mathbf{x}_c$) always samples reference skin surface ($\mathbf{X}_{\text{ref}} = \mathbf{x}_c$), preventing acoustic voids or hovering artifacts.
   - Subcutaneous tissue layers compress realistically, bringing bone reflection peaks physically shallower in B-mode echograms under higher probe pressure.
   - Preserves $< 1.8\text{ ms}$ GPU latency budget.
+
+---
+
+### `DEC-017`: Evaluation of SOFA Framework vs Regularized Kelvinlets for Real-Time Soft Body Ultrasound
+* **Date**: October 27, 2026
+* **Context**: Investigated the viability of utilizing the Python extension of SOFA (`SofaPython3`) for real-time in-the-loop soft body deformation and compared its performance against Regularized Kelvinlets.
+* **Empirical Findings**:
+  - *Axial Profile Congruence*: Kelvinlet depth decay matches Co-rotational FEM with $R^2 = 0.9959$ ($> 99.5\%$ correlation) on lumbar patient anatomy.
+  - *Solve Latency*: SOFA Co-rotational FEM requires $15 - 40\text{ ms}$ per step on CPU; Regularized Kelvinlets execute in $0.375\text{ ms}$ on CUDA ($> 6,600\times$ faster).
+  - *Multi-Instance Parallelism*: SOFA is process-bound and cannot scale to 512+ parallel GPU environments for SonoGym reinforcement learning / diffusion policy training.
+  - *Mesh Stability*: High normal forces ($F_N > 8\text{ N}$) risk tetrahedral element inversion in FEM, whereas Kelvinlets use singularity-free Green's functions.
+* **Decision**: 
+  1. Maintain **Regularized Kelvinlets** as the primary real-time in-the-loop deformation solver for the 1000 Hz PyBullet contact loop, ultrasound reslicing ($< 1.8\text{ ms}$), and fast DRL rollouts.
+  2. Adopt **SOFA / Co-Rotational FEM** as an **offline clinical validation benchmark** to evaluate policy sim-to-real generalization across nonlinear hyperelastic deformations.
+  3. If true GPU tetrahedral FEM is required in-the-loop, evaluate **NVIDIA Warp (`warp-lang`)** as the GPU-parallel alternative.

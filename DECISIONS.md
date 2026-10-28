@@ -25,6 +25,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Oct 2026** | `DEC-015` | Regularized Kelvinlets as Fast Differentiable Elasticity Prior | **Accepted** |
 | **Oct 2026** | `DEC-016` | Relative Eulerian Warping with Probe Indentation Compensation | **Accepted** |
 | **Oct 2026** | `DEC-017` | Evaluation of SOFA Framework vs Regularized Kelvinlets for Real-Time Soft Body Ultrasound | **Accepted** |
+| **Oct 2026** | `DEC-018` | Remote SSH Deployment & Ingestion Protocol for Real TotalSegmentator Clinical Data | **Accepted** |
 
 ---
 
@@ -226,3 +227,14 @@ A chronological record of all architectural, research, algorithmic, and engineer
   1. Maintain **Regularized Kelvinlets** as the primary real-time in-the-loop deformation solver for the 1000 Hz PyBullet contact loop, ultrasound reslicing ($< 1.8\text{ ms}$), and fast DRL rollouts.
   2. Adopt **SOFA / Co-Rotational FEM** as an **offline clinical validation benchmark** to evaluate policy sim-to-real generalization across nonlinear hyperelastic deformations.
   3. If true GPU tetrahedral FEM is required in-the-loop, evaluate **NVIDIA Warp (`warp-lang`)** as the GPU-parallel alternative.
+
+---
+
+### `DEC-018`: Remote SSH Deployment & Ingestion Protocol for Real TotalSegmentator Clinical Data
+* **Date**: October 28, 2026
+* **Context**: Moving from synthetic lumbar phantoms to real clinical patient data requires training and benchmarking on multi-gigabyte NIfTI CT volumes from TotalSegmentator on remote SSH GPU servers/clusters.
+* **Decision**: 
+  1. Built an all-in-one automation script [`scripts/run_remote_totalsegmentator.sh`](file:///home/rishang/Desktop/Insti_Stuff/MTP/scripts/run_remote_totalsegmentator.sh) supporting modular phases (`setup`, `prepare`, `train`, `benchmark`, `all`).
+  2. Standardized remote data ingestion via `load_totalsegmentator_subject` in `prepare_patient_assets.py` to auto-crop spine bounding boxes and generate acoustic impedance property maps directly from clinical NIfTI masks.
+  3. Formulated fast rsync transfer protocols excluding local `.venv` and video caches to enable $< 30\text{ s}$ repo deployment to any remote compute node.
+* **Rationale**: Eliminates manual remote configuration errors, ensures pure ultrasound signal extraction without ground-truth label leakage on real clinical scans, and accelerates DRL/Diffusion Policy training on high-VRAM remote GPUs.

@@ -15,6 +15,7 @@ A comprehensive architectural map detailing all entry points, execution flows, c
 | **Train Submodular PPO (Active DRL)** | [`ReconstructionPipeline/planning/train_submodular_ppo.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/planning/train_submodular_ppo.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --num-updates 20` |
 | **Train 3D Diffusion Policy (DP3/EDM)** | [`ReconstructionPipeline/planning/train_diffusion_policy.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/planning/train_diffusion_policy.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --epochs 50 --batch-size 32` |
 | **Run Unit & Integration Test Suite** | [`ReconstructionPipeline/tests/`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/tests) | `./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -v` |
+| **Remote TotalSegmentator Automation (SSH)** | [`scripts/run_remote_totalsegmentator.sh`](file:///home/rishang/Desktop/Insti_Stuff/MTP/scripts/run_remote_totalsegmentator.sh) | `bash scripts/run_remote_totalsegmentator.sh --dataset-dir /data/s0010 --mode all` |
 | **3D Slicer Loadable C++ Module** | [`SlicerSurgicalBridge/`](file:///home/rishang/Desktop/Insti_Stuff/MTP/SlicerSurgicalBridge) | Built via CMake against Slicer SDK; loaded as Qt extension |
 
 ---

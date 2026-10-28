@@ -185,7 +185,7 @@ class ReconstructionBenchmarkSuite:
         """
         ac = SubmodularActorCritic(action_dim=4, latent_dim=192).to(self.device)
         if checkpoint_path and os.path.exists(checkpoint_path):
-            ckpt = torch.load(checkpoint_path, map_location=self.device)
+            ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
             ac.load_state_dict(ckpt.get("state_dict", ckpt))
             print(f"[+] Loaded trained PPO policy from {checkpoint_path}")
         ac.eval()
@@ -277,7 +277,7 @@ class ReconstructionBenchmarkSuite:
         """
         diffusion_policy = SOTADiffusionPolicy(action_dim=4, horizon=8, device=self.device)
         if checkpoint_path and os.path.exists(checkpoint_path):
-            ckpt = torch.load(checkpoint_path, map_location=self.device)
+            ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
             diffusion_policy.load_state_dict(ckpt.get("state_dict", ckpt))
             print(f"[+] Loaded Diffusion Policy from {checkpoint_path}")
         diffusion_policy.eval()

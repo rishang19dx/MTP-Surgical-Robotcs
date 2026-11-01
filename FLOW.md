@@ -175,17 +175,27 @@ flowchart TD
 
 ## 4. Standard Developer Verification Recipes
 
-### 1. Full Unit Test Suite (21 Tests)
+### 1. Full Unit Test Suite (31 Tests)
 ```bash
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -v
 ```
 
-### 2. Run 6-Policy Benchmark (3 Trials per Method)
+### 2. Run SonoGym 6-Policy & Soft-Body Benchmark (Clinical Patient CT)
 ```bash
-./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --num-trials 3
+./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --num-trials 1 --soft-body
 ```
 
-### 3. Launch Unified Server (Streaming to 3D Slicer)
+### 3. Record Multi-Modal Soft-Body Demonstrations & Offline Dataset
+```bash
+./.venv/bin/python ReconstructionPipeline/scripts/record_soft_body_demonstrations.py --all
+```
+
+### 4. Train 3D Diffusion Policy from Recorded Expert Demonstrations
+```bash
+./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --demo-dataset demonstrations/soft_body_expert_demonstrations.npz --epochs 40
+```
+
+### 5. Launch Unified Server (Streaming to 3D Slicer)
 ```bash
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --mode orbital --fps 30.0
 ```

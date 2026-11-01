@@ -104,6 +104,29 @@ SonoGym (Ao et al., 2025) operates exclusively on rigid phantoms. Our framework 
 
 ---
 
+## 🎬 Demonstration Recordings with Soft-Body Integration (`DEC-032`)
+
+We provide visual video recordings (MP4/GIF) and an offline expert dataset recorded with active continuum mechanics:
+
+| Demonstration Asset | Format | Modality / Visualization | Description |
+| :--- | :---: | :--- | :--- |
+| **Robot Soft-Body Scan** | [MP4](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/demo_robot_soft_body_scan.mp4) &bull; [GIF](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/demo_robot_soft_body_scan.gif) | 3-Panel Synchronized View (PyBullet + B-Mode + Telemetry) | Franka Panda robot scanning over patient lumbar spine with translucent torso, ivory L1–L5 vertebrae, dynamic Kelvinlet contact indentation crater (von Mises stress color-coding), live B-mode ultrasound compression, and real-time force/coupling strip charts. |
+| **Multi-Stiffness Comparison** | [MP4](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/demo_multistiffness_comparison.mp4) &bull; [GIF](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/demo_multistiffness_comparison.gif) | 3-Way Side-by-Side B-Mode Slices | Comparative response across soft adipose ($\mu = 2.0\text{ kPa}$, $3.2\text{ mm}$ indent), normal torso ($\mu = 4.0\text{ kPa}$, $1.6\text{ mm}$ indent), and stiff muscle ($\mu = 8.0\text{ kPa}$, $0.8\text{ mm}$ indent) under identical probe pressure ($0.5 \to 7.5\text{ N}$). |
+| **Dynamic Tissue Deformation** | [MP4](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/demo_soft_body_deformation.mp4) &bull; [GIF](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/demo_soft_body_deformation.gif) | 4-Panel Multi-Scale Biomechanics View | Global patient cross-section with warped Lagrangian mesh, local deformed CT reslice, dynamic B-mode echogram with $\kappa(F_N)$ coupling, and real-time A-line RF tracking. |
+| **Soft-Body Expert Dataset** | [NPZ Archive](file:///home/rishang/Desktop/Insti_Stuff/MTP/demonstrations/soft_body_expert_demonstrations.npz) (28 MB) | Compressed Trajectory Archive (20 Episodes, 640 Steps) | Complete state observations, 4-DoF actions, contact forces ($F_N$), indentation depths ($\delta_m$), acoustic couplings ($\kappa$), 2D ultrasound frames, and 3D point clouds. Directly ingestible by 3D Diffusion Policy (`train_diffusion_policy.py --demo-dataset`). |
+
+### Re-recording Demonstrations & Training from Offline Dataset
+```bash
+# 1. Re-record all soft-body demonstration videos and export the offline dataset
+./.venv/bin/python ReconstructionPipeline/scripts/record_soft_body_demonstrations.py --all
+
+# 2. Train 3D Diffusion Policy directly on recorded expert demonstrations (1.1s execution)
+./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py \
+  --demo-dataset demonstrations/soft_body_expert_demonstrations.npz --epochs 40
+```
+
+---
+
 ## 🖥️ Clinical 3D Slicer Frontend
 
 The platform provides two complementary integration pathways with **3D Slicer** (v5.0+):

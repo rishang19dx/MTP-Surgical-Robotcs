@@ -28,8 +28,9 @@ class UltrasoundDemonstrationDataset(Dataset):
 
     def __init__(
         self,
-        observations: List[Dict[str, np.ndarray]],
-        action_trajectories: List[np.ndarray],
+        observations: Optional[List[Dict[str, np.ndarray]]] = None,
+        action_trajectories: Optional[List[np.ndarray]] = None,
+        npz_path: Optional[str] = None,
         horizon: int = 8,
         max_points: int = 256,
     ):
@@ -37,24 +38,46 @@ class UltrasoundDemonstrationDataset(Dataset):
         self.horizon = horizon
         self.max_points = max_points
 
-        for obs_seq, act_seq in zip(observations, action_trajectories):
-            seq_len = len(act_seq)
-            for t in range(seq_len):
-                pts = obs_seq[t]["reconstructed_points"]
-                pose = obs_seq[t]["probe_pose"]
+        if npz_path and os.path.exists(npz_path):
+            data = np.load(npz_path, allow_pickle=True)
+            episodes = data["episodes"]
+            for ep in episodes:
+                states = ep["states"]
+                actions = ep["actions"]
+                seq_len = len(actions)
+                for t in range(seq_len):
+                    pose = states[t]
+                    pts = np.zeros((32, 3), dtype=np.float32) # placeholder geometry if not explicitly logged
+                    chunk = actions[t : t + horizon]
+                    if len(chunk) < horizon:
+                        pad_len = horizon - len(chunk)
+                        pad = np.tile(chunk[-1:], (pad_len, 1)) if len(chunk) > 0 else np.zeros((pad_len, 4))
+                        chunk = np.vstack([chunk, pad]) if len(chunk) > 0 else pad
 
-                # Extract horizon chunk; pad with last action if near boundary
-                chunk = act_seq[t : t + horizon]
-                if len(chunk) < horizon:
-                    pad_len = horizon - len(chunk)
-                    pad = np.tile(chunk[-1:], (pad_len, 1)) if len(chunk) > 0 else np.zeros((pad_len, 4))
-                    chunk = np.vstack([chunk, pad]) if len(chunk) > 0 else pad
+                    self.samples.append({
+                        "points": pts.astype(np.float32),
+                        "pose": pose.astype(np.float32),
+                        "chunk": chunk.astype(np.float32),
+                    })
+        elif observations is not None and action_trajectories is not None:
+            for obs_seq, act_seq in zip(observations, action_trajectories):
+                seq_len = len(act_seq)
+                for t in range(seq_len):
+                    pts = obs_seq[t]["reconstructed_points"]
+                    pose = obs_seq[t]["probe_pose"]
 
-                self.samples.append({
-                    "points": pts.astype(np.float32),
-                    "pose": pose.astype(np.float32),
-                    "chunk": chunk.astype(np.float32),
-                })
+                    # Extract horizon chunk; pad with last action if near boundary
+                    chunk = act_seq[t : t + horizon]
+                    if len(chunk) < horizon:
+                        pad_len = horizon - len(chunk)
+                        pad = np.tile(chunk[-1:], (pad_len, 1)) if len(chunk) > 0 else np.zeros((pad_len, 4))
+                        chunk = np.vstack([chunk, pad]) if len(chunk) > 0 else pad
+
+                    self.samples.append({
+                        "points": pts.astype(np.float32),
+                        "pose": pose.astype(np.float32),
+                        "chunk": chunk.astype(np.float32),
+                    })
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -136,6 +159,7 @@ def collect_expert_demonstrations(
 
 def train_diffusion_policy(
     patient_dir: Optional[str] = None,
+    demo_dataset: Optional[str] = None,
     num_demo_episodes: int = 25,
     epochs: int = 40,
     batch_size: int = 32,
@@ -147,12 +171,16 @@ def train_diffusion_policy(
     device = torch.device(device_str)
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
 
-    print(f"[*] Initializing Training Environment (Patient: {patient_dir or 'Synthetic Anatomy'}, Device: {device})...")
-    env = UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=100, device=device)
+    # 1. Dataset Loading: from pre-recorded dataset or live simulation
+    if demo_dataset and os.path.exists(demo_dataset):
+        print(f"[*] Loading pre-recorded expert demonstration dataset from {demo_dataset}...")
+        dataset = UltrasoundDemonstrationDataset(npz_path=demo_dataset, horizon=horizon)
+    else:
+        print(f"[*] Initializing Training Environment (Patient: {patient_dir or 'Synthetic Anatomy'}, Device: {device})...")
+        env = UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=100, device=device)
+        obs_trajs, act_trajs = collect_expert_demonstrations(env, num_episodes=num_demo_episodes, horizon=horizon)
+        dataset = UltrasoundDemonstrationDataset(observations=obs_trajs, action_trajectories=act_trajs, horizon=horizon)
 
-    # 1. Collect Demonstrations
-    obs_trajs, act_trajs = collect_expert_demonstrations(env, num_episodes=num_demo_episodes, horizon=horizon)
-    dataset = UltrasoundDemonstrationDataset(obs_trajs, act_trajs, horizon=horizon)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     # 2. Instantiate SOTA Diffusion Policy
@@ -211,20 +239,21 @@ def train_diffusion_policy(
     # 4. Quick Verification Rollout
     print("[*] Running verification test rollout with trained policy...")
     policy.eval()
-    obs = env.reset()
+    test_env = env if 'env' in locals() and env is not None else UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=40, device=device)
+    obs = test_env.reset()
     for s in range(30):
         pts_t = torch.tensor(obs["reconstructed_points"], dtype=torch.float32, device=device)
         pose_t = torch.tensor(obs["probe_pose"], dtype=torch.float32, device=device)
         with torch.no_grad():
             chunk = policy.sample_actions(pts_t, pose_t, num_steps=5, method="heun").squeeze(0).cpu().numpy()
         for act in chunk[:2]: # Execute first 2 actions
-            obs, _, term, trunc, info = env.step(act)
+            obs, _, term, trunc, info = test_env.step(act)
             if term or trunc:
                 break
         if term or trunc:
             break
 
-    reconstructed_pts = env.accumulator.get_points()
+    reconstructed_pts = test_env.accumulator.get_points()
     cov = float(info.get("coverage_ratio", 0.0)) * 100.0
     print(f"[✓] Verification Rollout Result: Points={len(reconstructed_pts)}, Coverage={cov:.1f}%, Mean Force={info.get('normal_force', 0.0):.2f}N")
 
@@ -232,6 +261,7 @@ def train_diffusion_policy(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SOTA 3D Diffusion Policy for Autonomous Ultrasound")
     parser.add_argument("--patient-dir", type=str, default=None, help="Path to clinical TotalSegmentator patient directory")
+    parser.add_argument("--demo-dataset", type=str, default=None, help="Path to pre-recorded soft-body expert demonstrations .npz dataset")
     parser.add_argument("--num-demo-episodes", type=int, default=25, help="Number of demonstration episodes to collect")
     parser.add_argument("--epochs", type=int, default=40, help="Training epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
@@ -243,6 +273,7 @@ if __name__ == "__main__":
 
     train_diffusion_policy(
         patient_dir=args.patient_dir,
+        demo_dataset=args.demo_dataset,
         num_demo_episodes=args.num_demo_episodes,
         epochs=args.epochs,
         batch_size=args.batch_size,

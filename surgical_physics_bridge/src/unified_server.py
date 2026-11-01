@@ -128,7 +128,7 @@ class UnifiedSurgicalBridgeServer:
         print("[*] Initializing Ultrasound Reconstruction Engine (Dorsal Spine Scanning)...")
         self.env = UltrasoundReconstructionEnv(
             patient_data=patient_source,
-            max_steps=200,
+            max_steps=10000,
             scan_approach="dorsal",
             pybullet_backend=self.backend,
             device=self.device,
@@ -244,10 +244,18 @@ class UnifiedSurgicalBridgeServer:
             )
 
     def _build_trajectory(self, mode: str) -> Optional[np.ndarray]:
-        if mode == "orbital":
-            return self.planner.generate_orbital_trajectory(radii=[18.0, 28.0, 36.0], points_per_orbit=30)
-        elif mode == "raster":
-            return self.planner.generate_linear_raster_trajectory(num_sweep_lines=8, points_per_line=15)
+        if mode == "raster":
+            return self.planner.generate_spine_raster_trajectory(
+                x_range=(-16.0, 16.0),
+                z_range=(-50.0, 50.0),
+                step_distance_mm=0.33,
+                num_sweep_lines=5
+            )
+        elif mode == "orbital":
+            return self.planner.generate_orbital_trajectory(
+                radii=[16.0, 26.0, 34.0],
+                step_distance_mm=0.33
+            )
         return None
 
     def handle_incoming_messages(self):
@@ -398,17 +406,15 @@ class UnifiedSurgicalBridgeServer:
             with self.physics_lock:
                 self.update_robot_ik_and_visuals()
 
-            if term or trunc or self.traj_idx >= len(self.trajectory):
+            if self.traj_idx >= len(self.trajectory):
                 total_pts = len(self.env.accumulator.get_points())
                 print(
-                    f"[+] Trajectory Pass Completed: "
+                    f"[+] Full Spine Scan Pass Completed: "
                     f"Total Reconstructed Points={total_pts}, "
                     f"Coverage={info['coverage_ratio']*100:.1f}%, "
                     f"NormalForce={info['normal_force']:.2f}N, Coupling={info['acoustic_coupling']*100:.1f}%"
                 )
                 self.traj_idx = 0
-                # Retain accumulator points across scanning passes to allow full multi-vertebra reconstruction
-                self.obs = self.env.reset(clear_accumulator=False)
 
         # --- Network Publishing ---
 

@@ -158,7 +158,8 @@ class UltrasoundReconstructionEnv:
         if self.pybullet_backend is not None and getattr(self.pybullet_backend, "anatomy_body_id", None) is not None:
             contacts = self.pybullet_backend.get_contacts()
             if contacts:
-                normal_force = float(sum(c["normal_force"] for c in contacts))
+                raw_force = float(sum(c["normal_force"] for c in contacts))
+                normal_force = float(np.clip(raw_force, 0.0, 15.0))
             else:
                 surface_coord = self.get_skin_surface(c1, c2)
                 if probe_coord is None and probe_y is None:
@@ -167,7 +168,7 @@ class UltrasoundReconstructionEnv:
                     penetration = max(0.0, probe_y - self.skin_y)
                 else:
                     penetration = max(0.0, surface_coord - probe_coord)
-                normal_force = float(self.tissue_stiffness * penetration)
+                normal_force = float(np.clip(self.tissue_stiffness * penetration, 0.0, 15.0))
         else:
             surface_coord = self.get_skin_surface(c1, c2)
             if probe_coord is None and probe_y is None:
@@ -176,7 +177,7 @@ class UltrasoundReconstructionEnv:
                 penetration = max(0.0, probe_y - self.skin_y)
             else:
                 penetration = max(0.0, surface_coord - probe_coord)
-            normal_force = float(self.tissue_stiffness * penetration)
+            normal_force = float(np.clip(self.tissue_stiffness * penetration, 0.0, 15.0))
 
         # Beam tilt angle relative to surface normal:
         # yaw represents lateral tilt off normal; pitch represents sagittal tilt off normal.

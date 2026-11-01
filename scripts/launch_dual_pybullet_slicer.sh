@@ -32,7 +32,7 @@ cd "${PROJECT_ROOT}"
 
 # Default parameters
 export DISPLAY="${DISPLAY:-:0}"
-SCAN_MODE="orbital"
+SCAN_MODE="raster"
 PUBLISH_FPS="30.0"
 PORT="18944"
 PATIENT_DIR="${PROJECT_ROOT}/data/sample_totalsegmentator_patient"

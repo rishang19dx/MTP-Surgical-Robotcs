@@ -362,14 +362,15 @@ class SlicerSurgicalPhysicsBridge:
                     vtk_mat.SetElement(r, c, latest_probe_msg.matrix[r, c])
             self.probe_transform_node.SetMatrixTransformToParent(vtk_mat)
 
-        # B. Apply Latest 2D Ultrasound B-mode Slice
+        # B. Apply Latest 2D Ultrasound B-mode Slice (Top-down clinical display)
         if latest_image_msg is not None:
             img_data = latest_image_msg.image
             if img_data.ndim == 3 and img_data.shape[2] == 1:
                 img_data = img_data[:, :, 0]
 
-            # Format to (1, H, W) for Slicer scalar volume
-            vol_slice = img_data[np.newaxis, :, :]
+            # Invert row order so probe face (depth 0) is at screen top (+Y in Axial view)
+            oriented_img = np.ascontiguousarray(img_data[::-1, :])
+            vol_slice = oriented_img[np.newaxis, :, :]
             slicer.util.updateVolumeFromArray(self.us_volume_node, vol_slice)
 
             if self.frames_received == 1:

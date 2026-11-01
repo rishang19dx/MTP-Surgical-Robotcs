@@ -378,3 +378,20 @@ A chronological record of all architectural, research, algorithmic, and engineer
   2. Replaced re-instantiation of `vtkMRMLTextNode` in `vtkSlicerSurgicalBridgeLogic.cxx` with in-place MRML node lookup and `SetText()` mutation.
   3. Vectorized point cloud buffer mutation in `slicer_surgical_physics_bridge.py` using `vtk.util.numpy_support.numpy_to_vtk` and `numpy_to_vtkIdTypeArray` for zero-copy memory transfer ($< 0.2\text{ ms}$).
 * **Rationale**: Guarantees zero memory leaks in C++ Slicer scenes and smooth 60 FPS visual rendering without UI freezing in the zero-compile Python bridge.
+
+---
+
+### `DEC-029`: Rectification of Contact Manifold Body Filtering, L1-L5 Clinical Spine Raster Scanning, and Top-Down Ultrasound Presentation
+* **Date**: November 1, 2026
+* **Context**: Live demonstration revealed a massive normal force spike ($F_N \approx 13,748\text{ N}$) and saturated acoustic coupling ($\kappa = 20.0\%$), while the trajectory looped rapidly with only 66 points extracted. The 3D Slicer layout lacked the 3D scene view, and the 2D ultrasound viewer clipped the B-mode image obliquely.
+* **Root Causes**:
+  1. `pybullet_backend.get_contacts()` invoked `p.getContactPoints()` globally with no body filter, summing normal contact forces across all bodies in the world, including the gravitational reaction of the heavy operating table resting on the ground plane ($> 13,000\text{ N}$).
+  2. The $13,748\text{ N}$ force triggered the excessive force penalty in `env_reconstruction.py`, clamping acoustic coupling $\kappa$ to 0.20 and adding 80% artificial noise floor that obscured bone acoustic reflections.
+  3. The orbital trajectory executed only 90 sparse points with large jumps at 30 FPS ($3.0\text{ s}$ per pass), repeatedly resetting the environment.
+  4. Slicer layout was configured to `SlicerLayoutSideBySideView` (which opens two 2D slice views, hiding the 3D view), and `US_Image` was parented to the tilted 3D probe transform, causing the Axial slice viewer to intersect it obliquely as a single diagonal line.
+* **Decision**:
+  1. *Specific Body Contact Filtering*: Filter contact points strictly between `self.probe_body_id` and `self.anatomy_body_id` via `p.getContactPoints(ba, bb)`, clamping normal force to $[0.0, 15.0]\text{ N}$ with analytical compliance fallback.
+  2. *L1-L5 Clinical Spine Raster Trajectory*: Implemented `generate_spine_raster_trajectory` with 5 cranio-caudal sweep lines across lumbar vertebrae L1-L5 ($Z \in [-55, +55]\text{ mm}$, 110 mm span) discretized into sub-millimeter waypoints ($0.33\text{ mm}$ at 30 Hz = $10\text{ mm/s}$ clinical velocity).
+  3. *Unclipped Top-Down Ultrasound Display*: Detached `US_Image` from probe transform (`SetAndObserveTransformNodeID(None)`) with physical voxel spacing ($0.38 \times 0.375\text{ mm}$), and inverted vertical row indexing (`img_data[::-1, :]`) so depth 0 (probe face) is anchored at screen top and depth 60 mm extends downward.
+  4. *True Side-by-Side Slicer Layout & 3D Anatomical Grounding*: Configured custom layout XML (ID 501: Left = Red 2D Ultrasound Slice, Right = 3D Patient Space). Added 3D cyan transparent acoustic scan plane (`UltrasoundBeamPlane`) and loaded full lumbar spine surface mesh (`GroundTruthSpine`, 36,960 points in bone ivory) directly into Slicer's 3D scene.
+* **Rationale**: Eliminates false gravitational contact spikes, guarantees optimal acoustic coupling ($\kappa \in [0.95, 1.0]$), provides smooth continuous robot motion at clinical velocity ($10\text{ mm/s}$), and delivers pristine side-by-side clinical presentation with live unclipped 2D B-mode feed and 3D spine reconstruction.

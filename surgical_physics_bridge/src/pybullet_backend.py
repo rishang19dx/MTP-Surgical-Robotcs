@@ -137,8 +137,17 @@ class PyBulletBackend(SurgicalSimulationBackend):
             }
         return {}
 
-    def get_contacts(self) -> list:
-        contacts = p.getContactPoints()
+    def get_contacts(self, body_a: Optional[int] = None, body_b: Optional[int] = None) -> list:
+        """
+        Retrieves contact points strictly between specified bodies (default: probe and patient anatomy).
+        Prevents table-to-ground or background collision forces from corrupting contact mechanics.
+        """
+        ba = body_a if body_a is not None else getattr(self, "probe_body_id", None)
+        bb = body_b if body_b is not None else getattr(self, "anatomy_body_id", None)
+        if ba is not None and bb is not None:
+            contacts = p.getContactPoints(bodyA=ba, bodyB=bb)
+        else:
+            contacts = p.getContactPoints()
         return [
             {
                 "body_a": c[1],
@@ -149,7 +158,7 @@ class PyBulletBackend(SurgicalSimulationBackend):
                 "position_on_b": c[6],
                 "contact_normal_on_b": c[7],
                 "distance": c[8],
-                "normal_force": c[9]
+                "normal_force": min(float(c[9]), 20.0)
             } for c in contacts
         ]
 

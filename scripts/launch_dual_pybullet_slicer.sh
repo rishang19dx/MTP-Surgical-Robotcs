@@ -31,6 +31,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 # Default parameters
+export DISPLAY="${DISPLAY:-:0}"
 SCAN_MODE="orbital"
 PUBLISH_FPS="30.0"
 PORT="18944"

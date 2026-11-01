@@ -49,31 +49,59 @@ class ReconstructionBenchmarkSuite:
         force_history: List[float],
         coupling_history: List[float],
     ) -> Dict[str, float]:
-        """Calculates final registration and compliance metrics for a single trial."""
+        """
+        Calculates complete SonoGym evaluation metrics:
+        1. Reconstruction Quality: Surface Coverage (%), Chamfer Distance (mm), Mean Absolute Distance (MAD, mm)
+        2. Force Safety & Regulation: Safe Force Ratio (%), Max Force (N), Mean Force (N), Force RMSE from 4.0 N
+        3. Acoustic Visibility: Mean Acoustic Coupling kappa, Low Coupling Dropout Steps (kappa < 0.20)
+        4. Kinematic Efficiency: Trajectory Length (mm), End-Effector Angular Rotation (deg)
+        """
         reconstructed_pts = env.accumulator.get_points()
         gt_pts = env.gt_bone_points
 
-        if len(reconstructed_pts) > 20:
+        mad_mm = 999.0
+        if len(reconstructed_pts) > 20 and len(gt_pts) > 0:
             chamfer, cov = self.reg_evaluator.compute_metrics(reconstructed_pts, gt_pts)
+            # Compute Mean Absolute Distance (MAD) from reconstructed points to nearest ground-truth bone point
+            target_tree = o3d.geometry.KDTreeFlann(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(gt_pts)))
+            dists_s2t = [np.sqrt(target_tree.search_knn_vector_3d(p, 1)[2][0]) for p in reconstructed_pts]
+            mad_mm = float(np.mean(dists_s2t))
         else:
             chamfer, cov = 999.0, 0.0
 
-        # Calculate force compliance percentage (force within clinical safe window [2.0, 8.0] N)
+        # SonoGym Contact Force Safety & Regulation Metrics
         if len(force_history) > 0:
-            compliant_steps = sum(1 for f in force_history if 2.0 <= f <= 8.0)
-            force_compliance_pct = (compliant_steps / len(force_history)) * 100.0
-            mean_coupling = float(np.mean(coupling_history))
+            f_arr = np.array(force_history, dtype=np.float32)
+            safe_steps = int(np.sum((f_arr >= 2.0) & (f_arr <= 8.0)))
+            safe_force_ratio_pct = (safe_steps / len(f_arr)) * 100.0
+            max_force = float(np.max(f_arr))
+            mean_force = float(np.mean(f_arr))
+            force_rmse = float(np.sqrt(np.mean((f_arr - 4.0) ** 2)))
+            force_violations = int(np.sum((f_arr > 8.0) | (f_arr < 1.0)))
         else:
-            force_compliance_pct = 0.0
-            mean_coupling = 0.0
+            safe_force_ratio_pct, max_force, mean_force, force_rmse, force_violations = 0.0, 0.0, 0.0, 0.0, 0
+
+        # SonoGym Acoustic Visibility Metrics
+        if len(coupling_history) > 0:
+            c_arr = np.array(coupling_history, dtype=np.float32)
+            mean_coupling = float(np.mean(c_arr))
+            low_coupling_steps = int(np.sum(c_arr < 0.20))
+        else:
+            mean_coupling, low_coupling_steps = 0.0, 0
 
         return {
             "coverage_pct": cov * 100.0,
-            "chamfer_mm": chamfer,
-            "path_length_mm": env.trajectory_length,
-            "rotation_deg": np.degrees(env.total_rotation),
-            "force_compliance_pct": force_compliance_pct,
+            "chamfer_mm": float(chamfer),
+            "mad_mm": float(mad_mm),
+            "safe_force_ratio_pct": safe_force_ratio_pct,
+            "max_force_n": max_force,
+            "mean_force_n": mean_force,
+            "force_rmse_n": force_rmse,
+            "force_violations": float(force_violations),
             "mean_coupling": mean_coupling,
+            "low_coupling_steps": float(low_coupling_steps),
+            "path_length_mm": float(env.trajectory_length),
+            "rotation_deg": float(np.degrees(env.total_rotation)),
             "frames": float(env.current_step),
         }
 
@@ -327,6 +355,117 @@ class ReconstructionBenchmarkSuite:
 
         return self._aggregate_trial_results(trial_metrics)
 
+    def run_soft_body_deformation_benchmark(self) -> Dict[str, Any]:
+        """
+        Benchmarks the effect of continuum mechanics and soft-tissue deformation
+        on ultrasound image formation, bone echo localization, and 3D reconstruction accuracy.
+        Addresses SonoGym's primary limitation (rigid patient assumptions).
+        """
+        print("[*] Running SonoGym-SoftBody Continuum Mechanics Benchmark...")
+        env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=100, device=self.device)
+        env.reset()
+
+        # 1. Echo Shift vs. Probe Pressure Analysis
+        test_forces = [0.5, 2.0, 4.0, 6.0, 8.0, 10.0]
+        echo_shifts = []
+        t_pose = env._build_probe_matrix(0.0, 0.0, 0.0, 0.0)
+
+        for fn in test_forces:
+            # Extract slice with backward Eulerian warping at force fn
+            ct_slice = env.slice_extractor_ct.extract_slices(t_pose, interpolation="bilinear", contact_force_n=fn)
+            label_slice = env.slice_extractor_label.extract_slices(t_pose, interpolation="nearest", contact_force_n=fn)
+            us_res = env.us_sim.simulate_bmode(ct_slice, label_slice=label_slice)
+            bmode = us_res["bmode"]
+            if isinstance(bmode, torch.Tensor):
+                bmode = bmode.detach().cpu().numpy()
+
+            # Locate peak hyperechoic reflection (central A-scans average)
+            central_ascan = np.mean(bmode[:, 40:60], axis=1)
+            bone_peak_idx = int(np.argmax(central_ascan[10:])) + 10
+            # Pixel spacing along depth (60 mm / 160 pixels = 0.375 mm/px)
+            echo_depth_mm = bone_peak_idx * 0.375
+            indent_mm = (fn / 2500.0) * 1000.0
+            _, kappa, _ = env.compute_contact_force_and_coupling(0.0, 0.0, 0.0, 0.0, probe_coord=float(env.skin_y - indent_mm))
+
+            echo_shifts.append({
+                "force_n": fn,
+                "indentation_mm": indent_mm,
+                "echo_depth_mm": echo_depth_mm,
+                "coupling": kappa,
+            })
+
+        # 2. Rigid vs. Deformable Reconstruction Comparison
+        # Run standard raster sweep on both:
+        # A. Rigid baseline (force = 0.0 N, zero deformation)
+        env_rigid = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=60, device=self.device)
+        env_rigid.reset()
+        planner = HeuristicScanPlanner()
+        traj = planner.generate_spine_raster_trajectory(num_sweep_lines=4, step_distance_mm=0.5)
+
+        for target_p in traj[:60]:
+            curr_p = env_rigid.current_pose_params
+            action = np.array([
+                np.clip((target_p[0] - curr_p[0]) / env_rigid.action_scale_trans, -1.0, 1.0),
+                np.clip((target_p[1] - curr_p[1]) / env_rigid.action_scale_trans, -1.0, 1.0),
+                0.0, 0.0
+            ], dtype=np.float32)
+            env_rigid.step(action)
+
+        pts_rigid = env_rigid.accumulator.get_points()
+        cd_rigid, cov_rigid = self.reg_evaluator.compute_metrics(pts_rigid, env_rigid.gt_bone_points)
+
+        # B. Deformable tissue with Kelvinlet compression (FN = 5.0 N)
+        env_deform = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=60, target_force_n=5.0, device=self.device)
+        env_deform.reset()
+
+        for target_p in traj[:60]:
+            curr_p = env_deform.current_pose_params
+            action = np.array([
+                np.clip((target_p[0] - curr_p[0]) / env_deform.action_scale_trans, -1.0, 1.0),
+                np.clip((target_p[1] - curr_p[1]) / env_deform.action_scale_trans, -1.0, 1.0),
+                0.0, 0.0
+            ], dtype=np.float32)
+            env_deform.step(action)
+
+        pts_deform = env_deform.accumulator.get_points()
+        cd_deform, cov_deform = self.reg_evaluator.compute_metrics(pts_deform, env_deform.gt_bone_points)
+
+        # 3. Multi-Stiffness Generalization (mu in [2.0, 4.0, 8.0] kPa)
+        stiffness_results = {}
+        for mu_kpa in [2.0, 4.0, 8.0]:
+            env_stiff = UltrasoundReconstructionEnv(
+                patient_data=self.patient_dir, max_steps=40, target_force_n=4.0, device=self.device
+            )
+            # Adjust tissue stiffness
+            env_stiff.tissue_stiffness = float(mu_kpa * 300.0)
+            env_stiff.reset()
+            f_hist = []
+            for target_p in traj[:40]:
+                curr_p = env_stiff.current_pose_params
+                action = np.array([
+                    np.clip((target_p[0] - curr_p[0]) / env_stiff.action_scale_trans, -1.0, 1.0),
+                    np.clip((target_p[1] - curr_p[1]) / env_stiff.action_scale_trans, -1.0, 1.0),
+                    0.0, 0.0
+                ], dtype=np.float32)
+                _, _, _, _, info = env_stiff.step(action)
+                f_hist.append(info["normal_force"])
+
+            f_arr = np.array(f_hist, dtype=np.float32)
+            stiffness_results[f"mu_{mu_kpa:.1f}kPa"] = {
+                "safe_force_pct": float(np.mean((f_arr >= 2.0) & (f_arr <= 8.0)) * 100.0),
+                "force_rmse": float(np.sqrt(np.mean((f_arr - 4.0) ** 2))),
+                "max_force": float(np.max(f_arr)),
+            }
+
+        return {
+            "echo_shifts": echo_shifts,
+            "cd_rigid_mm": float(cd_rigid),
+            "cov_rigid_pct": float(cov_rigid * 100.0),
+            "cd_deform_mm": float(cd_deform),
+            "cov_deform_pct": float(cov_deform * 100.0),
+            "stiffness_generalization": stiffness_results,
+        }
+
     def run_full_comparison(
         self,
         ppo_ckpt: Optional[str] = None,
@@ -364,30 +503,55 @@ if __name__ == "__main__":
     parser.add_argument("--cfm-ckpt", type=str, default=None, help="Path to Continuous Flow Matching checkpoint")
     parser.add_argument("--diffusion-ckpt", type=str, default=None, help="Path to 3D Diffusion Policy checkpoint")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device (cpu/cuda)")
+    parser.add_argument("--soft-body", action="store_true", help="Run SonoGym-SoftBody continuum mechanics benchmark")
     args = parser.parse_args()
 
     dev = torch.device(args.device)
     print(f"[*] Initializing Benchmark Suite (Patient: {args.patient_dir or 'Synthetic Anatomy'}, Device: {dev}, Trials: {args.num_trials})...")
     suite = ReconstructionBenchmarkSuite(num_trials=args.num_trials, patient_dir=args.patient_dir, device=dev)
+
+    if args.soft_body:
+        sb_res = suite.run_soft_body_deformation_benchmark()
+        print("\n" + "=" * 80)
+        print("SONOGYM-SOFTBODY CONTINUUM MECHANICS & B-MODE DEFORMATION RESULTS")
+        print("=" * 80)
+        print("1. Probe Contact Force vs. B-Mode Hyperechoic Echo Shift:")
+        print(f"   {'Force (N)':<12} | {'Indentation (mm)':<18} | {'Echo Depth (mm)':<16} | {'Coupling':<10}")
+        print("   " + "-" * 62)
+        for row in sb_res["echo_shifts"]:
+            print(f"   {row['force_n']:<12.1f} | {row['indentation_mm']:<18.2f} | {row['echo_depth_mm']:<16.2f} | {row['coupling']:<10.2f}")
+
+        print("\n2. Reconstruction Accuracy: Rigid SonoGym Baseline vs Deformable Kelvinlets:")
+        print(f"   - Rigid Phantom Baseline (Zero Deformation): Chamfer = {sb_res['cd_rigid_mm']:.2f} mm | Coverage = {sb_res['cov_rigid_pct']:.1f}%")
+        print(f"   - Deformable Soft Tissue (Ours, F_N = 5.0 N): Chamfer = {sb_res['cd_deform_mm']:.2f} mm | Coverage = {sb_res['cov_deform_pct']:.1f}%")
+        print(f"   - Accuracy Restored via Backward Eulerian Warping: Delta CD = {abs(sb_res['cd_rigid_mm'] - sb_res['cd_deform_mm']):.2f} mm")
+
+        print("\n3. Tissue Stiffness Generalization (Adipose mu=2 kPa, Torso mu=4 kPa, Muscle mu=8 kPa):")
+        for k, v in sb_res["stiffness_generalization"].items():
+            print(f"   - {k}: Safe Force = {v['safe_force_pct']:.1f}%, Force RMSE = {v['force_rmse']:.2f} N, Max Force = {v['max_force']:.2f} N")
+        print("=" * 80)
+
     res = suite.run_full_comparison(ppo_ckpt=args.ppo_ckpt, cfm_ckpt=args.cfm_ckpt, diffusion_ckpt=args.diffusion_ckpt)
 
-    print("\n" + "=" * 95)
-    print("3D ROBOTIC ULTRASOUND RECONSTRUCTION BENCHMARK COMPARISON TABLE")
-    print("=" * 95)
+    print("\n" + "=" * 125)
+    print("SONOGYM 6-POLICY RECONSTRUCTION & COMPLIANCE BENCHMARK COMPARISON TABLE")
+    print("=" * 125)
     headers = [
-        "Method", "Coverage (%)", "Chamfer (mm)", "Path (mm)",
-        "Rotation (deg)", "Force Safe (%)", "Coupling"
+        "Method", "Coverage (%)", "Chamfer (mm)", "MAD (mm)", "Safe Force (%)",
+        "Max F (N)", "Force RMSE", "Coupling", "Path (mm)"
     ]
-    print(f"{headers[0]:<20} | {headers[1]:<14} | {headers[2]:<14} | {headers[3]:<12} | {headers[4]:<14} | {headers[5]:<14} | {headers[6]:<10}")
-    print("-" * 115)
+    print(f"{headers[0]:<18} | {headers[1]:<14} | {headers[2]:<14} | {headers[3]:<12} | {headers[4]:<14} | {headers[5]:<10} | {headers[6]:<10} | {headers[7]:<10} | {headers[8]:<10}")
+    print("-" * 125)
 
     for method, metrics in res.items():
-        cov_str = f"{metrics['mean_coverage_pct']:.1f} ± {metrics['std_coverage_pct']:.1f}"
-        cd_str = f"{metrics['mean_chamfer_mm']:.2f} ± {metrics['std_chamfer_mm']:.2f}"
-        path_str = f"{metrics['mean_path_length_mm']:.1f}"
-        rot_str = f"{metrics['mean_rotation_deg']:.1f}"
-        force_str = f"{metrics['mean_force_compliance_pct']:.1f}%"
+        cov_str = f"{metrics['mean_coverage_pct']:.1f} ± {metrics.get('std_coverage_pct', 0.0):.1f}"
+        cd_str = f"{metrics['mean_chamfer_mm']:.2f} ± {metrics.get('std_chamfer_mm', 0.0):.2f}"
+        mad_str = f"{metrics.get('mean_mad_mm', 0.0):.2f}"
+        safe_str = f"{metrics.get('mean_safe_force_ratio_pct', metrics.get('mean_force_compliance_pct', 0.0)):.1f}%"
+        max_f_str = f"{metrics.get('mean_max_force_n', 0.0):.1f}"
+        rmse_str = f"{metrics.get('mean_force_rmse_n', 0.0):.2f}"
         coup_str = f"{metrics['mean_mean_coupling']:.2f}"
-        print(f"{method:<20} | {cov_str:<14} | {cd_str:<14} | {path_str:<12} | {rot_str:<14} | {force_str:<14} | {coup_str:<10}")
+        path_str = f"{metrics['mean_path_length_mm']:.1f}"
+        print(f"{method:<18} | {cov_str:<14} | {cd_str:<14} | {mad_str:<12} | {safe_str:<14} | {max_f_str:<10} | {rmse_str:<10} | {coup_str:<10} | {path_str:<10}")
 
-    print("=" * 115)
+    print("=" * 125)

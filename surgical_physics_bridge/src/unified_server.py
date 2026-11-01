@@ -115,19 +115,19 @@ class UnifiedSurgicalBridgeServer:
         self.probe_body_id = None
         self.hud_text_id = -1
 
-        # Build operating room scene in PyBullet
+        # 2. TotalSegmentator Patient Asset Resolution
+        self.patient_dir = self._resolve_patient_data(patient_dir)
+
+        # Build operating room scene in PyBullet with patient anatomical assets
         self._build_pybullet_scene(urdf_path)
 
         # 3. Kinematics Controller
         self.kinematics = KinovaGen3Kinematics()
 
-        # 4. TotalSegmentator Patient Asset Loading
-        patient_source = self._resolve_patient_data(patient_dir)
-
-        # 5. Ultrasound Simulation & Reconstruction Environment
+        # 4. Ultrasound Simulation & Reconstruction Environment
         print("[*] Initializing Ultrasound Reconstruction Engine (Dorsal Spine Scanning)...")
         self.env = UltrasoundReconstructionEnv(
-            patient_data=patient_source,
+            patient_data=self.patient_dir,
             max_steps=10000,
             scan_approach="dorsal",
             pybullet_backend=self.backend,
@@ -201,15 +201,49 @@ class UnifiedSurgicalBridgeServer:
             basePosition=[0.55, 0.0, 0.15]
         )
 
-        # 3. Patient Torso Body (Soft Tissue Volume)
-        torso_col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.16, 0.24, 0.06])
-        torso_vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.16, 0.24, 0.06], rgbaColor=[0.88, 0.73, 0.61, 1.0])
-        self.torso_id = p.createMultiBody(
-            baseMass=0,
-            baseCollisionShapeIndex=torso_col,
-            baseVisualShapeIndex=torso_vis,
-            basePosition=[0.55, 0.0, 0.36]
-        )
+        # 3. Patient Anatomy: Real Lumbar Spine (L1-L5) & Translucent Torso Skin
+        mesh_dir = os.path.join(self.patient_dir, "meshes")
+        spine_mesh_path = os.path.join(mesh_dir, "patient_lumbar_spine.obj")
+        torso_mesh_path = os.path.join(mesh_dir, "patient_torso_skin.obj")
+
+        if not os.path.exists(spine_mesh_path) or not os.path.exists(torso_mesh_path):
+            PatientAssetGenerator.export_patient_meshes(self.patient_dir)
+
+        # 3A. Internal Ivory Lumbar Spine (L1-L5 + Sacrum)
+        if os.path.exists(spine_mesh_path):
+            spine_vis = p.createVisualShape(p.GEOM_MESH, fileName=spine_mesh_path, rgbaColor=[0.92, 0.89, 0.78, 1.0])
+            spine_col = p.createCollisionShape(p.GEOM_MESH, fileName=spine_mesh_path)
+            self.spine_id = p.createMultiBody(
+                baseMass=0,
+                baseCollisionShapeIndex=spine_col,
+                baseVisualShapeIndex=spine_vis,
+                basePosition=[0, 0, 0]
+            )
+            print(f"[+] Loaded anatomical lumbar spine (L1-L5) from {spine_mesh_path} (ID: {self.spine_id})")
+        else:
+            self.spine_id = -1
+
+        # 3B. Translucent Patient Torso Soft-Tissue Envelope
+        if os.path.exists(torso_mesh_path):
+            torso_vis = p.createVisualShape(p.GEOM_MESH, fileName=torso_mesh_path, rgbaColor=[0.86, 0.68, 0.58, 0.55])
+            torso_col = p.createCollisionShape(p.GEOM_MESH, fileName=torso_mesh_path)
+            self.torso_id = p.createMultiBody(
+                baseMass=0,
+                baseCollisionShapeIndex=torso_col,
+                baseVisualShapeIndex=torso_vis,
+                basePosition=[0, 0, 0]
+            )
+            print(f"[+] Loaded patient torso skin envelope from {torso_mesh_path} (ID: {self.torso_id})")
+        else:
+            torso_col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.16, 0.24, 0.06])
+            torso_vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.16, 0.24, 0.06], rgbaColor=[0.88, 0.73, 0.61, 1.0])
+            self.torso_id = p.createMultiBody(
+                baseMass=0,
+                baseCollisionShapeIndex=torso_col,
+                baseVisualShapeIndex=torso_vis,
+                basePosition=[0.55, 0.0, 0.36]
+            )
+
         self.backend.anatomy_body_id = self.torso_id
 
         # 4. Robot Manipulator
@@ -346,20 +380,61 @@ class UnifiedSurgicalBridgeServer:
 
         # PyBullet GUI visual feedback
         if self.gui:
-            # 1. Contact Force Vector (Vertical Red Arrow)
-            force_vec_end = [x_pb, y_pb, z_contact + fn * 0.02]
+            # 1. Contact Force Vector (Color coded: Green=Safe, Amber=Elevated, Red=Violation)
+            if fn <= 6.0:
+                f_color = [0.1, 0.95, 0.3]
+            elif fn <= 8.0:
+                f_color = [1.0, 0.75, 0.1]
+            else:
+                f_color = [1.0, 0.15, 0.1]
+
+            force_vec_end = [x_pb, y_pb, z_contact + fn * 0.015]
             p.addUserDebugLine(
                 [x_pb, y_pb, z_contact],
                 force_vec_end,
-                [1.0, 0.1, 0.1],
+                f_color,
                 lineWidth=4,
                 lifeTime=0.20,
             )
 
-            # 2. Ultrasound Acoustic Slicing Plane (Cyan Frustum)
+            # 2. Dynamic Soft-Tissue Kelvinlet Indentation Crater
+            # Visualizes the physical depression of the skin mesh under probe pressure
+            indent_m = max(0.0, delta_m)
+            r_contact = 0.014  # Transducer tip radius (14 mm)
+            r_mid = 0.026      # Mid transition radius (26 mm)
+            r_rim = 0.040      # Relaxed outer boundary (40 mm)
+            n_spokes = 12
+            thetas = np.linspace(0, 2 * np.pi, n_spokes, endpoint=False)
+
+            # Draw concentric circular contour rings & radial spokes
+            for k in range(n_spokes):
+                th1 = thetas[k]
+                th2 = thetas[(k + 1) % n_spokes]
+
+                # Inner ring (at probe indentation depth)
+                p0_a = [x_pb + r_contact * np.cos(th1), y_pb + r_contact * np.sin(th1), z_contact]
+                p0_b = [x_pb + r_contact * np.cos(th2), y_pb + r_contact * np.sin(th2), z_contact]
+                p.addUserDebugLine(p0_a, p0_b, f_color, lineWidth=3, lifeTime=0.20)
+
+                # Mid ring (Kelvinlet 40% decay profile)
+                z_mid = 0.42 - 0.35 * indent_m
+                p1_a = [x_pb + r_mid * np.cos(th1), y_pb + r_mid * np.sin(th1), z_mid]
+                p1_b = [x_pb + r_mid * np.cos(th2), y_pb + r_mid * np.sin(th2), z_mid]
+                p.addUserDebugLine(p1_a, p1_b, [0.3, 0.7, 0.9], lineWidth=2, lifeTime=0.20)
+
+                # Outer rim (undeformed skin surface at z=0.42)
+                p2_a = [x_pb + r_rim * np.cos(th1), y_pb + r_rim * np.sin(th1), 0.42]
+                p2_b = [x_pb + r_rim * np.cos(th2), y_pb + r_rim * np.sin(th2), 0.42]
+                p.addUserDebugLine(p2_a, p2_b, [0.6, 0.6, 0.6], lineWidth=1, lifeTime=0.20)
+
+                # Radial deformation spokes connecting the crater
+                if k % 2 == 0:
+                    p.addUserDebugLine(p0_a, p1_a, f_color, lineWidth=2, lifeTime=0.20)
+                    p.addUserDebugLine(p1_a, p2_a, [0.3, 0.7, 0.9], lineWidth=1, lifeTime=0.20)
+
+            # 3. Ultrasound Acoustic Slicing Plane (Cyan Frustum penetrating toward spine)
             half_w = 0.018  # 36 mm transducer lateral width
             depth = 0.06    # 60 mm acoustic penetration depth
-            # Project 4 corners into patient spine
             c_bl = [x_pb - half_w, y_pb, z_contact - depth]
             c_br = [x_pb + half_w, y_pb, z_contact - depth]
             c_tl = [x_pb - half_w, y_pb, z_contact]
@@ -369,18 +444,19 @@ class UnifiedSurgicalBridgeServer:
             p.addUserDebugLine(c_tr, c_br, cyan, lineWidth=2, lifeTime=0.20)
             p.addUserDebugLine(c_bl, c_br, cyan, lineWidth=2, lifeTime=0.20)
 
-            # 3. Dynamic On-Screen HUD Overlay
+            # 4. Dynamic On-Screen HUD Overlay with Soft-Body Telemetry
             pts_count = len(self.env.accumulator.get_points())
+            indent_mm = indent_m * 1000.0
             hud_msg = (
-                f"ROBOTIC ULTRASOUND OPERATING SUITE\n"
-                f"Patient: TotalSegmentator Lumbar L1-L5\n"
-                f"Normal Force: {fn:.2f} N (Elastic Coupling: {coupling*100:.1f}%)\n"
-                f"Reconstructed Bone Points: {pts_count}\n"
+                f"ROBOTIC ULTRASOUND OPERATING SUITE (SOFT-BODY DEFORMABLE)\n"
+                f"Patient: TotalSegmentator Lumbar L1-L5 | mu = 4.0 kPa, nu = 0.46\n"
+                f"Normal Force: {fn:.2f} N | Tissue Indentation: {indent_mm:.2f} mm\n"
+                f"Acoustic Coupling: {coupling*100:.1f}% | Reconstructed: {pts_count} pts\n"
                 f"Slicer 3D Bridge: {self.publish_fps:.0f} FPS Streaming"
             )
             self.hud_text_id = p.addUserDebugText(
                 hud_msg,
-                textPosition=[0.45, -0.28, 0.60],
+                textPosition=[0.42, -0.30, 0.62],
                 textColorRGB=[0.1, 0.95, 0.4],
                 textSize=1.1,
                 lifeTime=0.20,

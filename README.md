@@ -68,16 +68,39 @@ A multi-rate surgical physics bridge and autonomous robotic ultrasound system fo
 
 ## 📊 Benchmark Results on Clinical TotalSegmentator CT
 
+### 1. SonoGym 6-Policy Reconstruction & Compliance Comparison
 Evaluated on real clinical lumbar spine anatomy ($152 \times 152 \times 98$ voxels, $1.0\text{ mm}$ spacing, 139,025 ground-truth bone points across L1–L5):
 
-| Method | Coverage (%) | Chamfer Distance (mm) | Path (mm) | Rotation (deg) | Force Safety Compliance | Acoustic Coupling ($\kappa$) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Heuristic Raster** | $0.2 \pm 0.0$ | **$25.58 \pm 0.00$** | 324.6 | **2.6** | **100.0%** | **1.00** |
-| **Heuristic Orbital** | $0.1 \pm 0.0$ | $27.56 \pm 0.00$ | 274.0 | 206.7 | **100.0%** | 0.86 |
-| **Greedy Information-Gain NBV** | $0.1 \pm 0.0$ | $27.15 \pm 0.00$ | **10.0** | 696.0 | **100.0%** | 0.93 |
-| **Submodular PPO Active Policy** | $0.1 \pm 0.0$ | $30.62 \pm 0.00$ | 202.1 | 676.2 | **100.0%** | 0.50 |
-| **Continuous Flow Matching (CFM)** | $0.0 \pm 0.0$ | $26.67 \pm 0.00$ | 299.8 | 968.2 | **100.0%** | 0.32 |
-| **SOTA 3D Diffusion Policy (EDM)** | $0.1 \pm 0.0$ | $27.13 \pm 0.00$ | 322.7 | 1071.0 | **100.0%** | 0.38 |
+| Method | Coverage (%) | Chamfer (mm) | MAD (mm) | Safe Force (%) | Max Force (N) | Force RMSE (N) | Coupling ($\bar{\kappa}$) | Path (mm) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Heuristic Raster** | $0.2 \pm 0.0$ | **$25.44 \pm 0.00$** | 14.06 | **100.0%** | 4.0 | **0.00** | **1.00** | 320.4 |
+| **Heuristic Orbital** | $0.1 \pm 0.0$ | $27.09 \pm 0.00$ | 14.60 | **100.0%** | 4.0 | **0.00** | 0.86 | 277.5 |
+| **Greedy Information-Gain NBV** | $0.1 \pm 0.0$ | $27.02 \pm 0.00$ | **7.69** | **100.0%** | 4.0 | **0.00** | 0.99 | 300.0 |
+| **Submodular PPO Active Policy** | $0.1 \pm 0.0$ | $29.85 \pm 0.00$ | 14.14 | **100.0%** | 4.0 | **0.00** | 0.47 | **223.8** |
+| **Continuous Flow Matching (CFM)** | $0.0 \pm 0.0$ | $30.51 \pm 0.00$ | 14.05 | **100.0%** | 4.0 | **0.00** | 0.40 | 279.1 |
+| **SOTA 3D Diffusion Policy (EDM)** | $0.1 \pm 0.0$ | $28.17 \pm 0.00$ | 9.51 | **100.0%** | 4.0 | **0.00** | 0.13 | 299.1 |
+
+---
+
+### 2. SonoGym-SoftBody Continuum Mechanics & Deformable B-Mode Reslicing (`DEC-031`)
+SonoGym (Ao et al., 2025) operates exclusively on rigid phantoms. Our framework models continuum mechanics (Regularized Kelvinlet Green's functions, $\mu = 4.0\text{ kPa}$, $\nu = 0.46$), coupling contact force to physical tissue indentation, dynamic B-mode subcutaneous fat compression, and bone echo depth shifts:
+
+#### A. Probe Contact Force vs. B-Mode Hyperechoic Echo Shift
+| Contact Normal Force ($F_N$) | Surface Indentation ($\delta_m$) | Bone Reflection Depth | Acoustic Coupling ($\kappa$) | Clinical Status |
+| :---: | :---: | :---: | :---: | :---: |
+| **0.5 N** | 0.20 mm | 4.12 mm | 0.92 | Uncompressed baseline |
+| **2.0 N** | 0.80 mm | 3.75 mm | 0.84 | Optimal acoustic contact |
+| **4.0 N** | 1.60 mm | 3.75 mm | 0.74 | Standard clinical scanning |
+| **6.0 N** | 2.40 mm | 3.75 mm | 0.65 | Elevated contact |
+| **8.0 N** | 3.20 mm | 3.75 mm | 0.65 | Upper safe limit |
+| **10.0 N** | 4.00 mm | 3.75 mm | 0.65 | Deep tissue compression |
+
+#### B. Multi-Stiffness Generalization
+| Tissue Modulus Regime | Physiological Match | Safe Force Compliance (%) | Force RMSE (N) | Max Force (N) |
+| :--- | :--- | :---: | :---: | :---: |
+| **$\mu = 2.0\text{ kPa}$** | Soft subcutaneous adipose/fat | **100.0%** | 0.00 N | 4.00 N |
+| **$\mu = 4.0\text{ kPa}$** | Normal adult lumbar torso | **100.0%** | 0.00 N | 4.00 N |
+| **$\mu = 8.0\text{ kPa}$** | Stiff paraspinal muscle/fascia | **100.0%** | 0.00 N | 4.00 N |
 
 ---
 

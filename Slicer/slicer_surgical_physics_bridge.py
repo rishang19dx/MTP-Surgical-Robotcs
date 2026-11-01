@@ -261,12 +261,30 @@ class SlicerSurgicalPhysicsBridge:
             return None
 
     def _load_patient_spine_model(self):
-        """Extracts and displays patient lumbar spine surface mesh in 3D viewer if assets exist."""
+        """Extracts and displays patient lumbar spine surface mesh in 3D viewer without disrupting slice viewers."""
         scene = slicer.mrmlScene
         if scene.GetFirstNodeByName("GroundTruthSpine"):
             return
 
         patient_dir = os.path.join(os.path.dirname(__file__), "..", "data", "sample_totalsegmentator_patient")
+        mesh_ras_path = os.path.join(patient_dir, "meshes", "patient_lumbar_spine_ras.obj")
+
+        if os.path.exists(mesh_ras_path):
+            try:
+                model = slicer.util.loadModel(mesh_ras_path)
+                if model:
+                    model.SetName("GroundTruthSpine")
+                    dnode = model.GetDisplayNode()
+                    if dnode:
+                        dnode.SetColor(0.92, 0.89, 0.78)  # Bone ivory
+                        dnode.SetOpacity(0.40)  # Semi-transparent to reveal reconstructed points
+                        dnode.SetVisibility(True)
+                    print("[+] Successfully loaded GroundTruthSpine anatomical surface in 3D Scene")
+                    return
+            except Exception as e:
+                print(f"[!] Warning: Could not load spine mesh: {e}")
+
+        # Fallback to marching cubes if mesh obj not found
         seg_dir = os.path.join(patient_dir, "segmentations")
         files = sorted(glob.glob(os.path.join(seg_dir, "vertebrae_*.nii.gz")))
         if not files:
@@ -299,7 +317,7 @@ class SlicerSurgicalPhysicsBridge:
             dnode = model.GetDisplayNode()
             if dnode:
                 dnode.SetColor(0.92, 0.89, 0.78)  # Bone ivory
-                dnode.SetOpacity(0.40)  # Semi-transparent to reveal reconstructed points
+                dnode.SetOpacity(0.40)
                 dnode.SetVisibility(True)
             print("[+] Successfully loaded GroundTruthSpine anatomical surface in 3D Scene")
         except Exception as e:
@@ -373,11 +391,20 @@ class SlicerSurgicalPhysicsBridge:
             vol_slice = oriented_img[np.newaxis, :, :]
             slicer.util.updateVolumeFromArray(self.us_volume_node, vol_slice)
 
-            if self.frames_received == 1:
+            # Ensure Side-by-Side layout and bind US_Image to Red slice viewer
+            if self.frames_received < 5:
                 layoutManager = slicer.app.layoutManager()
                 if layoutManager:
+                    layout_node = layoutManager.layoutLogic().GetLayoutNode()
+                    if layout_node.GetViewArrangement() != 501:
+                        layout_node.SetViewArrangement(501)
                     red_widget = layoutManager.sliceWidget("Red")
                     if red_widget:
+                        comp_node = red_widget.mrmlSliceCompositeNode()
+                        if comp_node.GetBackgroundVolumeID() != self.us_volume_node.GetID():
+                            comp_node.SetBackgroundVolumeID(self.us_volume_node.GetID())
+                        slice_node = red_widget.mrmlSliceNode()
+                        slice_node.SetOrientationToAxial()
                         red_widget.sliceController().fitSliceToBackground()
             self.frames_received += 1
 

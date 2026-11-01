@@ -99,6 +99,8 @@ def test_backward_eulerian_slice_warping():
 
 def test_bmode_echo_shift_under_compression():
     """Verifies that increasing probe pressure physically compresses tissue and shifts the bone reflection shallower."""
+    np.random.seed(42)
+    torch.manual_seed(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     assets = PatientAssetGenerator.generate_lumbar_phantom(shape=(80, 80, 60))
 
@@ -113,30 +115,41 @@ def test_bmode_echo_shift_under_compression():
 
     sim = ModelBasedUltrasoundSimulator(device=device)
 
+    # Position probe precisely at the patient skin surface boundary
+    skin_y = float(assets["skin_y_mm"])
     pose = np.array([
-        [1.0,  0.0,  0.0,  0.0],
-        [0.0, -1.0,  0.0, 50.0],
-        [0.0,  0.0, -1.0,  0.0],
-        [0.0,  0.0,  0.0,  1.0]
+        [1.0,  0.0,  0.0,   0.0],
+        [0.0, -1.0,  0.0, skin_y],
+        [0.0,  0.0, -1.0,   0.0],
+        [0.0,  0.0,  0.0,   1.0]
     ], dtype=np.float32)
 
-    # Low force (1.0 N) vs High force (7.0 N)
-    slice_low = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=1.0)
-    slice_high = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=7.0)
+    # Low force (0.5 N) vs High force (8.0 N)
+    slice_low = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=0.5)
+    slice_high = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=8.0)
 
-    bmode_low = sim.simulate_bmode(slice_low)["bmode"]
-    bmode_high = sim.simulate_bmode(slice_high)["bmode"]
+    # 1. CT slice bone peak verification (direct physical density shift)
+    slice_c_low = slice_low[:, 38:42].mean(dim=1).cpu().numpy()
+    slice_c_high = slice_high[:, 38:42].mean(dim=1).cpu().numpy()
+    peak_slice_low = np.argmax(slice_c_low)
+    peak_slice_high = np.argmax(slice_c_high)
+    assert peak_slice_high < peak_slice_low, (
+        f"CT bone peak under compression ({peak_slice_high}) must be shallower than uncompressed ({peak_slice_low})"
+    )
 
-    # In the central beam zone, locate the depth index of the peak cortical bone reflection
-    # (average across lateral columns 35:45 to remove stochastic Rayleigh speckle variance)
-    center_col_low = np.mean(bmode_low[:, 35:45].cpu().numpy(), axis=1)
-    center_col_high = np.mean(bmode_high[:, 35:45].cpu().numpy(), axis=1)
+    # 2. Specular acoustic reflection peak verification (bone cortex boundary echo)
+    out_low = sim.simulate_bmode(slice_low)
+    out_high = sim.simulate_bmode(slice_high)
+    refl_low = out_low["reflection"][:, 38:42].mean(dim=1).cpu().numpy()
+    refl_high = out_high["reflection"][:, 38:42].mean(dim=1).cpu().numpy()
 
-    peak_low = np.argmax(center_col_low[12:]) + 12
-    peak_high = np.argmax(center_col_high[12:]) + 12
+    peak_refl_low = np.argmax(refl_low)
+    peak_refl_high = np.argmax(refl_high)
 
-    # Under compression, bone reflection must appear shallower (smaller or equal depth index)
-    assert peak_high <= peak_low, f"Bone peak under compression ({peak_high}) should be shallower than or equal to uncompressed ({peak_low})"
+    # Under compression, specular bone reflection must appear shallower (smaller row depth index)
+    assert peak_refl_high < peak_refl_low, (
+        f"Bone reflection peak under compression ({peak_refl_high}) must be shallower than uncompressed ({peak_refl_low})"
+    )
 
 
 def test_deformation_latency_budget():

@@ -79,6 +79,7 @@ flowchart TD
 1. **Eulerian vs. Lagrangian Reslicing**: *"When tissue deforms under probe pressure, do you plan to re-mesh the tetrahedral volume on every timestep ($> 50\text{ ms}$), or use backward Eulerian coordinate warping $\mathbf{X}_{\text{ref}} = \mathbf{x} - \mathbf{u}(\mathbf{x})$ via GPU `grid_sample` ($< 1.5\text{ ms}$)?"*
 2. **Deformation Engine Trade-off**: *"Why choose Regularized Kelvinlets for fast RL training ($< 0.3\text{ ms}$, differentiable) over heavy FEM solvers like SOFA ($15-35\text{ ms}$, CPU-bound)? When is full hyperelastic Neo-Hookean FEM actually needed?"*
 3. **Acoustic Wave Changes**: *"As probe pressure increases from 2 N to 6 N, subcutaneous fat compresses. How does your acoustic shader reflect this physical layer thinning in the resulting B-mode ultrasound image?"*
+4. **SonoGym Soft-Body Gap**: *"SonoGym assumes a completely rigid static patient model. How does our framework quantify the sim-to-real gap under Kelvinlet soft-tissue indentation ($F_N \in [0.5, 10]\text{ N}$), and why does uncompensated back-projection degrade Chamfer distance by several millimeters compared to deformation-aware backward Eulerian warping?"*
 
 ---
 

@@ -474,7 +474,160 @@ class PatientAssetGenerator:
 
         print(f"[+] Exported TotalSegmentator clinical patient dataset to: {output_dir}")
         print(f"    Structures: L1-L5, Sacrum, Skin | Dimensions: {shape} | Spacing: {spacing_mm} mm")
+
+        # Automatically export surface meshes for PyBullet and Slicer 3D visualization
+        PatientAssetGenerator.export_patient_meshes(output_dir)
         return output_dir
+
+    @staticmethod
+    def export_patient_meshes(
+        patient_dir: str,
+        output_mesh_dir: Optional[str] = None,
+        target_triangles_bone: int = 12000,
+    ) -> Dict[str, str]:
+        """
+        Extracts 3D surface meshes (.obj) for lumbar spine (L1-L5 + sacrum) and patient torso skin
+        from TotalSegmentator segmentations, aligned with PyBullet clinical coordinates.
+
+        Args:
+            patient_dir: Directory containing ct.nii.gz and segmentations/
+            output_mesh_dir: Output folder for .obj meshes (defaults to patient_dir/meshes)
+            target_triangles_bone: Target decimation triangle count for spine mesh.
+
+        Returns:
+            Dictionary mapping asset names ('spine', 'torso_skin') to absolute file paths.
+        """
+        import os
+        import glob
+        import skimage.measure
+        import open3d as o3d
+
+        if output_mesh_dir is None:
+            output_mesh_dir = os.path.join(patient_dir, "meshes")
+        os.makedirs(output_mesh_dir, exist_ok=True)
+
+        seg_dir = os.path.join(patient_dir, "segmentations")
+        if not os.path.isdir(seg_dir):
+            seg_dir = patient_dir
+
+        # 1. Bone Mesh (Lumbar Vertebrae L1-L5 + Sacrum)
+        comb_bone = None
+        bone_files = sorted(glob.glob(os.path.join(seg_dir, "vertebrae_*.nii.gz")))
+        sacrum_file = os.path.join(seg_dir, "sacrum.nii.gz")
+        if os.path.exists(sacrum_file):
+            bone_files.append(sacrum_file)
+
+        for f in bone_files:
+            data = nib.load(f).get_fdata() > 0.5
+            if comb_bone is None:
+                comb_bone = np.zeros(data.shape, dtype=bool)
+            comb_bone |= data
+
+        spine_path = os.path.join(output_mesh_dir, "patient_lumbar_spine.obj")
+        if comb_bone is not None and np.any(comb_bone):
+            verts, faces, _, _ = skimage.measure.marching_cubes(
+                comb_bone.astype(np.float32), level=0.5, spacing=(1.0, 1.0, 1.0)
+            )
+            # Coordinate conversion:
+            # Axis 2 (Lateral) -> PyBullet X centered at 0.55 m
+            # Axis 0 (Cranial-Caudal) -> PyBullet Y centered at 0.0 m
+            # Axis 1 (Anterior-Posterior, dorsal skin at 107) -> PyBullet Z (skin at 0.42 m)
+            pb_verts = np.empty_like(verts)
+            pb_verts[:, 0] = 0.55 + (verts[:, 2] - 80.0) * 1e-3
+            pb_verts[:, 1] = 0.0 + (verts[:, 0] - 80.0) * 1e-3
+            pb_verts[:, 2] = 0.42 + (verts[:, 1] - 107.0) * 1e-3
+
+            o3d_spine = o3d.geometry.TriangleMesh()
+            o3d_spine.vertices = o3d.utility.Vector3dVector(pb_verts)
+            o3d_spine.triangles = o3d.utility.Vector3iVector(faces)
+            o3d_spine.compute_vertex_normals()
+            if target_triangles_bone > 0 and len(faces) > target_triangles_bone:
+                o3d_spine = o3d_spine.simplify_quadric_decimation(target_number_of_triangles=target_triangles_bone)
+
+            o3d.io.write_triangle_mesh(spine_path, o3d_spine)
+            print(f"[+] Exported patient lumbar spine mesh (PyBullet) to: {spine_path} ({len(o3d_spine.vertices)} verts, {len(o3d_spine.triangles)} faces)")
+
+            # Export Slicer RAS version (millimeters) matching accumulator coordinates
+            spine_ras_path = os.path.join(output_mesh_dir, "patient_lumbar_spine_ras.obj")
+            d, h, w = comb_bone.shape
+            ras_verts = np.empty_like(verts)
+            ras_verts[:, 0] = (verts[:, 2] - w / 2.0) * 1.0  # Lateral X (mm)
+            ras_verts[:, 1] = (verts[:, 1] - h / 3.0) * 1.0  # Anterior Y (mm)
+            ras_verts[:, 2] = (verts[:, 0] - d / 2.0) * 1.0  # Cranial Z (mm)
+
+            o3d_spine_ras = o3d.geometry.TriangleMesh()
+            o3d_spine_ras.vertices = o3d.utility.Vector3dVector(ras_verts)
+            o3d_spine_ras.triangles = o3d.utility.Vector3iVector(faces)
+            o3d_spine_ras.compute_vertex_normals()
+            if target_triangles_bone > 0 and len(faces) > target_triangles_bone:
+                o3d_spine_ras = o3d_spine_ras.simplify_quadric_decimation(target_number_of_triangles=target_triangles_bone)
+            o3d.io.write_triangle_mesh(spine_ras_path, o3d_spine_ras)
+            print(f"[+] Exported patient lumbar spine mesh (Slicer RAS) to: {spine_ras_path}")
+
+        # 2. Torso Skin Envelope Mesh
+        torso_path = os.path.join(output_mesh_dir, "patient_torso_skin.obj")
+        x_center, y_center = 0.55, 0.0
+        z_base, z_skin = 0.30, 0.42
+        half_w, half_l = 0.15, 0.22
+        nx, ny = 40, 50
+        xs = np.linspace(-half_w, half_w, nx)
+        ys = np.linspace(-half_l, half_l, ny)
+        X, Y = np.meshgrid(xs, ys)
+        Z_dorsal = z_skin - 0.035 * (X / half_w)**2 - 0.015 * (Y / half_l)**2
+
+        verts = []
+        for i in range(ny):
+            for j in range(nx):
+                verts.append([x_center + X[i, j], y_center + Y[i, j], Z_dorsal[i, j]])
+        for i in range(ny):
+            for j in range(nx):
+                verts.append([x_center + X[i, j], y_center + Y[i, j], z_base])
+        verts = np.array(verts)
+
+        faces = []
+        for i in range(ny - 1):
+            for j in range(nx - 1):
+                v0, v1 = i * nx + j, i * nx + (j + 1)
+                v2, v3 = (i + 1) * nx + (j + 1), (i + 1) * nx + j
+                faces.append([v0, v1, v2])
+                faces.append([v0, v2, v3])
+        offset = nx * ny
+        for i in range(ny - 1):
+            for j in range(nx - 1):
+                v0, v1 = offset + i * nx + j, offset + i * nx + (j + 1)
+                v2, v3 = offset + (i + 1) * nx + (j + 1), offset + (i + 1) * nx + j
+                faces.append([v0, v2, v1])
+                faces.append([v0, v3, v2])
+        for i in range(ny - 1):
+            top0, top1 = i * nx, (i + 1) * nx
+            bot0, bot1 = offset + i * nx, offset + (i + 1) * nx
+            faces.append([top0, bot0, bot1])
+            faces.append([top0, bot1, top1])
+            top0, top1 = i * nx + (nx - 1), (i + 1) * nx + (nx - 1)
+            bot0, bot1 = offset + i * nx + (nx - 1), offset + (i + 1) * nx + (nx - 1)
+            faces.append([top0, bot1, bot0])
+            faces.append([top0, top1, bot1])
+        for j in range(nx - 1):
+            top0, top1 = (ny - 1) * nx + j, (ny - 1) * nx + (j + 1)
+            bot0, bot1 = offset + (ny - 1) * nx + j, offset + (ny - 1) * nx + (j + 1)
+            faces.append([top0, top1, bot1])
+            faces.append([top0, bot1, bot0])
+            top0, top1 = j, j + 1
+            bot0, bot1 = offset + j, offset + (j + 1)
+            faces.append([top0, bot1, top1])
+            faces.append([top0, bot0, bot1])
+
+        o3d_torso = o3d.geometry.TriangleMesh()
+        o3d_torso.vertices = o3d.utility.Vector3dVector(verts)
+        o3d_torso.triangles = o3d.utility.Vector3iVector(faces)
+        o3d_torso.compute_vertex_normals()
+        o3d.io.write_triangle_mesh(torso_path, o3d_torso)
+        print(f"[+] Exported patient torso skin mesh to: {torso_path} ({len(verts)} verts, {len(faces)} faces)")
+
+        return {
+            "spine": spine_path,
+            "torso_skin": torso_path,
+        }
 
 
 if __name__ == "__main__":

@@ -269,7 +269,7 @@ def generate_deformation_animation(
         fig.canvas.draw()
 
         rgba_buffer = np.asarray(fig.canvas.buffer_rgba())
-        rgb_image = rgba_buffer[:, :, :3]
+        rgb_image = np.array(rgba_buffer[:, :, :3], copy=True)
         frames.append(rgb_image)
 
     plt.close(fig)

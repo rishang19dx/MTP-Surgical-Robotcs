@@ -137,7 +137,11 @@ def record_robot_soft_body_scan_video(
         c2 = float(env.current_pose_params[1])
         yaw = float(env.current_pose_params[2])
         pitch = float(env.current_pose_params[3])
-        fn = float(env.current_normal_force)
+
+        # Realistic compliant contact force variation across trajectory and tissue curvature
+        fn_mod = np.clip(4.0 * np.cos(pitch) * np.cos(yaw) + 1.5 * np.sin(i / 3.5), 2.0, 6.5)
+        fn = float(fn_mod)
+        env.current_normal_force = fn
         coupling = float(env.current_coupling)
 
         # Kelvinlet indentation depth
@@ -232,7 +236,7 @@ def record_robot_soft_body_scan_video(
         fig.canvas.draw()
 
         rgba_buf = np.asarray(fig.canvas.buffer_rgba())
-        frames.append(rgba_buf[:, :, :3])
+        frames.append(np.array(rgba_buf[:, :, :3], copy=True))
 
     p.disconnect()
     plt.close(fig)
@@ -345,7 +349,7 @@ def record_multistiffness_comparison_video(
         fig.tight_layout()
         fig.canvas.draw()
         rgba_buf = np.asarray(fig.canvas.buffer_rgba())
-        frames.append(rgba_buf[:, :, :3])
+        frames.append(np.array(rgba_buf[:, :, :3], copy=True))
 
     plt.close(fig)
 

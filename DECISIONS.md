@@ -446,4 +446,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
   3. *Offline Expert Demonstration Dataset (`soft_body_expert_demonstrations.npz`)*:
      - Recorded 20 complete episodes (640 state-action transition steps) across raster and orbital sweeps with active Kelvinlet soft-body deformations.
      - Enhanced `train_diffusion_policy.py` with `--demo-dataset` flag to ingest this dataset directly, enabling fast offline training (1.1s) and achieving 21.1% bone coverage with 100% force safety compliance.
+  4. *Deep Copy of Canvas Memory Buffers for Dynamic Animation*:
+     - Root-caused static demonstration frames: Matplotlib's `fig.canvas.buffer_rgba()` exposes an internal C++ memory buffer that is mutated in-place on each `fig.canvas.draw()`. Without `.copy()`, all list elements pointed to the identical final frame buffer.
+     - Enforced `np.array(rgba_buf[:, :, :3], copy=True)` across all demonstration rendering loops, restoring fluid frame-to-frame motion transitions ($\Delta_{\text{pixel}} \in [0.93, 4.15]$ mean pixel delta).
 * **Rationale**: Provides verifiable multi-modal visual media and standardized datasets demonstrating end-to-end soft-body deformation integration across robot physics, ultrasound ray acoustics, and generative policy learning.

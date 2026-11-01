@@ -127,12 +127,13 @@ def test_bmode_echo_shift_under_compression():
     bmode_low = sim.simulate_bmode(slice_low)["bmode"]
     bmode_high = sim.simulate_bmode(slice_high)["bmode"]
 
-    # In the central column, locate the depth index of the peak cortical bone reflection
-    center_col_low = bmode_low[:, 40].cpu().numpy()
-    center_col_high = bmode_high[:, 40].cpu().numpy()
+    # In the central beam zone, locate the depth index of the peak cortical bone reflection
+    # (average across lateral columns 35:45 to remove stochastic Rayleigh speckle variance)
+    center_col_low = np.mean(bmode_low[:, 35:45].cpu().numpy(), axis=1)
+    center_col_high = np.mean(bmode_high[:, 35:45].cpu().numpy(), axis=1)
 
-    peak_low = np.argmax(center_col_low[10:]) + 10
-    peak_high = np.argmax(center_col_high[10:]) + 10
+    peak_low = np.argmax(center_col_low[12:]) + 12
+    peak_high = np.argmax(center_col_high[12:]) + 12
 
     # Under compression, bone reflection must appear shallower (smaller or equal depth index)
     assert peak_high <= peak_low, f"Bone peak under compression ({peak_high}) should be shallower than or equal to uncompressed ({peak_low})"

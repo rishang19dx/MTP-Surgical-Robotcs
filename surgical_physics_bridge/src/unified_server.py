@@ -182,10 +182,10 @@ class UnifiedSurgicalBridgeServer:
             p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
             p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 1)
             p.resetDebugVisualizerCamera(
-                cameraDistance=1.15,
-                cameraYaw=48,
-                cameraPitch=-24,
-                cameraTargetPosition=[0.45, 0.0, 0.38]
+                cameraDistance=1.10,
+                cameraYaw=45,
+                cameraPitch=-22,
+                cameraTargetPosition=[0.55, 0.0, 0.38]
             )
 
         # 1. Floor
@@ -345,7 +345,7 @@ class UnifiedSurgicalBridgeServer:
                 force_vec_end,
                 [1.0, 0.1, 0.1],
                 lineWidth=4,
-                lifeTime=self.publish_interval * 1.5,
+                lifeTime=0.20,
             )
 
             # 2. Ultrasound Acoustic Slicing Plane (Cyan Frustum)
@@ -357,9 +357,9 @@ class UnifiedSurgicalBridgeServer:
             c_tl = [x_pb - half_w, y_pb, z_contact]
             c_tr = [x_pb + half_w, y_pb, z_contact]
             cyan = [0.0, 0.85, 1.0]
-            p.addUserDebugLine(c_tl, c_bl, cyan, lineWidth=2, lifeTime=self.publish_interval * 1.5)
-            p.addUserDebugLine(c_tr, c_br, cyan, lineWidth=2, lifeTime=self.publish_interval * 1.5)
-            p.addUserDebugLine(c_bl, c_br, cyan, lineWidth=2, lifeTime=self.publish_interval * 1.5)
+            p.addUserDebugLine(c_tl, c_bl, cyan, lineWidth=2, lifeTime=0.20)
+            p.addUserDebugLine(c_tr, c_br, cyan, lineWidth=2, lifeTime=0.20)
+            p.addUserDebugLine(c_bl, c_br, cyan, lineWidth=2, lifeTime=0.20)
 
             # 3. Dynamic On-Screen HUD Overlay
             pts_count = len(self.env.accumulator.get_points())
@@ -372,10 +372,10 @@ class UnifiedSurgicalBridgeServer:
             )
             self.hud_text_id = p.addUserDebugText(
                 hud_msg,
-                textPosition=[0.25, -0.35, 0.65],
+                textPosition=[0.45, -0.28, 0.60],
                 textColorRGB=[0.1, 0.95, 0.4],
                 textSize=1.1,
-                lifeTime=self.publish_interval * 1.5,
+                lifeTime=0.20,
                 replaceItemUniqueId=self.hud_text_id if self.hud_text_id != -1 else -1,
             )
 
@@ -394,6 +394,9 @@ class UnifiedSurgicalBridgeServer:
             action = np.array([dx, dz, dyaw, dpitch], dtype=np.float32)
             self.obs, reward, term, trunc, info = self.env.step(action)
             self.traj_idx += 1
+
+            with self.physics_lock:
+                self.update_robot_ik_and_visuals()
 
             if term or trunc or self.traj_idx >= len(self.trajectory):
                 total_pts = len(self.env.accumulator.get_points())
@@ -447,7 +450,6 @@ class UnifiedSurgicalBridgeServer:
         while self.is_running:
             t0 = time.perf_counter()
             with self.physics_lock:
-                self.update_robot_ik_and_visuals()
                 self.backend.step(target_dt)
             elapsed = time.perf_counter() - t0
             sleep_time = target_dt - elapsed

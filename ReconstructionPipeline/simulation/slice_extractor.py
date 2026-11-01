@@ -158,29 +158,31 @@ class VolumeSliceExtractor:
 
             force_vec = norm_vec * float(contact_force_n) # (B, 3)
 
-            # Compute displacement field u(x) and probe indentation u_0 for each batch
-            u_displacements = []
+            # Probe face indentation u_0 at contact point
+            u_0 = self.deformation_solver.compute_displacement(
+                query_points=contact_pt,
+                contact_point=contact_pt,
+                force_vector=force_vec,
+                bone_depth_mm=bone_depth_mm,
+            ) # (B, 3)
+
+            u_samples = []
             for b in range(batch_size):
+                u_0_b = u_0[b:b+1] # (1, 3)
+                # Physical query coordinates indented by probe contact: x_query = x + u_0
+                pts_query = pts_xyz[b] + u_0_b
+                # Material displacement field u(x_query) with bone anchoring
                 u_b = self.deformation_solver.compute_displacement(
-                    query_points=pts_xyz[b],
-                    contact_point=contact_pt[b],
+                    query_points=pts_query,
+                    contact_point=contact_pt[b] + u_0_b.squeeze(0),
                     force_vector=force_vec[b],
                     bone_depth_mm=bone_depth_mm,
                 )
-                # Probe face indentation at contact point
-                u_0 = self.deformation_solver.compute_displacement(
-                    query_points=contact_pt[b:b+1],
-                    contact_point=contact_pt[b],
-                    force_vector=force_vec[b],
-                    bone_depth_mm=bone_depth_mm,
-                ) # (1, 3)
-                # Relative displacement in probe frame: u_rel(x) = u(x) - u_0
-                # Backward warping: X_ref = x - u_rel(x) = x - (u_b - u_0)
-                u_displacements.append(u_b - u_0)
-            u_tensor = torch.stack(u_displacements, dim=0) # (B, H*W, 3)
+                # True Backward Eulerian mapping: X_ref = x_query - u(x_query)
+                x_ref_b = pts_query - u_b
+                u_samples.append(x_ref_b)
 
-            # Backward coordinate warping in probe coordinate frame
-            pts_sample_xyz = pts_xyz - u_tensor
+            pts_sample_xyz = torch.stack(u_samples, dim=0) # (B, H*W, 3)
         else:
             pts_sample_xyz = pts_xyz
 

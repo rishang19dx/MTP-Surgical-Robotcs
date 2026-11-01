@@ -48,10 +48,10 @@ class RegularizedKelvinletDeformation(nn.Module):
         self.max_indentation_mm = max_indentation_mm
 
         # Elasticity constants a and b
-        # a = (3 - 4*nu) / (2 * (1 - nu))
+        # a = (3 - 4*nu) / (4 * (1 - nu))
         # b = 1 / (4 * (1 - nu))
         nu = self.poissons_ratio
-        self.const_a = (3.0 - 4.0 * nu) / (2.0 * (1.0 - nu))
+        self.const_a = (3.0 - 4.0 * nu) / (4.0 * (1.0 - nu))
         self.const_b = 1.0 / (4.0 * (1.0 - nu))
         self.prefactor = 1.0 / (4.0 * np.pi * self.mu_n_per_mm2)
 

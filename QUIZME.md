@@ -86,8 +86,8 @@ flowchart TD
 
 Before writing a single line of implementation code, the agent and user must agree on:
 
-- [ ] **Core Invariants Preserved**: Python `./.venv/bin/python`, 1000 Hz physics decoupled from 30 FPS display, in-place VTK memory mutation.
-- [ ] **Frame Math Validated**: Spatial transformations between PyBullet world (meters) and Slicer RAS (mm) are mathematically proven.
-- [ ] **Acoustic Physics Grounded**: Ultrasound extraction remains purely signal-based without ground-truth label leakage.
-- [ ] **Performance Budget Met**: Ultrasound generation $< 2\text{ ms}$, physics step $< 1\text{ ms}$, RL inference $< 5\text{ ms}$.
-- [ ] **DECISIONS.md Updated**: The decision, context, alternatives, and rationale are documented in `DECISIONS.md`.
+- [x] **Core Invariants Preserved**: Python `./.venv/bin/python`, 1000 Hz physics decoupled from 30 FPS display, in-place VTK memory mutation.
+- [x] **Frame Math Validated**: Spatial transformations between PyBullet world (meters) and Slicer RAS (mm) are mathematically proven.
+- [x] **Acoustic Physics Grounded**: Ultrasound extraction remains purely signal-based without ground-truth label leakage.
+- [x] **Performance Budget Met**: Ultrasound generation $< 2\text{ ms}$, physics step $< 1\text{ ms}$, RL inference $< 5\text{ ms}$.
+- [x] **DECISIONS.md Updated**: The decision, context, alternatives, and rationale are documented in `DECISIONS.md`.

@@ -4,10 +4,10 @@ from typing import Dict, List, Optional
 import numpy as np
 try:
     from backend_interface import SurgicalSimulationBackend
-    from coordinates import convert_pose_pb_to_slicer
+    from coordinates import convert_pose_pb_to_slicer, convert_points_slicer_to_pb
 except ImportError:
     from surgical_physics_bridge.src.backend_interface import SurgicalSimulationBackend
-    from surgical_physics_bridge.src.coordinates import convert_pose_pb_to_slicer
+    from surgical_physics_bridge.src.coordinates import convert_pose_pb_to_slicer, convert_points_slicer_to_pb
 
 
 class PyBulletBackend(SurgicalSimulationBackend):
@@ -178,10 +178,12 @@ class PyBulletBackend(SurgicalSimulationBackend):
 
         if policy == "keep_out":
             try:
-                col_id = p.createCollisionShape(p.GEOM_MESH, vertices=vertices, indices=indices)
-                vis_id = p.createVisualShape(p.GEOM_MESH, vertices=vertices, indices=indices, rgbaColor=[1,0,0,0.3])
+                # Slicer sends vertices in RAS millimeters; convert to PyBullet world meters
+                pb_vertices = convert_points_slicer_to_pb(vertices, scale_to_m=True).tolist()
+                col_id = p.createCollisionShape(p.GEOM_MESH, vertices=pb_vertices, indices=indices)
+                vis_id = p.createVisualShape(p.GEOM_MESH, vertices=pb_vertices, indices=indices, rgbaColor=[1,0,0,0.3])
                 self.virtual_fixture_body = p.createMultiBody(baseMass=0, baseCollisionShapeIndex=col_id, baseVisualShapeIndex=vis_id)
-                print(f"Virtual Fixture (Keep-Out) created with {len(vertices)} vertices and {len(indices)//3} faces.")
+                print(f"Virtual Fixture (Keep-Out) created with {len(pb_vertices)} vertices and {len(indices)//3} faces in PyBullet world.")
             except Exception as e:
                 print(f"Error creating Virtual Fixture: {e}")
 

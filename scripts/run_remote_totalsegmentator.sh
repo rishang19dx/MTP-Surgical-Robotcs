@@ -14,11 +14,11 @@
 #      --exclude '*.log' \
 #      --exclude 'demonstrations/*.mp4' \
 #      --exclude 'demonstrations/*.gif' \
-#      /path/to/local/MTP/ user@remote-gpu-host:/home/user/MTP/
+#      /path/to/local/MTP/ user@172.18.17.35:/home/user/workspace/rishang/MTP/
 #
 # 2. SSH into remote machine and run:
-#    ssh user@remote-gpu-host
-#    cd /home/user/MTP
+#    ssh user@172.18.17.35
+#    cd /home/user/workspace/rishang/MTP
 #    bash scripts/run_remote_totalsegmentator.sh --mode all --dataset-dir /path/to/totalsegmentator/subject
 # ==============================================================================
 

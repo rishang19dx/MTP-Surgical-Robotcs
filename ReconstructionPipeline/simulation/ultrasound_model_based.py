@@ -114,11 +114,11 @@ class ModelBasedUltrasoundSimulator:
             bone_mask = (ct > 350.0).float()
             alpha_map = self.alpha_soft_tissue * (1.0 - bone_mask) + self.alpha_bone * bone_mask
 
-        # 3. Cumulative Acoustic Energy E(u): ray propagates along axis +y (downwards)
-        # E(x, y) = E0 * exp( -f * sum_{v=0}^y alpha(x, v) * delta_y )
+        # 3. Cumulative Acoustic Energy E(u): ray propagates round-trip (2x attenuation) along axis +y (downwards)
+        # E(x, y) = E0 * exp( -2 * f * sum_{v=0}^y alpha(x, v) * delta_y )
         # Cumulative sum along dim 1 (axial height)
         cumulative_attenuation = torch.cumsum(alpha_map * self.delta_y_cm, dim=1)
-        energy = self.initial_energy * torch.exp(-self.frequency * cumulative_attenuation)
+        energy = self.initial_energy * torch.exp(-2.0 * self.frequency * cumulative_attenuation)
 
         # 4. Tissue Boundary Gradient & Incidence Angle Theta
         # Compute spatial derivatives: dZ/dy (axial) and dZ/dx (lateral)

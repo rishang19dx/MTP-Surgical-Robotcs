@@ -10,7 +10,7 @@ Run this command from your local terminal to copy the repository to your remote 
 It excludes heavy local artifacts (`.venv`, compiled caches, video outputs) to make transfer fast ($< 30\text{ seconds}$):
 
 ```bash
-# Replace 'user' and 'remote-gpu-host' with your remote SSH credentials
+# Sync local repository to the dedicated workspace directory on remote server
 rsync -avz --progress \
   --exclude '.venv' \
   --exclude '__pycache__' \
@@ -18,7 +18,7 @@ rsync -avz --progress \
   --exclude '*.log' \
   --exclude 'demonstrations/*.mp4' \
   --exclude 'demonstrations/*.gif' \
-  /home/rishang/Desktop/Insti_Stuff/MTP/ user@remote-gpu-host:/home/user/MTP/
+  /home/rishang/Desktop/Insti_Stuff/MTP/ user@172.18.17.35:/home/user/workspace/rishang/MTP/
 ```
 
 ---
@@ -53,8 +53,8 @@ On your remote server, organize the clinical patient data in standard TotalSegme
 SSH into the remote server:
 
 ```bash
-ssh user@remote-gpu-host
-cd /home/user/MTP
+ssh user@172.18.17.35
+cd /home/user/workspace/rishang/MTP
 ```
 
 ### Option A: Complete End-to-End Automation (`--mode all`)

@@ -369,6 +369,14 @@ class SubmodularPPOTrainer:
                 next_obs, reward, terminated, truncated, info = self.env.step(act_np)
                 done = terminated or truncated
 
+                # Bootstrapping for truncation (time-limit) to prevent horizon myopia (Pardo et al., 2018)
+                if truncated and not terminated:
+                    with torch.no_grad():
+                        pts_next_t = torch.tensor(next_obs["reconstructed_points"], dtype=torch.float32, device=self.device)
+                        pose_next_t = torch.tensor(next_obs["probe_pose"], dtype=torch.float32, device=self.device)
+                        v_next = float(self.ac.get_value(pts_next_t, pose_next_t).item())
+                    reward = float(reward + self.gamma * v_next)
+
                 buffer.add(
                     points=obs["reconstructed_points"],
                     pose=obs["probe_pose"],

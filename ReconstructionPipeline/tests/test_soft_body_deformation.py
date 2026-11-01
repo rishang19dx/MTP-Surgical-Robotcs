@@ -22,7 +22,7 @@ def test_kelvinlet_mathematical_invariants():
     """Verifies that Regularized Kelvinlets have no singularity, decay with 1/r, and match elasticity theory."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     solver = RegularizedKelvinletDeformation(
-        shear_modulus_kpa=12.0,
+        shear_modulus_kpa=6.0,
         poissons_ratio=0.48,
         probe_radius_mm=15.0,
         device=device,
@@ -166,4 +166,5 @@ def test_deformation_latency_budget():
     avg_latency_ms = ((time.time() - t0) / num_runs) * 1000.0
 
     print(f"[*] Deformable Slice Extraction Latency: {avg_latency_ms:.3f} ms")
-    assert avg_latency_ms < 10.0, f"Deformable slice extraction must be fast (< 10 ms), got {avg_latency_ms:.2f} ms"
+    threshold = 5.0 if torch.cuda.is_available() else 25.0
+    assert avg_latency_ms < threshold, f"Deformable slice extraction must be fast (< {threshold} ms), got {avg_latency_ms:.2f} ms"

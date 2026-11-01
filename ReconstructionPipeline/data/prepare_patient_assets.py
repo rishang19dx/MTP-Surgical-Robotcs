@@ -340,3 +340,154 @@ class PatientAssetGenerator:
 
         return patients
 
+    @staticmethod
+    def export_totalsegmentator_dataset(
+        output_dir: str,
+        shape: Tuple[int, int, int] = (160, 160, 160),
+        spacing_mm: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+    ) -> str:
+        """
+        Synthesizes and exports a full clinical patient dataset adhering strictly
+        to the standard TotalSegmentator NIfTI directory structure:
+        - {output_dir}/ct.nii.gz
+        - {output_dir}/segmentations/vertebrae_L1.nii.gz
+        - {output_dir}/segmentations/vertebrae_L2.nii.gz
+        - {output_dir}/segmentations/vertebrae_L3.nii.gz
+        - {output_dir}/segmentations/vertebrae_L4.nii.gz
+        - {output_dir}/segmentations/vertebrae_L5.nii.gz
+        - {output_dir}/segmentations/sacrum.nii.gz
+        - {output_dir}/segmentations/skin.nii.gz
+
+        Args:
+            output_dir: Target directory path for exported NIfTI files.
+            shape: (D, H, W) volume dimensions.
+            spacing_mm: (sx, sy, sz) physical voxel spacing in mm.
+
+        Returns:
+            Path to the generated patient directory.
+        """
+        import os
+
+        os.makedirs(output_dir, exist_ok=True)
+        seg_dir = os.path.join(output_dir, "segmentations")
+        os.makedirs(seg_dir, exist_ok=True)
+
+        d, h, w = shape
+        sx, sy, sz = spacing_mm
+
+        # Physical coordinate grids in mm
+        z = (np.arange(d) - d / 2.0) * sz  # Cranial-caudal
+        y = (np.arange(h) - h / 3.0) * sy  # Anterior-posterior (y > 0 is dorsal back)
+        x = (np.arange(w) - w / 2.0) * sx  # Lateral
+        grid_z, grid_y, grid_x = np.meshgrid(z, y, x, indexing="ij")
+
+        # CT HU baseline (+40 HU muscle/soft tissue)
+        ct_vol = np.full(shape, 40.0, dtype=np.float32)
+        affine = np.diag([sx, sy, sz, 1.0])
+        affine[0, 3] = -w / 2.0 * sx
+        affine[1, 3] = -h / 3.0 * sy
+        affine[2, 3] = -d / 2.0 * sz
+
+        # Define multi-vertebra levels along lumbar spine
+        vertebrae_configs = [
+            ("vertebrae_L1", -48.0),
+            ("vertebrae_L2", -24.0),
+            ("vertebrae_L3", 0.0),
+            ("vertebrae_L4", 24.0),
+            ("vertebrae_L5", 48.0),
+        ]
+
+        composite_bone_mask = np.zeros(shape, dtype=bool)
+
+        for name, z_center in vertebrae_configs:
+            # 1. Vertebral body
+            rel_z = grid_z - z_center
+            body_dist = ((rel_z / 10.0)**2 + ((grid_y + 15.0) / 16.0)**2 + (grid_x / 20.0)**2)
+            body_mask = body_dist <= 1.0
+
+            # 2. Spinal canal
+            canal_dist = ((grid_y - 8.0) / 9.0)**2 + (grid_x / 10.0)**2
+            canal_mask = (canal_dist <= 1.0) & (np.abs(rel_z) <= 12.0)
+
+            # 3. Spinous process
+            spinous_mask = (
+                (grid_y >= 10.0) & (grid_y <= 40.0) &
+                (np.abs(grid_x) <= (3.5 - 0.05 * grid_y)) &
+                (np.abs(rel_z) <= (8.0 - 0.15 * grid_y))
+            )
+
+            # 4. Transverse processes
+            trans_left = (
+                (grid_y >= 0.0) & (grid_y <= 10.0) &
+                (grid_x >= 10.0) & (grid_x <= 34.0) &
+                (np.abs(rel_z) <= 5.0)
+            )
+            trans_right = (
+                (grid_y >= 0.0) & (grid_y <= 10.0) &
+                (grid_x <= -10.0) & (grid_x >= -34.0) &
+                (np.abs(rel_z) <= 5.0)
+            )
+
+            vert_mask = (body_mask | spinous_mask | trans_left | trans_right) & (~canal_mask)
+            composite_bone_mask |= vert_mask
+
+            # Save individual vertebra mask
+            vert_nii = nib.Nifti1Image(vert_mask.astype(np.uint8), affine)
+            nib.save(vert_nii, os.path.join(seg_dir, f"{name}.nii.gz"))
+
+        # Sacrum at lower lumbar junction
+        sacrum_rel_z = grid_z - 68.0
+        sacrum_mask = (
+            (sacrum_rel_z >= -10.0) & (sacrum_rel_z <= 18.0) &
+            (grid_y >= -10.0) & (grid_y <= 25.0) &
+            (np.abs(grid_x) <= (28.0 - 0.5 * np.maximum(0, sacrum_rel_z)))
+        )
+        composite_bone_mask |= sacrum_mask
+        sacrum_nii = nib.Nifti1Image(sacrum_mask.astype(np.uint8), affine)
+        nib.save(sacrum_nii, os.path.join(seg_dir, "sacrum.nii.gz"))
+
+        # Skin surface at posterior back (y = 54 mm)
+        skin_y = 54.0
+        skin_mask = (np.abs(grid_y - skin_y) <= 2.0) & (grid_y <= skin_y + 1.0)
+        skin_nii = nib.Nifti1Image(skin_mask.astype(np.uint8), affine)
+        nib.save(skin_nii, os.path.join(seg_dir, "skin.nii.gz"))
+
+        # Assign HU to CT volume
+        # Cortical bone (+1250 HU)
+        ct_vol[composite_bone_mask] = 1250.0
+
+        # Subcutaneous fat (-90 HU)
+        fat_mask = (grid_y >= 38.0) & (grid_y <= skin_y) & (~composite_bone_mask)
+        ct_vol[fat_mask] = -90.0
+
+        # Air (-1000 HU)
+        air_mask = grid_y > skin_y
+        ct_vol[air_mask] = -1000.0
+
+        # Gaussian CT noise
+        noise = np.random.normal(0, 14.0, shape).astype(np.float32)
+        ct_vol += noise
+
+        # Save CT volume
+        ct_nii = nib.Nifti1Image(ct_vol, affine)
+        nib.save(ct_nii, os.path.join(output_dir, "ct.nii.gz"))
+
+        print(f"[+] Exported TotalSegmentator clinical patient dataset to: {output_dir}")
+        print(f"    Structures: L1-L5, Sacrum, Skin | Dimensions: {shape} | Spacing: {spacing_mm} mm")
+        return output_dir
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Patient Asset Generator & TotalSegmentator Exporter")
+    parser.add_argument("--export-totalseg", type=str, default="", help="Export TotalSegmentator patient dataset to directory")
+    args = parser.parse_args()
+
+    if args.export_totalseg:
+        PatientAssetGenerator.export_totalsegmentator_dataset(args.export_totalseg)
+    else:
+        print("[*] Generating synthetic lumbar phantom verification...")
+        data = PatientAssetGenerator.generate_lumbar_phantom()
+        print(f"[✓] Lumbar phantom ready. Bone points: {len(data['bone_points'])}, Shape: {data['ct_volume'].shape}")
+
+

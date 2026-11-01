@@ -88,16 +88,16 @@ class ReconstructionBenchmarkSuite:
         return res
 
     def run_heuristic_benchmark(self, scan_type: str = "raster") -> Dict[str, float]:
-        """Runs benchmark across multiple trials for a heuristic scanning strategy."""
+        """Runs benchmark across multiple trials for a heuristic scanning strategy (standardized 60-step budget)."""
         planner = HeuristicScanPlanner()
         if scan_type == "raster":
-            traj = planner.generate_linear_raster_trajectory(num_sweep_lines=6, points_per_line=12)
+            traj = planner.generate_linear_raster_trajectory(num_sweep_lines=5, points_per_line=12) # 60 steps
         else:
-            traj = planner.generate_orbital_trajectory(radii=[18.0, 30.0], points_per_orbit=24)
+            traj = planner.generate_orbital_trajectory(radii=[18.0, 30.0], points_per_orbit=30) # 60 steps
 
         trial_metrics = []
         for trial in range(self.num_trials):
-            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=len(traj) + 5, device=self.device)
+            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=len(traj), device=self.device)
             env.reset()
             force_hist = []
             coupling_hist = []
@@ -121,10 +121,11 @@ class ReconstructionBenchmarkSuite:
 
         return self._aggregate_trial_results(trial_metrics)
 
-    def run_greedy_nbv_benchmark(self, max_steps: int = 50) -> Dict[str, float]:
+    def run_greedy_nbv_benchmark(self, max_steps: int = 60) -> Dict[str, float]:
         """
         Runs an information-theoretic Greedy Next-Best-View (NBV) baseline.
-        Evaluates discrete candidate probe moves and selects the one with maximum expected coverage gain.
+        Evaluates candidate probe moves and selects the one maximizing frontier information gain
+        and acoustic coupling.
         """
         trial_metrics = []
         candidate_deltas = [
@@ -155,7 +156,9 @@ class ReconstructionBenchmarkSuite:
                     inward_tilt = -np.sign(cand_x) * cand_pitch
                     cand_fn, cand_kappa, _ = env.compute_contact_force_and_coupling(cand_x, cand_z, cand_yaw, cand_pitch)
 
-                    score = cand_kappa * 5.0 + inward_tilt * 2.0 - 0.02 * dist_from_origin
+                    # Frontier information gain: reward moves that face inward with high acoustic coupling
+                    frontier_gain = 3.0 * np.exp(-0.02 * dist_from_origin)
+                    score = cand_kappa * 5.0 + inward_tilt * 2.5 + frontier_gain - 0.01 * dist_from_origin
                     if score > best_score:
                         best_score = score
                         best_action = np.array([
@@ -223,14 +226,21 @@ class ReconstructionBenchmarkSuite:
         max_steps: int = 60,
     ) -> Dict[str, float]:
         """
-        Runs the Continuous Flow Matching (CFM) Action Chunking Policy.
+        Runs the Continuous Flow Matching (CFM) Policy with Receding Horizon Execution (K=2).
         """
         pointnet = PointNetEncoder(latent_dim=128).to(self.device)
         cfm_policy = FlowMatchingPolicy(action_dim=4, chunk_horizon=8, condition_dim=132, device=self.device).to(self.device)
         if checkpoint_path and os.path.exists(checkpoint_path):
-            ckpt = torch.load(checkpoint_path, map_location=self.device)
-            cfm_policy.load_state_dict(ckpt.get("state_dict", ckpt))
-            print(f"[+] Loaded CFM policy from {checkpoint_path}")
+            ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+            if "pointnet_state_dict" in ckpt:
+                pointnet.load_state_dict(ckpt["pointnet_state_dict"])
+            elif "pointnet" in ckpt:
+                pointnet.load_state_dict(ckpt["pointnet"])
+            if "policy_state_dict" in ckpt:
+                cfm_policy.load_state_dict(ckpt["policy_state_dict"])
+            elif "state_dict" in ckpt:
+                cfm_policy.load_state_dict(ckpt["state_dict"])
+            print(f"[+] Loaded CFM policy & PointNet from {checkpoint_path}")
         cfm_policy.eval()
         pointnet.eval()
 
@@ -253,7 +263,9 @@ class ReconstructionBenchmarkSuite:
                     cond = torch.cat([feat, pose_t], dim=-1) # (1, 132)
                     chunk = cfm_policy.generate_action_chunk(cond, num_steps=5).squeeze(0).cpu().numpy() # (8, 4)
 
-                for act in chunk:
+                # Receding Horizon Execution: execute first K=2 actions, then re-observe and re-plan
+                exec_chunk = chunk[:2]
+                for act in exec_chunk:
                     obs, _, term, trunc, info = env.step(act)
                     force_hist.append(info["normal_force"])
                     coupling_hist.append(info["acoustic_coupling"])
@@ -273,7 +285,7 @@ class ReconstructionBenchmarkSuite:
         max_steps: int = 60,
     ) -> Dict[str, float]:
         """
-        Runs the SOTA 3D Diffusion Policy (Karras EDM + AdaLN DiT backbone).
+        Runs the SOTA 3D Diffusion Policy with Receding Horizon Execution (K=2).
         """
         diffusion_policy = SOTADiffusionPolicy(action_dim=4, horizon=8, device=self.device)
         if checkpoint_path and os.path.exists(checkpoint_path):
@@ -299,7 +311,9 @@ class ReconstructionBenchmarkSuite:
                     pose_t = torch.tensor(pose, dtype=torch.float32, device=self.device)
                     chunk = diffusion_policy.sample_actions(pts_t, pose_t, num_steps=5, method="heun").squeeze(0).cpu().numpy()
 
-                for act in chunk:
+                # Receding Horizon Execution: execute first K=2 actions, then re-observe and re-plan
+                exec_chunk = chunk[:2]
+                for act in exec_chunk:
                     obs, _, term, trunc, info = env.step(act)
                     force_hist.append(info["normal_force"])
                     coupling_hist.append(info["acoustic_coupling"])

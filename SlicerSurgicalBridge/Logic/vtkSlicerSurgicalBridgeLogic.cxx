@@ -176,13 +176,21 @@ void vtkSlicerSurgicalBridgeLogic::SendVirtualFixture()
   }
   ss << "] }";
 
-  vtkNew<vtkMRMLTextNode> textNode;
-  textNode->SetName("VirtualFixture");
+  vtkMRMLTextNode* textNode = vtkMRMLTextNode::SafeDownCast(
+    this->GetMRMLScene()->GetFirstNodeByName("VirtualFixture")
+  );
+  if (!textNode) {
+    textNode = vtkMRMLTextNode::SafeDownCast(
+      this->GetMRMLScene()->AddNewNodeByClass("vtkMRMLTextNode", "VirtualFixture")
+    );
+    if (this->ConnectorNode) {
+      this->ConnectorNode->RegisterOutgoingMRMLNode(textNode);
+    }
+  }
   textNode->SetText(ss.str().c_str());
-  this->GetMRMLScene()->AddNode(textNode);
-  
-  this->ConnectorNode->RegisterOutgoingMRMLNode(textNode);
-  this->ConnectorNode->PushNode(textNode);
+  if (this->ConnectorNode) {
+    this->ConnectorNode->PushNode(textNode);
+  }
 }
 
 void vtkSlicerSurgicalBridgeLogic::ConnectToPhysicsServer(const std::string& host, int port)
@@ -204,11 +212,16 @@ void vtkSlicerSurgicalBridgeLogic::ConnectToPhysicsServer(const std::string& hos
 void vtkSlicerSurgicalBridgeLogic::SendRobotCommand(const std::string& q_des)
 {
   if (!this->ConnectorNode || !this->GetMRMLScene()) return;
-  vtkNew<vtkMRMLTextNode> textNode;
-  textNode->SetName("CMD");
+  vtkMRMLTextNode* textNode = vtkMRMLTextNode::SafeDownCast(
+    this->GetMRMLScene()->GetFirstNodeByName("CMD")
+  );
+  if (!textNode) {
+    textNode = vtkMRMLTextNode::SafeDownCast(
+      this->GetMRMLScene()->AddNewNodeByClass("vtkMRMLTextNode", "CMD")
+    );
+    this->ConnectorNode->RegisterOutgoingMRMLNode(textNode);
+  }
   textNode->SetText(q_des.c_str());
-  this->GetMRMLScene()->AddNode(textNode);
-  this->ConnectorNode->RegisterOutgoingMRMLNode(textNode);
   this->ConnectorNode->PushNode(textNode);
 }
 

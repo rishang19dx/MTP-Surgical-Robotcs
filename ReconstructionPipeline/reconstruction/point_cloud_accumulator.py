@@ -70,7 +70,7 @@ class PointCloudAccumulator:
         self,
         pixel_coords: np.ndarray,
         t_world_probe: np.ndarray,
-        filter_outliers: bool = True,
+        filter_outliers: bool = False,
     ) -> int:
         """
         Back-projects a set of 2D bone boundary pixels into the 3D world frame
@@ -115,6 +115,16 @@ class PointCloudAccumulator:
             )
             self.pcd = filtered_pcd
 
+        return len(self.pcd.points)
+
+    def finalize(self) -> int:
+        """Applies statistical outlier removal once at episode completion to preserve online submodular monotonicity."""
+        if len(self.pcd.points) > self.sor_neighbors:
+            filtered_pcd, _ = self.pcd.remove_statistical_outlier(
+                nb_neighbors=self.sor_neighbors,
+                std_ratio=self.sor_ratio
+            )
+            self.pcd = filtered_pcd
         return len(self.pcd.points)
 
     def estimate_surface_normals(self, k_neighbors: int = 15):

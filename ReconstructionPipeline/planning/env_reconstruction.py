@@ -70,6 +70,21 @@ class UltrasoundReconstructionEnv:
         self.gt_bone_points = patient_data["bone_points"]
         self.skin_y = patient_data.get("skin_y_mm", 55.0)
 
+        # Target ROI ground-truth bone surface points in acoustic scan field
+        pts = self.gt_bone_points
+        if len(pts) > 5000:
+            roi_mask = (np.abs(pts[:, 0]) <= 45.0) & (np.abs(pts[:, 2]) <= 35.0) & (pts[:, 1] >= 0.0)
+            self.target_roi_bone_points = pts[roi_mask] if np.any(roi_mask) else pts[:5000]
+            # Downsample target to 1.5mm voxel grid matching the accumulator resolution
+            import open3d as o3d
+            pcd_target = o3d.geometry.PointCloud()
+            pcd_target.points = o3d.utility.Vector3dVector(self.target_roi_bone_points)
+            pcd_down = pcd_target.voxel_down_sample(voxel_size=1.5)
+            self.target_voxel_count = max(1, len(pcd_down.points))
+        else:
+            self.target_roi_bone_points = pts
+            self.target_voxel_count = max(1, len(pts))
+
         # 2. Initialize Subsystems
         self.slice_extractor_ct = VolumeSliceExtractor(
             self.ct_vol, spacing=self.spacing, origin=self.origin, device=self.device
@@ -142,7 +157,17 @@ class UltrasoundReconstructionEnv:
             probe_coord = probe_y
         if self.pybullet_backend is not None and getattr(self.pybullet_backend, "anatomy_body_id", None) is not None:
             contacts = self.pybullet_backend.get_contacts()
-            normal_force = float(sum(c["normal_force"] for c in contacts)) if contacts else 0.0
+            if contacts:
+                normal_force = float(sum(c["normal_force"] for c in contacts))
+            else:
+                surface_coord = self.get_skin_surface(c1, c2)
+                if probe_coord is None and probe_y is None:
+                    penetration = self.target_force_n / self.tissue_stiffness
+                elif probe_y is not None:
+                    penetration = max(0.0, probe_y - self.skin_y)
+                else:
+                    penetration = max(0.0, surface_coord - probe_coord)
+                normal_force = float(self.tissue_stiffness * penetration)
         else:
             surface_coord = self.get_skin_surface(c1, c2)
             if probe_coord is None and probe_y is None:
@@ -153,7 +178,8 @@ class UltrasoundReconstructionEnv:
                 penetration = max(0.0, surface_coord - probe_coord)
             normal_force = float(self.tissue_stiffness * penetration)
 
-        # Beam tilt angle relative to surface normal
+        # Beam tilt angle relative to surface normal:
+        # yaw represents lateral tilt off normal; pitch represents sagittal tilt off normal.
         tilt_angle = np.sqrt(yaw ** 2 + pitch ** 2)
         tilt_factor = float(np.exp(-0.5 * (tilt_angle / np.radians(22.0)) ** 2))
 
@@ -224,13 +250,19 @@ class UltrasoundReconstructionEnv:
             t_matrix[2, 3] = c2
             return t_matrix
 
-    def reset(self) -> Dict[str, Any]:
-        """Resets the environment for a new scanning episode."""
+    def reset(self, clear_accumulator: bool = True) -> Dict[str, Any]:
+        """
+        Resets the environment for a new scanning episode.
+        
+        Args:
+            clear_accumulator: If True, flushes 3D point cloud. If False, retains prior points.
+        """
         self.current_step = 0
-        self.accumulator.clear()
-        self.previous_area = 0.0
-        self.trajectory_length = 0.0
-        self.total_rotation = 0.0
+        if clear_accumulator:
+            self.accumulator.clear()
+            self.previous_area = 0.0
+            self.trajectory_length = 0.0
+            self.total_rotation = 0.0
 
         # Randomize initial probe pose on patient skin
         init_c1 = np.random.uniform(-10.0, 10.0)
@@ -333,7 +365,8 @@ class UltrasoundReconstructionEnv:
         )
 
         reconstructed_pts = self.accumulator.get_points()
-        coverage_ratio = min(1.0, float(len(reconstructed_pts)) / float(max(1, len(self.gt_bone_points))))
+        denom_pts = max(1, getattr(self, "target_voxel_count", len(self.gt_bone_points)))
+        coverage_ratio = min(1.0, float(len(reconstructed_pts)) / float(denom_pts))
 
         terminated = bool(coverage_ratio >= self.target_coverage)
         truncated = bool(self.current_step >= self.max_steps)

@@ -82,7 +82,7 @@ Extracts 3D bone point clouds **strictly from 2D ultrasound signals** (zero grou
 
 ```mermaid
 flowchart TD
-    ProbePose["Tracked Ultrasound Probe Pose\nT_{W <- U} (Lateral Flank)"] --> WarpGrid["Backward Eulerian Coordinate Warping\nX_ref = x - (u(x) - u_0)"]
+    ProbePose["Tracked Ultrasound Probe Pose\nT_{W <- U} (Lateral Flank / Dorsal)"] --> WarpGrid["True Backward Eulerian Coordinate Warping\nX_ref = x_query - u(x_query) with Bone Anchoring"]
     Force["Probe Contact Normal Force Fn\n& Inward Incidence Angle"] --> Kelvinlet["Regularized Kelvinlet Elasticity\n(kelvinlet_deformation.py)\nmu=12 kPa, nu=0.48, epsilon=15 mm"]
     Kelvinlet --> WarpGrid
     WarpGrid --> GridSample["GPU Volume Reslicer\ntorch.nn.functional.grid_sample (< 1.8 ms)"]
@@ -197,4 +197,42 @@ flowchart TD
 ### 5. Train Submodular PPO
 ```bash
 ./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --num-updates 20 --num-steps 128
+```
+
+### 6. Remote GPU Deployment & Ingestion (Isolated strictly to `workspace/rishang/`)
+```bash
+# 1. Sync repository to remote host isolated workspace
+rsync -avz --progress --exclude '.venv' --exclude '__pycache__' --exclude '.pytest_cache' --exclude '*.log' --exclude 'demonstrations/*.mp4' --exclude 'demonstrations/*.gif' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/
+
+# 2. On remote host (strictly inside /home/user/workspace/rishang/MTP)
+cd /home/user/workspace/rishang/MTP
+bash scripts/run_remote_totalsegmentator.sh --mode all --dataset-dir <path_to_totalsegmentator_subject>
+```
+
+### 7. Interactive Soft-Tissue & Ultrasound GUI (Local Desktop)
+```bash
+./.venv/bin/python ReconstructionPipeline/scripts/interactive_soft_tissue_gui.py
+```
+
+### 8. FEM vs Kelvinlet Benchmark (Local or Remote)
+```bash
+./.venv/bin/python ReconstructionPipeline/evaluation/compare_sofa_fem_vs_kelvinlet.py
+```
+
+### 9. Interactive 3D Slicer Streaming (Slicer 5.12+)
+```bash
+# Terminal 1: Launch Unified Surgical Physics Server
+./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --mode orbital --fps 30.0
+
+# Terminal 2: Launch 3D Slicer with pre-connected bridge
+~/Downloads/Slicer-5.12.4-linux-amd64/Slicer --python-script Slicer/slicer_surgical_physics_bridge.py
+```
+
+### 10. Dual-Window PyBullet Native GUI & 3D Slicer Clinical Suite (Franka Panda + TotalSegmentator)
+```bash
+# Single command launches both windows side-by-side with full robot arm, patient soft-tissue, and 3D Slicer:
+bash scripts/launch_dual_pybullet_slicer.sh --mode orbital --fps 30.0
+
+# With custom TotalSegmentator subject:
+bash scripts/launch_dual_pybullet_slicer.sh --patient-dir /path/to/totalsegmentator/subject --mode raster
 ```

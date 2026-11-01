@@ -151,12 +151,15 @@ class KinovaGen3Kinematics(RobotKinematicsInterface):
         self,
         current_rot: np.ndarray,
         surface_normal: np.ndarray,
-        probe_beam_axis: np.ndarray = np.array([0.0, 0.0, 1.0]),
+        probe_beam_axis: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Calculates corrective angular velocity omega to align the ultrasound probe axis
         with the local anatomical surface normal.
         """
+        if probe_beam_axis is None:
+            # Probe frame convention: +Y is the axial ray propagation direction down into tissue
+            probe_beam_axis = np.array([0.0, 1.0, 0.0])
         current_axis = current_rot @ probe_beam_axis
         # Error is the cross product between current beam axis and negative surface normal (pointing in)
         target_axis = -surface_normal / (np.linalg.norm(surface_normal) + 1e-6)

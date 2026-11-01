@@ -56,9 +56,9 @@ class UltrasoundConfidenceEstimator:
         depth_penalty = torch.exp(-self.attenuation_decay_rate * depth_coords)
 
         # 2. Cumulative shadow detection along axial beam (y axis):
-        # High intensity bone reflection attenuates all sound below it
-        # Compute cumulative max or exponential running shadow
-        cumulative_attenuator = torch.cumsum(img * 0.1, dim=1)
+        # Only hyperechoic specular bone reflections (intensity >= 0.60) cause distal acoustic shadowing
+        bone_peaks = torch.clamp((img - 0.60) / 0.40, min=0.0)
+        cumulative_attenuator = torch.cumsum(bone_peaks * 0.25, dim=1)
         shadow_factor = torch.clamp(1.0 - cumulative_attenuator, min=0.0, max=1.0)
 
         # 3. Energy factor

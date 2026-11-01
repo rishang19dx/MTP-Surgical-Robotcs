@@ -64,9 +64,8 @@ class HeuristicScanPlanner:
             for theta in thetas:
                 x = cx + r * np.cos(theta)
                 z = cz + (r * 0.75) * np.sin(theta) # Elliptical along spine
-                # Yaw aligns along trajectory tangent
-                yaw = theta + np.pi / 2.0
-                # Inward pitch tilts probe towards anatomical center
+                # Inward probe acoustic tilt towards anatomical center (yaw=lateral tilt, pitch=sagittal tilt)
+                yaw = pitch_rad * np.sin(theta)
                 pitch = pitch_rad * np.cos(theta)
                 trajectory.append([x, z, yaw, pitch])
 

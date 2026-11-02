@@ -17,10 +17,11 @@ class BoneSurfaceSegmenter:
     def __init__(
         self,
         dropout_probability: float = 0.15,
-        intensity_threshold: float = 0.18,
+        intensity_threshold: float = 0.16,
         gradient_threshold: float = 0.03,
-        shadow_contrast_ratio: float = 1.25,
+        shadow_contrast_ratio: float = 1.30,
         min_confidence: float = 0.20,
+        min_depth_y: int = 20,
     ):
         """
         Args:
@@ -29,12 +30,14 @@ class BoneSurfaceSegmenter:
             gradient_threshold: Minimum vertical intensity gradient for rising edge detection.
             shadow_contrast_ratio: Ratio of peak bone echo to underlying acoustic shadow intensity.
             min_confidence: Minimum acoustic confidence required to accept a bone candidate.
+            min_depth_y: Minimum axial depth in pixels to filter out superficial near-field fat clutter.
         """
         self.dropout_prob = dropout_probability
         self.intensity_thresh = intensity_threshold
         self.grad_thresh = gradient_threshold
         self.shadow_contrast = shadow_contrast_ratio
         self.min_confidence = min_confidence
+        self.min_depth_y = min_depth_y
 
     def segment_from_bmode(
         self,
@@ -69,25 +72,29 @@ class BoneSurfaceSegmenter:
             if np.max(conf_col) < self.min_confidence:
                 continue
 
-            peaks = []
-            # Bone interfaces typically appear beyond the superficial transducer ring-down zone (y >= 6)
-            for y in range(6, h - 16):
+            best_cand = None
+            best_score = -1.0
+
+            # Bone cortex appears at physiological depths beyond subcutaneous fat layer
+            start_y = max(6, self.min_depth_y)
+            for y in range(start_y, h - 16):
                 val = col[y]
                 # 1. Local hyperechoic peak condition
                 if val >= self.intensity_thresh and val > col[y - 1] and val >= col[y + 1]:
                     # 2. Confidence check at the peak
                     if conf_col[y] >= self.min_confidence:
                         # 3. Acoustic shadow check: distal tissue beneath bone reflects significantly less energy
-                        distal_shadow = float(np.mean(col[y + 4 : min(h, y + 24)]))
-                        if val >= distal_shadow * self.shadow_contrast or val >= 0.35:
-                            peaks.append((val, y))
+                        distal_shadow = float(np.mean(col[y + 6 : min(h, y + 24)]))
+                        if val >= distal_shadow * self.shadow_contrast or distal_shadow <= 0.06:
+                            score = (val - distal_shadow) * conf_col[y]
+                            if score > best_score:
+                                best_score = score
+                                best_cand = y
 
-            if len(peaks) > 0:
+            if best_cand is not None:
                 # Stochastic dropout (simulating acoustic specular drop-out at steep angles)
                 if np.random.rand() > self.dropout_prob:
-                    # Pick the shallowest prominent reflection (first bone cortex encountered by the sound wave)
-                    best_y = max(peaks[:2], key=lambda item: item[0])[1]
-                    points.append([x, best_y])
+                    points.append([x, best_cand])
 
         if len(points) == 0:
             return np.empty((0, 2), dtype=np.int32)

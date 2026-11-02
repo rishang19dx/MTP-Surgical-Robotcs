@@ -34,7 +34,7 @@ class UltrasoundReconstructionEnv:
         tissue_stiffness_n_per_mm: float = 2.5,
         target_force_n: float = 4.0,
         skin_curvature: float = 0.002,
-        scan_approach: str = "lateral",
+        scan_approach: str = "dorsal",
         reconstruction_source: str = "bmode",
         pybullet_backend: Optional[Any] = None,
         device: Optional[torch.device] = None,
@@ -73,14 +73,21 @@ class UltrasoundReconstructionEnv:
         # Target ROI ground-truth bone surface points in acoustic scan field
         pts = self.gt_bone_points
         if len(pts) > 5000:
-            roi_mask = (np.abs(pts[:, 0]) <= 45.0) & (np.abs(pts[:, 2]) <= 35.0) & (pts[:, 1] >= 0.0)
-            self.target_roi_bone_points = pts[roi_mask] if np.any(roi_mask) else pts[:5000]
-            # Downsample target to 1.5mm voxel grid matching the accumulator resolution
-            import open3d as o3d
-            pcd_target = o3d.geometry.PointCloud()
-            pcd_target.points = o3d.utility.Vector3dVector(self.target_roi_bone_points)
-            pcd_down = pcd_target.voxel_down_sample(voxel_size=1.5)
-            self.target_voxel_count = max(1, len(pcd_down.points))
+            if self.scan_approach == "dorsal":
+                roi_mask = (np.abs(pts[:, 0]) <= 25.0) & (np.abs(pts[:, 2]) <= 35.0) & (pts[:, 1] >= 15.0)
+                roi_pts = pts[roi_mask] if np.any(roi_mask) else pts[:5000]
+                # Extract uppermost dorsal bone surface cortex visible along the acoustic beam (+Y to -Y)
+                grid = {}
+                for p in roi_pts:
+                    key = (int(np.round(p[0])), int(np.round(p[2])))
+                    if key not in grid or p[1] > grid[key][1]:
+                        grid[key] = p
+                self.target_roi_bone_points = np.array(list(grid.values()), dtype=np.float32)
+            else:
+                roi_mask = (pts[:, 0] >= 15.0) & (np.abs(pts[:, 1]) <= 35.0) & (np.abs(pts[:, 2]) <= 35.0)
+                self.target_roi_bone_points = pts[roi_mask] if np.any(roi_mask) else pts[:5000]
+
+            self.target_voxel_count = max(1, len(self.target_roi_bone_points))
         else:
             self.target_roi_bone_points = pts
             self.target_voxel_count = max(1, len(pts))

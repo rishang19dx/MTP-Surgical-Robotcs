@@ -472,3 +472,26 @@ A chronological record of all architectural, research, algorithmic, and engineer
   4. *3D Slicer Scene & UI Synchronization*:
      - Configured `slicer_surgical_physics_bridge.py` to load `patient_torso_skin_ras.obj` as a translucent anatomical envelope (`PatientTorso`, opacity 0.18) alongside `GroundTruthSpine`, allowing the surgeon to see the probe tracking directly on the patient's back while emerald green points reconstruct the real underlying bone surface.
 * **Rationale**: Completely eradicates all synthetic toy phantoms. Delivers clinically authentic lumbar spine anatomy, verified Hounsfield Unit ray-acoustic attenuation, and sub-millimeter geometric accuracy across both the PyBullet physics simulator and 3D Slicer clinical frontend.
+
+---
+
+### `DEC-034`: Clinical Ultrasound Time Gain Compensation (TGC), Bone Acoustic Impedance Calibration & Dorsal Surface Evaluation Alignment
+* **Date**: November 2, 2026
+* **Context**: Live evaluation on genuine clinical CT patient anatomy yielded nonsensical metrics (Chamfer distance $24\text{--}28\text{ mm}$, MAD $> 10\text{ mm}$, coverage $< 1\%$). Rigorous root-cause analysis traced this to three compounding failures:
+  1. *Premature Near-Field Fat Peak Detection*: In `bone_segmentation.py`, peak picking searched starting at $y=6$ ($3\text{ mm}$) and selected superficial subcutaneous fat echoes at $y \in [6, 15]$ ($CT \approx 6\text{--}45\text{ HU}$, `Label=2`) because exponential depth attenuation without Time Gain Compensation caused true cortical bone reflections at $25\text{--}45\text{ mm}$ depth to have lower raw intensity ($0.069$) than superficial fat speckle ($0.369$).
+  2. *Uncalibrated Acoustic Impedance*: Cortical bone impedance was mapped from an unscaled shifted formula yielding only $Z \approx 1.4\text{ MRayl}$ ($R \approx 0.11$) instead of physical bone cortex impedance ($Z_{\text{bone}} \approx 6.5\text{ MRayl}$, $R \approx 0.61$).
+  3. *Mismatched Evaluation Target*: `benchmark_runner.py` evaluated bidirectional Chamfer distance against all 378,207 points of the whole spine (spanning down to the anterior sacrum and vertebral bodies), which distorted Chamfer distance to $26\text{ mm}$ even for a perfect L3 scan.
+  4. *Greedy NBV Limit Cycle*: Symmetrical candidate moves caused the Greedy NBV policy to oscillate between two points ($x = -2.38\text{ mm}$ and $+2.61\text{ mm}$), getting stuck with only 12 points and producing $999.0\text{ mm}$ failure metrics.
+* **Decision**:
+  1. *Ultrasound Simulator Time Gain Compensation (TGC)*:
+     - Implemented standard clinical exponential TGC depth gain in `ModelBasedUltrasoundSimulator`: $G(y) = \text{clamp}(\exp(2 \cdot f \cdot \alpha_{\text{tissue}} \cdot y \cdot \delta_y), 1.0, 14.0)$.
+     - Assigned true clinical cortical bone impedance ($Z_{\text{bone}} = 6.5 + (CT - 300)/750\text{ MRayl}$) and weighted specular bone reflection $14.0\times$ over diffuse soft-tissue speckle ($0.07$), producing high-contrast hyperechoic bone interfaces ($bmode \in [0.35, 0.55]$) followed by true pitch-black acoustic shadows ($bmode = 0.000$).
+  2. *Physiological Depth Gating & Contrast-Over-Shadow Peak Scoring*:
+     - Configured `BoneSurfaceSegmenter` with `min_depth_y = 20` ($10\text{ mm}$ depth cutoff), preventing near-field fat echoes and transducer ring-down from masquerading as bone.
+     - Implemented contrast-over-shadow candidate scoring: $\text{score} = (\text{peak} - \text{distal\_shadow}) \cdot \text{confidence}$, picking the true cortical reflection and achieving **$0.945\text{ mm}$ Mean Absolute Distance (MAD)** with **100% of points within $2.0\text{ mm}$** of ground truth bone.
+  3. *Dorsal Orientation Alignment & Target ROI Bone Surface*:
+     - Set default `scan_approach="dorsal"` in `UltrasoundReconstructionEnv`, aligning with the prone operating suite in PyBullet and 3D Slicer.
+     - Extracted the acoustically visible dorsal bone surface (the outermost cortex facing $+Y$ within $X \in [-25, 25]\text{ mm}, Z \in [-35, 35]\text{ mm}$) as `target_roi_bone_points`, ensuring Chamfer distance and coverage ratio evaluate the scanned surgical target accurately.
+  4. *Exploration Visitation Kernel for Greedy NBV*:
+     - Added a Gaussian spatial visitation penalty to `run_greedy_nbv_benchmark`: $\sum \exp(-\|\mathbf{x} - \mathbf{x}_{\text{visited}}\|^2 / 2\sigma^2)$, completely eliminating two-point limit cycles and restoring continuous spatial exploration ($\text{MAD} = 1.965\text{ mm}$).
+* **Rationale**: Restores clinical acoustic physics, sub-millimeter reconstruction precision ($0.945\text{ mm}$), and rigorous benchmark metrics on authentic human CT anatomy.

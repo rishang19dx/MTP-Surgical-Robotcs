@@ -100,74 +100,73 @@ class ModelBasedUltrasoundSimulator:
 
         batch_size, h, w = ct.shape
 
-        # 1. Acoustic Impedance Z: proportional to CT intensity (shifted HU)
-        # Clamp HU range: air (-1000) -> 0, soft tissue (0-100) -> 1.5, bone (1000-2000) -> 6-8
-        ct_clamped = torch.clamp(ct, min=-1000.0, max=2500.0)
-        impedance = (ct_clamped + 1000.0) / 1000.0 + 0.1  # (B, H, W)
-
-        # 2. Local Attenuation Map alpha:
+        # 1. Anatomical Bone Mask & Acoustic Attenuation
         if labels is not None:
-            bone_mask = (labels == bone_label_id).float()
-            alpha_map = self.alpha_soft_tissue * (1.0 - bone_mask) + self.alpha_bone * bone_mask
+            bone_mask = ((labels == bone_label_id) | (ct > 300.0)).float()
         else:
-            # Estimate bone directly from high CT attenuation (HU > 350)
-            bone_mask = (ct > 350.0).float()
-            alpha_map = self.alpha_soft_tissue * (1.0 - bone_mask) + self.alpha_bone * bone_mask
+            bone_mask = (ct > 300.0).float()
 
-        # 3. Cumulative Acoustic Energy E(u): ray propagates round-trip (2x attenuation) along axis +y (downwards)
-        # E(x, y) = E0 * exp( -2 * f * sum_{v=0}^y alpha(x, v) * delta_y )
-        # Cumulative sum along dim 1 (axial height)
+        # 2. Acoustic Impedance Z:
+        # Soft tissue baseline ~1.54 MRayl, cortical bone ~6.5 MRayl, fat ~1.38 MRayl
+        ct_clamped = torch.clamp(ct, min=-1000.0, max=2500.0)
+        z_tissue = 1.54 + torch.clamp(ct_clamped - 40.0, min=-500.0, max=200.0) / 1000.0
+        z_bone = 6.5 + torch.clamp(ct_clamped - 300.0, min=0.0, max=1500.0) / 750.0
+        impedance = torch.where(bone_mask > 0.5, z_bone, z_tissue)
+
+        # 3. Local Attenuation Map alpha:
+        alpha_map = self.alpha_soft_tissue * (1.0 - bone_mask) + self.alpha_bone * bone_mask
+
+        # 4. Cumulative Acoustic Energy E(u): round-trip attenuation along axis +y
         cumulative_attenuation = torch.cumsum(alpha_map * self.delta_y_cm, dim=1)
         energy = self.initial_energy * torch.exp(-2.0 * self.frequency * cumulative_attenuation)
 
-        # 4. Tissue Boundary Gradient & Incidence Angle Theta
-        # Compute spatial derivatives: dZ/dy (axial) and dZ/dx (lateral)
-        # Ray direction is [0, 1] (along +y)
+        # 5. Clinical Time Gain Compensation (TGC):
+        # Compensates exponential soft tissue attenuation with depth, matching clinical scanners
+        y_indices = torch.arange(h, device=self.device, dtype=torch.float32).view(1, -1, 1)
+        tgc_gain = torch.clamp(
+            torch.exp(2.0 * self.frequency * self.alpha_soft_tissue * y_indices * self.delta_y_cm),
+            min=1.0, max=14.0
+        )
+
+        # 6. Tissue Boundary Gradient & Incidence Angle Theta
         dZ_dy = torch.zeros_like(impedance)
         dZ_dx = torch.zeros_like(impedance)
         dZ_dy[:, 1:, :] = impedance[:, 1:, :] - impedance[:, :-1, :]
         dZ_dx[:, :, 1:] = impedance[:, :, 1:] - impedance[:, :, :-1]
 
         grad_norm = torch.sqrt(dZ_dy ** 2 + dZ_dx ** 2 + 1e-6)
-        
-        # Incidence angle cosine: cos(Theta) = |dZ/dy| / grad_norm
-        # Perpendicular incidence has normal along y axis -> cos(Theta) = 1.0
         cos_theta = torch.clamp(torch.abs(dZ_dy) / grad_norm, 0.0, 1.0)
         specular_factor = torch.pow(cos_theta, self.specular_exponent)
 
-        # Boundary indicator G(u): high impedance gradient
-        boundary_indicator = torch.sigmoid((grad_norm - 0.2) * 10.0)
+        boundary_indicator = torch.sigmoid((grad_norm - 0.2) * 8.0)
 
-        # Acoustic reflection coefficient: (Z2 - Z1) / (Z2 + Z1)
-        # Forward difference along axial axis y
+        # Acoustic reflection coefficient: |Z2 - Z1| / (Z2 + Z1)
         z_curr = impedance[:, :-1, :]
         z_next = impedance[:, 1:, :]
         refl_coeff = torch.zeros_like(impedance)
         refl_coeff[:, :-1, :] = torch.abs((z_next - z_curr) / (z_next + z_curr + 1e-6))
 
-        # Raw Reflection R_raw = E * cos(Theta) * refl_coeff * G
-        reflection_raw = energy * specular_factor * refl_coeff * boundary_indicator
+        # Raw Reflection R_raw = (E * TGC) * cos(Theta) * refl_coeff * G
+        effective_energy = energy * tgc_gain
+        reflection_raw = effective_energy * specular_factor * refl_coeff * boundary_indicator
 
-        # 5. Backscattering (Speckle Texture) B
-        # Sample stochastic Gaussian noise maps N0, N1
+        # 7. Backscattering (Speckle Texture) B
         n0 = torch.randn_like(impedance)
         n1 = torch.rand_like(impedance)
         scatter_mask = (n1 < 0.75).float()
         speckle_texture = (0.2 + 0.3 * torch.abs(n0)) * scatter_mask
-        # Soft tissue has speckle; bone internal cavity attenuated; fluid has minimal speckle
-        tissue_scatter = torch.where(bone_mask > 0.5, 0.05, 0.35)
-        backscatter_raw = energy * tissue_scatter * speckle_texture
+        tissue_scatter = torch.where(bone_mask > 0.5, 0.01, 0.07)
+        backscatter_raw = effective_energy * tissue_scatter * speckle_texture
 
-        # 6. Convolution with Point Spread Function (PSF)
-        # Add channel dim: (B, 1, H, W)
+        # 8. Convolution with Point Spread Function (PSF)
         pad = self.psf_kernel.shape[-1] // 2
         r_convolved = F.conv2d(reflection_raw.unsqueeze(1), self.psf_kernel, padding=pad).squeeze(1)
         b_convolved = F.conv2d(backscatter_raw.unsqueeze(1), self.psf_kernel, padding=pad).squeeze(1)
 
-        # 7. Total Image Synthesis: I = R + B with logarithmic dynamic range compression
-        total_intensity = r_convolved * 3.5 + b_convolved
-        # Standard ultrasound log compression: log(1 + c * I)
-        bmode_log = torch.log1p(15.0 * total_intensity) / torch.log1p(torch.tensor(15.0, device=self.device))
+        # 9. Total Image Synthesis with logarithmic dynamic range compression
+        # Bone specular reflection is significantly stronger (>15 dB) than diffuse soft-tissue speckle
+        total_intensity = r_convolved * 14.0 + b_convolved
+        bmode_log = torch.log1p(10.0 * total_intensity) / torch.log1p(torch.tensor(10.0, device=self.device))
         bmode = torch.clamp(bmode_log, 0.0, 1.0)
 
         if is_single:

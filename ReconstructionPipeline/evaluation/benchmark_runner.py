@@ -57,11 +57,12 @@ class ReconstructionBenchmarkSuite:
         4. Kinematic Efficiency: Trajectory Length (mm), End-Effector Angular Rotation (deg)
         """
         reconstructed_pts = env.accumulator.get_points()
+        target_pts = getattr(env, "target_roi_bone_points", env.gt_bone_points)
         gt_pts = env.gt_bone_points
 
         mad_mm = 999.0
-        if len(reconstructed_pts) > 20 and len(gt_pts) > 0:
-            chamfer, cov = self.reg_evaluator.compute_metrics(reconstructed_pts, gt_pts)
+        if len(reconstructed_pts) > 20 and len(target_pts) > 0:
+            chamfer, cov = self.reg_evaluator.compute_metrics(reconstructed_pts, target_pts)
             # Compute Mean Absolute Distance (MAD) from reconstructed points to nearest ground-truth bone point
             target_tree = o3d.geometry.KDTreeFlann(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(gt_pts)))
             dists_s2t = [np.sqrt(target_tree.search_knn_vector_3d(p, 1)[2][0]) for p in reconstructed_pts]
@@ -160,7 +161,7 @@ class ReconstructionBenchmarkSuite:
             (5.0, 0.0, 0.0, 0.0), (-5.0, 0.0, 0.0, 0.0),
             (0.0, 5.0, 0.0, 0.0), (0.0, -5.0, 0.0, 0.0),
             (3.5, 3.5, np.radians(6.0), 0.0), (-3.5, 3.5, -np.radians(6.0), 0.0),
-            (0.0, 0.0, 0.0, np.radians(12.0)), (0.0, 0.0, 0.0, -np.radians(12.0)),
+            (3.5, -3.5, np.radians(6.0), 0.0), (-3.5, -3.5, -np.radians(6.0), 0.0),
         ]
 
         for trial in range(self.num_trials):
@@ -168,25 +169,31 @@ class ReconstructionBenchmarkSuite:
             env.reset()
             force_hist = []
             coupling_hist = []
+            visited_positions = []
 
             for _ in range(max_steps):
                 curr_p = env.current_pose_params
+                visited_positions.append((float(curr_p[0]), float(curr_p[1])))
                 best_action = None
                 best_score = -float("inf")
 
                 for dx_mm, dz_mm, dyaw_r, dpitch_r in candidate_deltas:
-                    cand_x = np.clip(curr_p[0] + dx_mm, env.x_bounds[0], env.x_bounds[1])
-                    cand_z = np.clip(curr_p[1] + dz_mm, env.z_bounds[0], env.z_bounds[1])
+                    cand_x = np.clip(curr_p[0] + dx_mm, env.c1_bounds[0], env.c1_bounds[1])
+                    cand_z = np.clip(curr_p[1] + dz_mm, env.c2_bounds[0], env.c2_bounds[1])
                     cand_yaw = curr_p[2] + dyaw_r
                     cand_pitch = curr_p[3] + dpitch_r
 
+                    # Visitation penalty prevents limit-cycle oscillations
+                    visitation_penalty = sum(
+                        np.exp(-0.5 * ((cand_x - vx)**2 + (cand_z - vz)**2) / 25.0)
+                        for vx, vz in visited_positions
+                    )
+
                     dist_from_origin = np.sqrt(cand_x**2 + cand_z**2)
-                    inward_tilt = -np.sign(cand_x) * cand_pitch
                     cand_fn, cand_kappa, _ = env.compute_contact_force_and_coupling(cand_x, cand_z, cand_yaw, cand_pitch)
 
-                    # Frontier information gain: reward moves that face inward with high acoustic coupling
-                    frontier_gain = 3.0 * np.exp(-0.02 * dist_from_origin)
-                    score = cand_kappa * 5.0 + inward_tilt * 2.5 + frontier_gain - 0.01 * dist_from_origin
+                    # Frontier information gain: reward high coupling and unexplored areas
+                    score = cand_kappa * 5.0 - 1.2 * visitation_penalty - 0.01 * dist_from_origin
                     if score > best_score:
                         best_score = score
                         best_action = np.array([

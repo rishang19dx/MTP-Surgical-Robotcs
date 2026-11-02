@@ -268,6 +268,22 @@ class SlicerSurgicalPhysicsBridge:
 
         patient_dir = os.path.join(os.path.dirname(__file__), "..", "data", "sample_totalsegmentator_patient")
         mesh_ras_path = os.path.join(patient_dir, "meshes", "patient_lumbar_spine_ras.obj")
+        torso_ras_path = os.path.join(patient_dir, "meshes", "patient_torso_skin_ras.obj")
+
+        # Optional Patient Torso Skin Mesh (Translucent Flesh)
+        if os.path.exists(torso_ras_path) and not scene.GetFirstNodeByName("PatientTorso"):
+            try:
+                torso_model = slicer.util.loadModel(torso_ras_path)
+                if torso_model:
+                    torso_model.SetName("PatientTorso")
+                    tdnode = torso_model.GetDisplayNode()
+                    if tdnode:
+                        tdnode.SetColor(0.86, 0.68, 0.58)  # Flesh tint
+                        tdnode.SetOpacity(0.18)  # Subtle translucent envelope
+                        tdnode.SetVisibility(True)
+                    print("[+] Successfully loaded PatientTorso anatomical envelope in 3D Scene")
+            except Exception as e:
+                print(f"[!] Warning: Could not load torso mesh: {e}")
 
         if os.path.exists(mesh_ras_path):
             try:

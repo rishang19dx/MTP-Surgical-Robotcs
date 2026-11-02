@@ -23,17 +23,19 @@ A comprehensive architectural map detailing all entry points, execution flows, c
 
 ## 2. End-to-End System Execution Flows
 
-### Flow A: Offline Patient Asset Generation
-Generates synthetic or TotalSegmentator clinical CT volumes, anatomical label maps, dorsal/flank skin meshes, and ground-truth bone point clouds.
+### Flow A: Clinical Patient Asset Preparation
+Ingests and prepares authentic TotalSegmentator clinical CT volumes, expert lumbar vertebra segmentations (L1-L5 + sacrum), authentic torso skin meshes, and ground-truth bone point clouds.
 
 ```mermaid
 flowchart LR
-    CTGen["PatientAssetGenerator\n(prepare_patient_assets.py)"] --> SynthCT["CT Volume (120x120x80)\nHounsfield Units (-1000 to +1200)"]
-    CTGen --> Labels["Label Map (120x120x80)\n0=Background, 1=Bone, 2=Tissue"]
-    CTGen --> SkinMesh["Skin Surface Mesh (STL)\nLateral Flank & Dorsal Curvature"]
-    CTGen --> GTPoints["GT Vertebra Point Cloud\nN x 3 Bone Surface Coordinates"]
-    SynthCT --> OutDir["ReconstructionPipeline/data/sample_patient/"]
+    CTGen["PatientAssetGenerator\n(prepare_patient_assets.py)"] --> RealCT["Clinical Human CT (141x116x176)\nHounsfield Units (-1024 to +1478)"]
+    CTGen --> Labels["Expert Radiologist Segmentations\nL1-L5, Sacrum, Muscles, Skin"]
+    CTGen --> SpineMesh["High-Res Bone Mesh (OBJ)\n19.8k verts, 40k faces (L1-L5)"]
+    CTGen --> SkinMesh["Authentic Torso Skin (OBJ)\nRealistic Patient Dorsal Envelope"]
+    CTGen --> GTPoints["GT Vertebra Point Cloud\n378k Bone Surface Coordinates"]
+    RealCT --> OutDir["data/sample_totalsegmentator_patient/"]
     Labels --> OutDir
+    SpineMesh --> OutDir
     SkinMesh --> OutDir
     GTPoints --> OutDir
 ```

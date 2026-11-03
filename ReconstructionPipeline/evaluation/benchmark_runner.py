@@ -36,10 +36,12 @@ class ReconstructionBenchmarkSuite:
         self,
         num_trials: int = 5,
         patient_dir: Optional[str] = None,
+        target_vertebra: Optional[str] = "vertebrae_L4",
         device: Optional[torch.device] = None,
     ):
         self.num_trials = num_trials
         self.patient_dir = patient_dir
+        self.target_vertebra = target_vertebra
         self.reg_evaluator = IntraoperativeRegistration()
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -119,14 +121,30 @@ class ReconstructionBenchmarkSuite:
     def run_heuristic_benchmark(self, scan_type: str = "raster") -> Dict[str, float]:
         """Runs benchmark across multiple trials for a heuristic scanning strategy (standardized 60-step budget)."""
         planner = HeuristicScanPlanner()
+        is_l4 = self.target_vertebra in ["vertebrae_L4", "L4", "l4"]
         if scan_type == "raster":
-            traj = planner.generate_linear_raster_trajectory(num_sweep_lines=5, points_per_line=12) # 60 steps
+            if is_l4:
+                traj = planner.generate_linear_raster_trajectory(
+                    x_range=(-20.0, 20.0), z_range=(-50.0, -12.0), num_sweep_lines=6, points_per_line=12
+                ) # 72 steps over L4
+            else:
+                traj = planner.generate_linear_raster_trajectory(num_sweep_lines=5, points_per_line=12) # 60 steps
         else:
-            traj = planner.generate_orbital_trajectory(radii=[18.0, 30.0], points_per_orbit=30) # 60 steps
+            if is_l4:
+                traj = planner.generate_orbital_trajectory(
+                    center=(0.0, -31.0), radii=[14.0, 24.0], points_per_orbit=36
+                ) # 72 steps over L4
+            else:
+                traj = planner.generate_orbital_trajectory(radii=[18.0, 30.0], points_per_orbit=30) # 60 steps
 
         trial_metrics = []
         for trial in range(self.num_trials):
-            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=len(traj), device=self.device)
+            env = UltrasoundReconstructionEnv(
+                patient_data=self.patient_dir,
+                target_vertebra=self.target_vertebra,
+                max_steps=len(traj),
+                device=self.device
+            )
             env.reset()
             force_hist = []
             coupling_hist = []
@@ -164,8 +182,15 @@ class ReconstructionBenchmarkSuite:
             (3.5, -3.5, np.radians(6.0), 0.0), (-3.5, -3.5, -np.radians(6.0), 0.0),
         ]
 
+        center_z = -31.0 if (self.target_vertebra in ["vertebrae_L4", "L4", "l4"]) else 0.0
+
         for trial in range(self.num_trials):
-            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=max_steps, device=self.device)
+            env = UltrasoundReconstructionEnv(
+                patient_data=self.patient_dir,
+                target_vertebra=self.target_vertebra,
+                max_steps=max_steps,
+                device=self.device
+            )
             env.reset()
             force_hist = []
             coupling_hist = []
@@ -189,7 +214,7 @@ class ReconstructionBenchmarkSuite:
                         for vx, vz in visited_positions
                     )
 
-                    dist_from_origin = np.sqrt(cand_x**2 + cand_z**2)
+                    dist_from_origin = np.sqrt(cand_x**2 + (cand_z - center_z)**2)
                     cand_fn, cand_kappa, _ = env.compute_contact_force_and_coupling(cand_x, cand_z, cand_yaw, cand_pitch)
 
                     # Frontier information gain: reward high coupling and unexplored areas
@@ -230,7 +255,12 @@ class ReconstructionBenchmarkSuite:
 
         trial_metrics = []
         for trial in range(self.num_trials):
-            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=max_steps, device=self.device)
+            env = UltrasoundReconstructionEnv(
+                patient_data=self.patient_dir,
+                target_vertebra=self.target_vertebra,
+                max_steps=max_steps,
+                device=self.device
+            )
             obs = env.reset()
             force_hist = []
             coupling_hist = []
@@ -281,7 +311,12 @@ class ReconstructionBenchmarkSuite:
 
         trial_metrics = []
         for trial in range(self.num_trials):
-            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=max_steps, device=self.device)
+            env = UltrasoundReconstructionEnv(
+                patient_data=self.patient_dir,
+                target_vertebra=self.target_vertebra,
+                max_steps=max_steps,
+                device=self.device
+            )
             obs = env.reset()
             force_hist = []
             coupling_hist = []
@@ -331,7 +366,12 @@ class ReconstructionBenchmarkSuite:
 
         trial_metrics = []
         for trial in range(self.num_trials):
-            env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=max_steps, device=self.device)
+            env = UltrasoundReconstructionEnv(
+                patient_data=self.patient_dir,
+                target_vertebra=self.target_vertebra,
+                max_steps=max_steps,
+                device=self.device
+            )
             obs = env.reset()
             force_hist = []
             coupling_hist = []
@@ -369,13 +409,19 @@ class ReconstructionBenchmarkSuite:
         Addresses SonoGym's primary limitation (rigid patient assumptions).
         """
         print("[*] Running SonoGym-SoftBody Continuum Mechanics Benchmark...")
-        env = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=100, device=self.device)
+        env = UltrasoundReconstructionEnv(
+            patient_data=self.patient_dir,
+            target_vertebra=self.target_vertebra,
+            max_steps=100,
+            device=self.device
+        )
         env.reset()
 
         # 1. Echo Shift vs. Probe Pressure Analysis
         test_forces = [0.5, 2.0, 4.0, 6.0, 8.0, 10.0]
         echo_shifts = []
-        t_pose = env._build_probe_matrix(0.0, 0.0, 0.0, 0.0)
+        center_z = -31.0 if (self.target_vertebra in ["vertebrae_L4", "L4", "l4"]) else 0.0
+        t_pose = env._build_probe_matrix(0.0, center_z, 0.0, 0.0)
 
         for fn in test_forces:
             # Extract slice with backward Eulerian warping at force fn
@@ -392,7 +438,7 @@ class ReconstructionBenchmarkSuite:
             # Pixel spacing along depth (60 mm / 160 pixels = 0.375 mm/px)
             echo_depth_mm = bone_peak_idx * 0.375
             indent_mm = (fn / 2500.0) * 1000.0
-            _, kappa, _ = env.compute_contact_force_and_coupling(0.0, 0.0, 0.0, 0.0, probe_coord=float(env.skin_y - indent_mm))
+            _, kappa, _ = env.compute_contact_force_and_coupling(0.0, center_z, 0.0, 0.0, probe_coord=float(env.skin_y - indent_mm))
 
             echo_shifts.append({
                 "force_n": fn,
@@ -404,7 +450,12 @@ class ReconstructionBenchmarkSuite:
         # 2. Rigid vs. Deformable Reconstruction Comparison
         # Run standard raster sweep on both:
         # A. Rigid baseline (force = 0.0 N, zero deformation)
-        env_rigid = UltrasoundReconstructionEnv(patient_data=self.patient_dir, max_steps=60, device=self.device)
+        env_rigid = UltrasoundReconstructionEnv(
+            patient_data=self.patient_dir,
+            target_vertebra=self.target_vertebra,
+            max_steps=60,
+            device=self.device
+        )
         env_rigid.reset()
         planner = HeuristicScanPlanner()
         traj = planner.generate_spine_raster_trajectory(num_sweep_lines=4, step_distance_mm=0.5)
@@ -509,13 +560,19 @@ if __name__ == "__main__":
     parser.add_argument("--ppo-ckpt", type=str, default=None, help="Path to Submodular PPO checkpoint")
     parser.add_argument("--cfm-ckpt", type=str, default=None, help="Path to Continuous Flow Matching checkpoint")
     parser.add_argument("--diffusion-ckpt", type=str, default=None, help="Path to 3D Diffusion Policy checkpoint")
+    parser.add_argument("--target-vertebra", type=str, default="vertebrae_L4", help="Target anatomical structure (default: vertebrae_L4)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device (cpu/cuda)")
     parser.add_argument("--soft-body", action="store_true", help="Run SonoGym-SoftBody continuum mechanics benchmark")
     args = parser.parse_args()
 
     dev = torch.device(args.device)
-    print(f"[*] Initializing Benchmark Suite (Patient: {args.patient_dir or 'Synthetic Anatomy'}, Device: {dev}, Trials: {args.num_trials})...")
-    suite = ReconstructionBenchmarkSuite(num_trials=args.num_trials, patient_dir=args.patient_dir, device=dev)
+    print(f"[*] Initializing Benchmark Suite (Patient: {args.patient_dir or 'Synthetic Anatomy'}, Target: {args.target_vertebra}, Device: {dev}, Trials: {args.num_trials})...")
+    suite = ReconstructionBenchmarkSuite(
+        num_trials=args.num_trials,
+        patient_dir=args.patient_dir,
+        target_vertebra=args.target_vertebra,
+        device=dev
+    )
 
     if args.soft_body:
         sb_res = suite.run_soft_body_deformation_benchmark()
@@ -538,7 +595,10 @@ if __name__ == "__main__":
             print(f"   - {k}: Safe Force = {v['safe_force_pct']:.1f}%, Force RMSE = {v['force_rmse']:.2f} N, Max Force = {v['max_force']:.2f} N")
         print("=" * 80)
 
-    res = suite.run_full_comparison(ppo_ckpt=args.ppo_ckpt, cfm_ckpt=args.cfm_ckpt, diffusion_ckpt=args.diffusion_ckpt)
+    ppo_path = args.ppo_ckpt or ("checkpoints/submodular_ppo.pt" if os.path.exists("checkpoints/submodular_ppo.pt") else None)
+    cfm_path = args.cfm_ckpt or ("checkpoints/flow_matching.pt" if os.path.exists("checkpoints/flow_matching.pt") else None)
+    diff_path = args.diffusion_ckpt or ("checkpoints/diffusion_policy.pt" if os.path.exists("checkpoints/diffusion_policy.pt") else None)
+    res = suite.run_full_comparison(ppo_ckpt=ppo_path, cfm_ckpt=cfm_path, diffusion_ckpt=diff_path)
 
     print("\n" + "=" * 125)
     print("SONOGYM 6-POLICY RECONSTRUCTION & COMPLIANCE BENCHMARK COMPARISON TABLE")

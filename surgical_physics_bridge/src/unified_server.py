@@ -128,6 +128,7 @@ class UnifiedSurgicalBridgeServer:
         print("[*] Initializing Ultrasound Reconstruction Engine (Dorsal Spine Scanning)...")
         self.env = UltrasoundReconstructionEnv(
             patient_data=self.patient_dir,
+            target_vertebra="vertebrae_L4",
             max_steps=10000,
             scan_approach="dorsal",
             pybullet_backend=self.backend,
@@ -136,10 +137,49 @@ class UnifiedSurgicalBridgeServer:
         self.obs = self.env.reset()
         self.update_robot_ik_and_visuals(teleport=True)
 
-        # 6. Trajectory Planner
+        # 5. Trajectory & Active Next-Best-View Planner Setup
         self.planner = HeuristicScanPlanner()
         self.trajectory = self._build_trajectory(self.scan_mode)
         self.traj_idx = 0
+
+        self.candidate_deltas = [
+            (5.0, 0.0, 0.0, 0.0), (-5.0, 0.0, 0.0, 0.0),
+            (0.0, 5.0, 0.0, 0.0), (0.0, -5.0, 0.0, 0.0),
+            (3.5, 3.5, np.radians(6.0), 0.0), (-3.5, 3.5, -np.radians(6.0), 0.0),
+            (3.5, -3.5, np.radians(6.0), 0.0), (-3.5, -3.5, -np.radians(6.0), 0.0),
+        ]
+        self.visited_positions = []
+        self.action_queue = []
+        self.diffusion_policy = None
+        self.cfm_policy = None
+        self.pointnet = None
+
+        if self.scan_mode == "diffusion" and os.path.exists("checkpoints/diffusion_policy.pt"):
+            try:
+                from ReconstructionPipeline.planning.diffusion_policy import SOTADiffusionPolicy
+                self.diffusion_policy = SOTADiffusionPolicy(action_dim=4, horizon=8, device=self.device)
+                ckpt = torch.load("checkpoints/diffusion_policy.pt", map_location=self.device, weights_only=False)
+                self.diffusion_policy.load_state_dict(ckpt.get("state_dict", ckpt))
+                self.diffusion_policy.eval()
+                print("[+] Loaded SOTA Diffusion Policy for live active NBV scanning")
+            except Exception as e:
+                print(f"[!] Warning: Failed to load diffusion policy: {e}")
+        elif self.scan_mode == "cfm" and os.path.exists("checkpoints/flow_matching.pt"):
+            try:
+                from ReconstructionPipeline.planning.flow_matching_policy import FlowMatchingPolicy
+                from ReconstructionPipeline.planning.pointnet_encoder import PointNetEncoder
+                self.pointnet = PointNetEncoder(latent_dim=128).to(self.device)
+                self.cfm_policy = FlowMatchingPolicy(action_dim=4, chunk_horizon=8, condition_dim=132, device=self.device).to(self.device)
+                ckpt = torch.load("checkpoints/flow_matching.pt", map_location=self.device, weights_only=False)
+                if "pointnet_state_dict" in ckpt:
+                    self.pointnet.load_state_dict(ckpt["pointnet_state_dict"])
+                if "policy_state_dict" in ckpt:
+                    self.cfm_policy.load_state_dict(ckpt["policy_state_dict"])
+                self.pointnet.eval()
+                self.cfm_policy.eval()
+                print("[+] Loaded Continuous Flow Matching Policy for live active NBV scanning")
+            except Exception as e:
+                print(f"[!] Warning: Failed to load CFM policy: {e}")
 
         # State tracking
         self.is_running = True
@@ -223,6 +263,19 @@ class UnifiedSurgicalBridgeServer:
         else:
             self.spine_id = -1
 
+        # Dedicated Highlighted L4 Vertebra Mesh
+        l4_mesh_path = os.path.join(mesh_dir, "patient_l4_vertebra.obj")
+        if os.path.exists(l4_mesh_path):
+            l4_vis = p.createVisualShape(p.GEOM_MESH, fileName=l4_mesh_path, rgbaColor=[1.0, 0.85, 0.40, 0.95])
+            self.l4_id = p.createMultiBody(
+                baseMass=0,
+                baseVisualShapeIndex=l4_vis,
+                basePosition=[0, 0, 0]
+            )
+            print(f"[+] Loaded dedicated L4 vertebra model from {l4_mesh_path} (ID: {self.l4_id})")
+        else:
+            self.l4_id = -1
+
         # 3B. Translucent Patient Torso Soft-Tissue Envelope
         if os.path.exists(torso_mesh_path):
             torso_vis = p.createVisualShape(p.GEOM_MESH, fileName=torso_mesh_path, rgbaColor=[0.86, 0.68, 0.58, 0.55])
@@ -278,15 +331,29 @@ class UnifiedSurgicalBridgeServer:
             )
 
     def _build_trajectory(self, mode: str) -> Optional[np.ndarray]:
-        if mode == "raster":
+        if mode in ["raster_l4", "l4_raster"]:
             return self.planner.generate_spine_raster_trajectory(
-                x_range=(-16.0, 16.0),
-                z_range=(-50.0, 50.0),
+                x_range=(-20.0, 20.0),
+                z_range=(-52.0, -10.0),
+                step_distance_mm=0.33,
+                num_sweep_lines=6
+            )
+        elif mode in ["orbital_l4", "l4_orbital"]:
+            return self.planner.generate_orbital_trajectory(
+                center=(0.0, -31.0),
+                radii=[16.0, 26.0],
+                step_distance_mm=0.33
+            )
+        elif mode == "raster":
+            return self.planner.generate_spine_raster_trajectory(
+                x_range=(-18.0, 18.0),
+                z_range=(-55.0, 55.0),
                 step_distance_mm=0.33,
                 num_sweep_lines=5
             )
         elif mode == "orbital":
             return self.planner.generate_orbital_trajectory(
+                center=(0.0, -31.0),
                 radii=[16.0, 26.0, 34.0],
                 step_distance_mm=0.33
             )
@@ -492,6 +559,62 @@ class UnifiedSurgicalBridgeServer:
                 )
                 self.traj_idx = 0
 
+        elif self.scan_mode in ["nbv", "nbv_l4", "active"]:
+            curr_p = self.env.current_pose_params
+            self.visited_positions.append((float(curr_p[0]), float(curr_p[1])))
+            best_action = None
+            best_score = -float("inf")
+            center_z = -31.0 if getattr(self.env, "is_l4_target", False) else 0.0
+
+            for dx_mm, dz_mm, dyaw_r, dpitch_r in self.candidate_deltas:
+                cand_x = np.clip(curr_p[0] + dx_mm, self.env.c1_bounds[0], self.env.c1_bounds[1])
+                cand_z = np.clip(curr_p[1] + dz_mm, self.env.c2_bounds[0], self.env.c2_bounds[1])
+                cand_yaw = curr_p[2] + dyaw_r
+                cand_pitch = curr_p[3] + dpitch_r
+
+                visitation_penalty = sum(
+                    np.exp(-0.5 * ((cand_x - vx)**2 + (cand_z - vz)**2) / 25.0)
+                    for vx, vz in self.visited_positions[-40:]
+                )
+                dist_from_origin = np.sqrt(cand_x**2 + (cand_z - center_z)**2)
+                cand_fn, cand_kappa, _ = self.env.compute_contact_force_and_coupling(cand_x, cand_z, cand_yaw, cand_pitch)
+
+                score = cand_kappa * 5.0 - 1.2 * visitation_penalty - 0.01 * dist_from_origin
+                if score > best_score:
+                    best_score = score
+                    best_action = np.array([
+                        dx_mm / self.env.action_scale_trans,
+                        dz_mm / self.env.action_scale_trans,
+                        dyaw_r / self.env.action_scale_yaw,
+                        dpitch_r / self.env.action_scale_pitch,
+                    ], dtype=np.float32)
+
+            self.obs, reward, term, trunc, info = self.env.step(best_action)
+            with self.physics_lock:
+                self.update_robot_ik_and_visuals()
+
+        elif self.scan_mode in ["diffusion", "cfm"]:
+            if len(self.action_queue) == 0:
+                pts = self.obs["reconstructed_points"]
+                pose = self.obs["probe_pose"]
+                with torch.no_grad():
+                    pts_t = torch.tensor(pts, dtype=torch.float32, device=self.device).unsqueeze(0)
+                    pose_t = torch.tensor(pose, dtype=torch.float32, device=self.device).unsqueeze(0)
+                    if self.scan_mode == "diffusion" and self.diffusion_policy is not None:
+                        chunk = self.diffusion_policy.sample_actions(pts_t, pose_t, num_steps=5).squeeze(0).cpu().numpy()
+                    elif self.scan_mode == "cfm" and self.cfm_policy is not None:
+                        feat = self.pointnet(pts_t)
+                        cond = torch.cat([feat, pose_t], dim=-1)
+                        chunk = self.cfm_policy.generate_action_chunk(cond, num_steps=5).squeeze(0).cpu().numpy()
+                    else:
+                        chunk = np.zeros((2, 4), dtype=np.float32)
+                self.action_queue.extend(list(chunk[:2]))
+
+            action = self.action_queue.pop(0)
+            self.obs, reward, term, trunc, info = self.env.step(action)
+            with self.physics_lock:
+                self.update_robot_ik_and_visuals()
+
         # --- Network Publishing ---
 
         # A. Ultrasound Probe Transform in Slicer RAS
@@ -591,8 +714,8 @@ def main():
     parser.add_argument("--patient-dir", type=str, default="", help="Path to TotalSegmentator patient directory")
     parser.add_argument("--gui", action="store_true", help="Launch native PyBullet GUI")
     parser.add_argument("--fps", type=float, default=30.0, help="Publishing rate to Slicer (Hz)")
-    parser.add_argument("--mode", type=str, choices=["orbital", "raster", "interactive"], default="orbital",
-                        help="Scan execution mode: orbital, raster, or interactive")
+    parser.add_argument("--mode", type=str, choices=["orbital_l4", "raster_l4", "nbv", "diffusion", "cfm", "orbital", "raster", "interactive"], default="orbital_l4",
+                        help="Scan execution mode: orbital_l4, raster_l4, nbv, diffusion, cfm, orbital, raster, or interactive")
     args = parser.parse_args()
 
     server = UnifiedSurgicalBridgeServer(

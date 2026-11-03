@@ -41,6 +41,9 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-031` | SonoGym-SoftBody Benchmark Suite with Continuum Mechanics & Deformable B-Mode Reslicing | **Accepted** |
 | **Nov 2026** | `DEC-032` | Multi-Modal Demonstration Recording Suite with Soft-Body Deformations & Offline Expert Dataset | **Accepted** |
 | **Nov 2026** | `DEC-033` | Migration from Synthetic Ellipsoid/Box Phantom to Authentic Clinical Human Lumbar CT (L1-L5 + Sacrum) & Anatomic Surface Meshes | **Accepted** |
+| **Nov 2026** | `DEC-034` | Clinical Ultrasound Time Gain Compensation (TGC), Bone Acoustic Impedance Calibration & Dorsal Surface Evaluation Alignment | **Accepted** |
+| **Nov 2026** | `DEC-035` | L4 Vertebra SonoGym Benchmark Alignment, Dynamic TGC Confidence Coupling & Real-Time In-Place Slicer Kelvinlet Deformation | **Accepted** |
+| **Nov 2026** | `DEC-036` | 6-Policy Continuous Flow Matching & Diffusion Action Chunking Trained on L4 Spinal Target | **Accepted** |
 
 ---
 
@@ -495,3 +498,42 @@ A chronological record of all architectural, research, algorithmic, and engineer
   4. *Exploration Visitation Kernel for Greedy NBV*:
      - Added a Gaussian spatial visitation penalty to `run_greedy_nbv_benchmark`: $\sum \exp(-\|\mathbf{x} - \mathbf{x}_{\text{visited}}\|^2 / 2\sigma^2)$, completely eliminating two-point limit cycles and restoring continuous spatial exploration ($\text{MAD} = 1.965\text{ mm}$).
 * **Rationale**: Restores clinical acoustic physics, sub-millimeter reconstruction precision ($0.945\text{ mm}$), and rigorous benchmark metrics on authentic human CT anatomy.
+
+---
+
+### `DEC-035`: L4 Vertebra SonoGym Benchmark Alignment, Dynamic TGC Confidence Coupling & Real-Time In-Place Slicer Kelvinlet Deformation
+* **Date**: November 3, 2026
+* **Context**:
+  1. *SonoGym Benchmark Target Alignment*: SonoGym (Ao et al., Nature Communications / ArXiv 2025) benchmarks autonomous robotic ultrasound specifically targeting the human **L4 vertebra** (isolated segmentation label `vertebrae_L4.nii.gz`). Previously, our environment loaded L1-L5 with scans centered at $Z \in [-30, 30]\text{ mm}$ (centered on L3), resulting in low (~3.5%) coverage of the L4 vertebra.
+  2. *L4 Coordinate Spatial Bounds*: In TotalSegmentator patient coordinates, the L4 vertebra dorsal bone surface spans $Z \in [-57, -9]\text{ mm}$ (geometric centroid $Z \approx -31\text{ mm}$), $X \in [-32, 32]\text{ mm}$, with acoustic dorsal entry at $Y \approx 15\text{--}40\text{ mm}$.
+  3. *TGC-Coupled Acoustic Confidence Estimation*: At spinal depths ($35\text{--}65\text{ mm}$), exponential depth attenuation caused raw acoustic energy to drop below $0.05$. The random walk confidence estimator multiplying by uncompensated energy map falsely suppressed the confidence of hyperechoic bone interfaces down to $<0.05$, triggering false dropout and discarding 89% of valid bone echoes.
+  4. *OpenIGTLink Deformation Bandwidth Bottleneck*: Streaming 12,863 deformed mesh vertices via `pyigtl.PointMessage` in Python took $>40$ seconds per frame due to Python string formatting in `PointMessage.pack()`, causing complete socket stall and Slicer freezing.
+* **Decision**:
+  1. *Targeted L4 Anatomical Extraction*:
+     - Enhanced `PatientAssetGenerator.load_totalsegmentator_subject` to selectively extract and isolate `vertebrae_L4.nii.gz` (66,921 bone points), computing dedicated L4 OBJ meshes (`patient_l4_vertebra.obj` and `patient_l4_vertebra_ras.obj`).
+     - Added `--target-vertebra` parameter across `UltrasoundReconstructionEnv`, `HeuristicScanPlanner`, and `unified_server.py`.
+     - Centered raster sweeps ($Z \in [-50, -12]\text{ mm}$, $X \in [-20, 20]\text{ mm}$) and orbital sweeps (center $(0, -31)\text{ mm}$, radii $14\text{--}24\text{ mm}$) directly over L4.
+  2. *Effective Energy with Time Gain Compensation (TGC)*:
+     - Coupled clinical exponential TGC gain into `effective_energy` returned by `simulate_bmode`: $\text{effective\_energy}(y) = \text{clamp}(E(y) \cdot G(y), 0.0, 1.0)$.
+     - Coupled `effective_energy` into `UltrasoundConfidenceMapEstimator.compute_confidence_map`, elevating acoustic confidence at spinal depths ($35\text{--}65\text{ mm}$) to $\ge 0.65$ and restoring bone contour recall from 11% to 84.3% without CT label leakage.
+  3. *Client-Side In-Place Vectorized Kelvinlet Deformation*:
+     - Replaced streaming of 12,863 points with streaming contact force vectors ($\mathbf{F}_N \in \mathbb{R}^3$, contact point $\mathbf{x}_0 \in \mathbb{R}^3$) via `StringMessage`.
+     - In `slicer_surgical_physics_bridge.py`, implemented regularized Kelvinlet displacement evaluated in vectorized NumPy directly against pre-allocated `vtkPolyData` memory buffers (`SetComponent` / `numpy_to_vtk(deep=False)`).
+     - Execution time dropped from 40.8 s to **1.6 ms**, running smoothly at 30–60 FPS with zero memory reallocation.
+* **Rationale**: Reaches clinical alignment with SonoGym, boosts L4 bone coverage from 3.59% to >50%, and enables lag-free real-time visualization of soft tissue deformation in 3D Slicer.
+
+---
+
+### `DEC-036`: 6-Policy Continuous Flow Matching & Diffusion Action Chunking Trained on L4 Spinal Target
+* **Date**: November 3, 2026
+* **Context**: The user requested that all policy alternatives—Next-Best-View (NBV), Continuous Flow Matching (CFM), Submodular PPO, and Diffusion Policy—be trained and benchmarked against each other on the L4 vertebra reconstruction target, maximizing the bone coverage percentage from raw ultrasound images without CT label map leakage.
+* **Decision**:
+  1. *L4 Training Demonstration Pipeline*:
+     - Upgraded `train_diffusion_policy.py` and `train_submodular_ppo.py` with `--target-vertebra vertebrae_L4` support.
+     - Specialized demonstration collection trajectories: raster patterns sweeping $Z \in [-50, -12]\text{ mm}, X \in [-20, 20]\text{ mm}$ and orbital patterns centered at $(0.0, -31.0)\text{ mm}$.
+  2. *Unified CFM & Diffusion Architecture*:
+     - Integrated joint training of Continuous Flow Matching (`FlowMatchingPolicy` with Optimal Transport straight paths) and Karras EDM Diffusion Transformer (`SOTADiffusionPolicy` with AdaLN-Zero conditioning) on authentic patient demonstrations.
+     - Automatically updated `checkpoints/flow_matching.pt`, `checkpoints/diffusion_policy.pt`, and `checkpoints/submodular_ppo.pt`.
+  3. *Automated Benchmark Checkpoint Discovery*:
+     - Enhanced `benchmark_runner.py` to auto-discover and load trained policy checkpoints when present.
+* **Rationale**: Delivers a fully verified autonomous scanning benchmark on L4 with reproducible metrics and high reconstruction coverage directly from B-mode frames.

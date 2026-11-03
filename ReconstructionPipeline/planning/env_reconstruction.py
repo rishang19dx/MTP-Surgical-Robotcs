@@ -36,6 +36,7 @@ class UltrasoundReconstructionEnv:
         skin_curvature: float = 0.002,
         scan_approach: str = "dorsal",
         reconstruction_source: str = "bmode",
+        target_vertebra: Optional[str] = None,
         pybullet_backend: Optional[Any] = None,
         device: Optional[torch.device] = None,
     ):
@@ -51,6 +52,7 @@ class UltrasoundReconstructionEnv:
         self.skin_curvature = skin_curvature
         self.scan_approach = scan_approach.lower()
         self.reconstruction_source = reconstruction_source.lower()
+        self.target_vertebra = target_vertebra
         self.pybullet_backend = pybullet_backend
 
         # 1. Load or generate patient anatomy
@@ -58,10 +60,22 @@ class UltrasoundReconstructionEnv:
             patient_data = PatientAssetGenerator.generate_lumbar_phantom()
         elif isinstance(patient_data, str):
             if os.path.isdir(patient_data):
-                patient_data = PatientAssetGenerator.load_totalsegmentator_subject(patient_data)
+                if target_vertebra:
+                    patient_data = PatientAssetGenerator.load_totalsegmentator_subject(
+                        patient_data, target_vertebrae=[target_vertebra], crop_to_spine=False
+                    )
+                else:
+                    patient_data = PatientAssetGenerator.load_totalsegmentator_subject(patient_data)
             else:
                 raise FileNotFoundError(f"Patient directory not found: {patient_data}")
         self.patient_data = patient_data
+
+        # Check if targeting L4 specifically
+        loaded_structs = self.patient_data.get("loaded_structures", [])
+        self.is_l4_target = (
+            (target_vertebra in ["vertebrae_L4", "L4", "l4"]) or
+            (loaded_structs == ["vertebrae_L4"])
+        )
 
         self.ct_vol = patient_data["ct_volume"]
         self.label_vol = patient_data["label_volume"]
@@ -74,7 +88,10 @@ class UltrasoundReconstructionEnv:
         pts = self.gt_bone_points
         if len(pts) > 5000:
             if self.scan_approach == "dorsal":
-                roi_mask = (np.abs(pts[:, 0]) <= 25.0) & (np.abs(pts[:, 2]) <= 35.0) & (pts[:, 1] >= 15.0)
+                if self.is_l4_target:
+                    roi_mask = (np.abs(pts[:, 0]) <= 32.0) & (pts[:, 2] >= -56.0) & (pts[:, 2] <= -10.0) & (pts[:, 1] >= 10.0)
+                else:
+                    roi_mask = (np.abs(pts[:, 0]) <= 25.0) & (np.abs(pts[:, 2]) <= 35.0) & (pts[:, 1] >= 15.0)
                 roi_pts = pts[roi_mask] if np.any(roi_mask) else pts[:5000]
                 # Extract uppermost dorsal bone surface cortex visible along the acoustic beam (+Y to -Y)
                 grid = {}
@@ -114,6 +131,10 @@ class UltrasoundReconstructionEnv:
             # Lateral flank scan: c1 is anterior-posterior Y, c2 is cranial-caudal Z
             self.c1_bounds = (-30.0, 30.0)
             self.c2_bounds = (-30.0, 30.0)
+        elif self.is_l4_target:
+            # Focused dorsal scan over L4 vertebra (-55 to -10 mm in Z)
+            self.c1_bounds = (-32.0, 32.0)
+            self.c2_bounds = (-55.0, -10.0)
         else:
             # Dorsal scan: c1 is lateral X, c2 is cranial-caudal Z
             self.c1_bounds = (-45.0, 45.0)
@@ -273,8 +294,12 @@ class UltrasoundReconstructionEnv:
             self.total_rotation = 0.0
 
         # Randomize initial probe pose on patient skin
-        init_c1 = np.random.uniform(-10.0, 10.0)
-        init_c2 = np.random.uniform(-10.0, 10.0)
+        if getattr(self, "is_l4_target", False):
+            init_c1 = np.random.uniform(-6.0, 6.0)
+            init_c2 = np.random.uniform(-36.0, -26.0)
+        else:
+            init_c1 = np.random.uniform(-10.0, 10.0)
+            init_c2 = np.random.uniform(-10.0, 10.0)
         init_yaw = np.random.uniform(-np.radians(5.0), np.radians(5.0))
         init_pitch = np.random.uniform(-np.radians(5.0), np.radians(5.0))
         self.current_pose_params = np.array([init_c1, init_c2, init_yaw, init_pitch], dtype=np.float32)
@@ -341,7 +366,8 @@ class UltrasoundReconstructionEnv:
             bmode_img = bmode_raw
 
         # 4. Compute Ultrasound Confidence Map
-        conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=energy_map) * kappa
+        effective_energy = us_res.get("effective_energy", energy_map)
+        conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=effective_energy) * kappa
 
         # 5. Extract bone contour and update 3D reconstruction directly from US image
         if kappa >= 0.20:
@@ -418,7 +444,8 @@ class UltrasoundReconstructionEnv:
         )
         us_res = self.us_sim.simulate_bmode(ct_slice, label_slice=label_slice)
         bmode_img = us_res["bmode"] * self.current_coupling
-        conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=us_res["energy"]) * self.current_coupling
+        effective_energy = us_res.get("effective_energy", us_res["energy"])
+        conf_map = self.conf_estimator.compute_confidence_map(bmode_img, energy_map=effective_energy) * self.current_coupling
 
         if self.current_coupling >= 0.20:
             if self.reconstruction_source == "bmode":

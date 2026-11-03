@@ -443,6 +443,7 @@ def parse_args():
     parser.add_argument("--vf-coef", type=float, default=0.5, help="Value function loss weight")
     parser.add_argument("--save-path", type=str, default="checkpoints/submodular_ppo.pt", help="Checkpoint save path")
     parser.add_argument("--patient-dir", type=str, default="", help="Path to TotalSegmentator subject directory (ct.nii.gz & segmentations/)")
+    parser.add_argument("--target-vertebra", type=str, default="vertebrae_L4", help="Target anatomical structure (e.g. vertebrae_L4)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device")
     parser.add_argument("--dry-run", action="store_true", help="Run 1 rollout and 1 update for smoke test")
     return parser.parse_args()
@@ -453,7 +454,11 @@ if __name__ == "__main__":
     device = torch.device(args.device)
 
     patient_arg = args.patient_dir if args.patient_dir else None
-    env = UltrasoundReconstructionEnv(patient_data=patient_arg, device=device)
+    env = UltrasoundReconstructionEnv(
+        patient_data=patient_arg,
+        target_vertebra=args.target_vertebra,
+        device=device,
+    )
     ac = SubmodularActorCritic(action_dim=4, latent_dim=192).to(device)
 
     trainer = SubmodularPPOTrainer(

@@ -175,6 +175,7 @@ class ModelBasedUltrasoundSimulator:
                 "reflection": r_convolved.squeeze(0),
                 "backscatter": b_convolved.squeeze(0),
                 "energy": energy.squeeze(0),
+                "effective_energy": effective_energy.squeeze(0),
                 "bone_mask": bone_mask.squeeze(0),
             }
 
@@ -183,5 +184,6 @@ class ModelBasedUltrasoundSimulator:
             "reflection": r_convolved,
             "backscatter": b_convolved,
             "energy": energy,
+            "effective_energy": effective_energy,
             "bone_mask": bone_mask,
         }

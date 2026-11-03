@@ -182,24 +182,24 @@ flowchart TD
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -v
 ```
 
-### 2. Run SonoGym 6-Policy & Soft-Body Benchmark (Clinical Patient CT)
+### 2. Run SonoGym 6-Policy & Soft-Body Benchmark (Clinical Patient CT targeting L4)
 ```bash
-./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --num-trials 1 --soft-body
+./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --target-vertebra vertebrae_L4 --num-trials 3 --soft-body
 ```
 
-### 3. Record Multi-Modal Soft-Body Demonstrations & Offline Dataset
+### 3. Train Submodular PPO Active Policy on L4 Anatomy
 ```bash
-./.venv/bin/python ReconstructionPipeline/scripts/record_soft_body_demonstrations.py --all
+./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --patient-dir data/sample_totalsegmentator_patient --target-vertebra vertebrae_L4 --total-timesteps 8000
 ```
 
-### 4. Train 3D Diffusion Policy from Recorded Expert Demonstrations
+### 4. Train 3D Diffusion Policy & Continuous Flow Matching (CFM) on L4 Anatomy
 ```bash
-./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --demo-dataset demonstrations/soft_body_expert_demonstrations.npz --epochs 40
+./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --patient-dir data/sample_totalsegmentator_patient --target-vertebra vertebrae_L4 --num-demo-episodes 16 --epochs 30
 ```
 
-### 5. Launch Unified Server (Streaming to 3D Slicer)
+### 5. Launch Unified Server (Streaming to 3D Slicer with Deformable Mesh & L4 Scan)
 ```bash
-./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --mode orbital --fps 30.0
+./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --scan-mode raster_l4 --fps 30.0
 ```
 
 ### 4. Train 3D Diffusion Policy

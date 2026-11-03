@@ -17,6 +17,8 @@ import torch.optim as optim
 from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
 from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner
 from ReconstructionPipeline.planning.diffusion_policy import SOTADiffusionPolicy
+from ReconstructionPipeline.planning.flow_matching_policy import FlowMatchingPolicy
+from ReconstructionPipeline.planning.pointnet_encoder import PointNetEncoder
 
 
 class UltrasoundDemonstrationDataset(Dataset):
@@ -123,14 +125,27 @@ def collect_expert_demonstrations(
         ep_actions = []
 
         # Alternate between raster and orbital trajectories
+        is_l4 = getattr(env, "is_l4_target", False)
         if ep % 2 == 0:
             lines = np.random.choice([5, 6, 7])
             pts = np.random.choice([10, 12, 14])
-            traj = planner.generate_linear_raster_trajectory(num_sweep_lines=lines, points_per_line=pts)
+            if is_l4:
+                traj = planner.generate_linear_raster_trajectory(
+                    x_range=(-20.0, 20.0), z_range=(-50.0, -12.0), num_sweep_lines=lines, points_per_line=pts
+                )
+            else:
+                traj = planner.generate_linear_raster_trajectory(num_sweep_lines=lines, points_per_line=pts)
         else:
-            r1 = np.random.uniform(15.0, 20.0)
-            r2 = np.random.uniform(25.0, 32.0)
-            traj = planner.generate_orbital_trajectory(radii=[r1, r2], points_per_orbit=24)
+            if is_l4:
+                r1 = np.random.uniform(12.0, 16.0)
+                r2 = np.random.uniform(20.0, 26.0)
+                traj = planner.generate_orbital_trajectory(
+                    center=(0.0, -31.0), radii=[r1, r2], points_per_orbit=28
+                )
+            else:
+                r1 = np.random.uniform(15.0, 20.0)
+                r2 = np.random.uniform(25.0, 32.0)
+                traj = planner.generate_orbital_trajectory(radii=[r1, r2], points_per_orbit=24)
 
         for target_p in traj:
             ep_obs.append(obs)
@@ -157,8 +172,65 @@ def collect_expert_demonstrations(
     return all_obs, all_actions
 
 
+def train_flow_matching_policy(
+    dataset: UltrasoundDemonstrationDataset,
+    epochs: int = 35,
+    batch_size: int = 32,
+    lr: float = 3e-4,
+    horizon: int = 8,
+    save_path: str = "checkpoints/flow_matching.pt",
+    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+):
+    print(f"[*] Starting Continuous Flow Matching (CFM) Training for {epochs} epochs ({len(dataset)} samples)...")
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    pointnet = PointNetEncoder(latent_dim=128).to(device)
+    policy = FlowMatchingPolicy(action_dim=4, chunk_horizon=horizon, condition_dim=132, device=device).to(device)
+    optimizer = optim.AdamW(list(pointnet.parameters()) + list(policy.parameters()), lr=lr, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+
+    best_loss = float("inf")
+    pointnet.train()
+    policy.train()
+
+    for epoch in range(1, epochs + 1):
+        epoch_losses = []
+        for batch in dataloader:
+            pts = batch["points"].to(device)
+            pose = batch["pose"].to(device)
+            chunks = batch["chunk"].to(device)
+
+            feat = pointnet(pts)
+            cond = torch.cat([feat, pose], dim=-1)
+
+            optimizer.zero_grad()
+            loss = policy.compute_loss(expert_actions=chunks, condition=cond)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(list(pointnet.parameters()) + list(policy.parameters()), max_norm=1.0)
+            optimizer.step()
+            epoch_losses.append(loss.item())
+
+        scheduler.step()
+        mean_loss = float(np.mean(epoch_losses))
+        if mean_loss < best_loss:
+            best_loss = mean_loss
+            os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+            torch.save({
+                "epoch": epoch,
+                "pointnet_state_dict": pointnet.state_dict(),
+                "policy_state_dict": policy.state_dict(),
+                "loss": best_loss,
+                "horizon": horizon,
+            }, save_path)
+
+        if epoch % 10 == 0 or epoch == epochs:
+            print(f"CFM Epoch {epoch:02d}/{epochs:02d} | Loss: {mean_loss:.5f} (Best: {best_loss:.5f})")
+
+    print(f"[✓] CFM training complete. Best checkpoint saved to: {save_path}")
+
+
 def train_diffusion_policy(
     patient_dir: Optional[str] = None,
+    target_vertebra: Optional[str] = "vertebrae_L4",
     demo_dataset: Optional[str] = None,
     num_demo_episodes: int = 25,
     epochs: int = 40,
@@ -166,6 +238,8 @@ def train_diffusion_policy(
     lr: float = 2e-4,
     horizon: int = 8,
     save_path: str = "checkpoints/diffusion_policy.pt",
+    train_cfm: bool = True,
+    cfm_save_path: str = "checkpoints/flow_matching.pt",
     device_str: str = "cuda" if torch.cuda.is_available() else "cpu",
 ):
     device = torch.device(device_str)
@@ -176,10 +250,26 @@ def train_diffusion_policy(
         print(f"[*] Loading pre-recorded expert demonstration dataset from {demo_dataset}...")
         dataset = UltrasoundDemonstrationDataset(npz_path=demo_dataset, horizon=horizon)
     else:
-        print(f"[*] Initializing Training Environment (Patient: {patient_dir or 'Synthetic Anatomy'}, Device: {device})...")
-        env = UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=100, device=device)
+        print(f"[*] Initializing Training Environment (Patient: {patient_dir or 'Synthetic Anatomy'}, Target: {target_vertebra}, Device: {device})...")
+        env = UltrasoundReconstructionEnv(
+            patient_data=patient_dir,
+            target_vertebra=target_vertebra,
+            max_steps=100,
+            device=device,
+        )
         obs_trajs, act_trajs = collect_expert_demonstrations(env, num_episodes=num_demo_episodes, horizon=horizon)
         dataset = UltrasoundDemonstrationDataset(observations=obs_trajs, action_trajectories=act_trajs, horizon=horizon)
+
+    if train_cfm:
+        train_flow_matching_policy(
+            dataset=dataset,
+            epochs=min(epochs, 35),
+            batch_size=batch_size,
+            lr=3e-4,
+            horizon=horizon,
+            save_path=cfm_save_path,
+            device=device,
+        )
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
@@ -239,7 +329,12 @@ def train_diffusion_policy(
     # 4. Quick Verification Rollout
     print("[*] Running verification test rollout with trained policy...")
     policy.eval()
-    test_env = env if 'env' in locals() and env is not None else UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=40, device=device)
+    test_env = env if 'env' in locals() and env is not None else UltrasoundReconstructionEnv(
+        patient_data=patient_dir,
+        target_vertebra=target_vertebra,
+        max_steps=40,
+        device=device
+    )
     obs = test_env.reset()
     for s in range(30):
         pts_t = torch.tensor(obs["reconstructed_points"], dtype=torch.float32, device=device)
@@ -261,6 +356,7 @@ def train_diffusion_policy(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SOTA 3D Diffusion Policy for Autonomous Ultrasound")
     parser.add_argument("--patient-dir", type=str, default=None, help="Path to clinical TotalSegmentator patient directory")
+    parser.add_argument("--target-vertebra", type=str, default="vertebrae_L4", help="Target anatomical structure (e.g. vertebrae_L4)")
     parser.add_argument("--demo-dataset", type=str, default=None, help="Path to pre-recorded soft-body expert demonstrations .npz dataset")
     parser.add_argument("--num-demo-episodes", type=int, default=25, help="Number of demonstration episodes to collect")
     parser.add_argument("--epochs", type=int, default=40, help="Training epochs")
@@ -268,11 +364,14 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
     parser.add_argument("--horizon", type=int, default=8, help="Action chunk prediction horizon")
     parser.add_argument("--save-path", type=str, default="checkpoints/diffusion_policy.pt", help="Checkpoint save path")
+    parser.add_argument("--cfm-save-path", type=str, default="checkpoints/flow_matching.pt", help="CFM checkpoint save path")
+    parser.add_argument("--no-cfm", action="store_true", help="Disable training CFM alongside Diffusion Policy")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Compute device")
     args = parser.parse_args()
 
     train_diffusion_policy(
         patient_dir=args.patient_dir,
+        target_vertebra=args.target_vertebra,
         demo_dataset=args.demo_dataset,
         num_demo_episodes=args.num_demo_episodes,
         epochs=args.epochs,
@@ -280,5 +379,7 @@ if __name__ == "__main__":
         lr=args.lr,
         horizon=args.horizon,
         save_path=args.save_path,
+        train_cfm=not args.no_cfm,
+        cfm_save_path=args.cfm_save_path,
         device_str=args.device,
     )

@@ -56,6 +56,11 @@ class SlicerSurgicalPhysicsBridge:
         self.bone_model_node = None
         self.bone_points = None
         self.bone_polydata = None
+        self.torso_model_node = None
+        self.torso_polydata = None
+        self.base_torso_verts = None
+        self.is_tissue_deformed = False
+        self.l4_model_node = None
 
         self._setup_layout_and_views()
         self._setup_mrml_nodes()
@@ -270,7 +275,7 @@ class SlicerSurgicalPhysicsBridge:
         mesh_ras_path = os.path.join(patient_dir, "meshes", "patient_lumbar_spine_ras.obj")
         torso_ras_path = os.path.join(patient_dir, "meshes", "patient_torso_skin_ras.obj")
 
-        # Optional Patient Torso Skin Mesh (Translucent Flesh)
+        # Optional Patient Torso Skin Mesh (Translucent Flesh with Real-Time Soft Body Deformation)
         if os.path.exists(torso_ras_path) and not scene.GetFirstNodeByName("PatientTorso"):
             try:
                 torso_model = slicer.util.loadModel(torso_ras_path)
@@ -279,11 +284,32 @@ class SlicerSurgicalPhysicsBridge:
                     tdnode = torso_model.GetDisplayNode()
                     if tdnode:
                         tdnode.SetColor(0.86, 0.68, 0.58)  # Flesh tint
-                        tdnode.SetOpacity(0.18)  # Subtle translucent envelope
+                        tdnode.SetOpacity(0.24)  # Translucent envelope
                         tdnode.SetVisibility(True)
-                    print("[+] Successfully loaded PatientTorso anatomical envelope in 3D Scene")
+                    self.torso_model_node = torso_model
+                    self.torso_polydata = torso_model.GetPolyData()
+                    if self.torso_polydata and self.torso_polydata.GetPoints():
+                        self.base_torso_verts = vtk_np.vtk_to_numpy(self.torso_polydata.GetPoints().GetData()).copy()
+                    print("[+] Successfully loaded PatientTorso anatomical envelope (Soft Body Deformable) in 3D Scene")
             except Exception as e:
                 print(f"[!] Warning: Could not load torso mesh: {e}")
+
+        # Dedicated Anatomical L4 Vertebra Reference Model (SonoGym Target)
+        l4_ras_path = os.path.join(patient_dir, "meshes", "patient_l4_vertebra_ras.obj")
+        if os.path.exists(l4_ras_path) and not scene.GetFirstNodeByName("GroundTruthL4"):
+            try:
+                l4_model = slicer.util.loadModel(l4_ras_path)
+                if l4_model:
+                    l4_model.SetName("GroundTruthL4")
+                    l4_dnode = l4_model.GetDisplayNode()
+                    if l4_dnode:
+                        l4_dnode.SetColor(1.0, 0.88, 0.45)  # Highlighted warm gold/ivory for L4
+                        l4_dnode.SetOpacity(0.40)  # Revealing inner bone surfaces
+                        l4_dnode.SetVisibility(True)
+                    self.l4_model_node = l4_model
+                    print("[+] Successfully loaded GroundTruthL4 anatomical vertebra model in 3D Scene")
+            except Exception as e:
+                print(f"[!] Warning: Could not load L4 vertebra mesh: {e}")
 
         if os.path.exists(mesh_ras_path):
             try:
@@ -379,6 +405,8 @@ class SlicerSurgicalPhysicsBridge:
         latest_probe_msg = None
         latest_image_msg = None
         latest_points_msg = None
+        latest_forces_msg = None
+        latest_skin_msg = None
 
         for msg in messages:
             if isinstance(msg, pyigtl.TransformMessage) and msg.device_name == "UltrasoundProbe":
@@ -387,6 +415,12 @@ class SlicerSurgicalPhysicsBridge:
                 latest_image_msg = msg
             elif isinstance(msg, pyigtl.PointMessage) and msg.device_name == "ReconstructedBone":
                 latest_points_msg = msg
+            elif isinstance(msg, pyigtl.StringMessage) and msg.device_name == "ContactForces":
+                latest_forces_msg = msg
+            elif hasattr(pyigtl, "PolyDataMessage") and isinstance(msg, pyigtl.PolyDataMessage) and msg.device_name == "DeformedSkin":
+                latest_skin_msg = msg
+            elif isinstance(msg, pyigtl.PointMessage) and msg.device_name == "DeformedSkin":
+                latest_skin_msg = msg
 
         # A. Apply Latest Probe Transform
         if latest_probe_msg is not None:
@@ -454,6 +488,61 @@ class SlicerSurgicalPhysicsBridge:
                             threeDWidget.threeDView().resetCamera()
                             self.camera_initialized = True
                             print(f"[+] 3D Camera centered on reconstructed bone ({n_pts} points)")
+
+        # D. Apply Real-Time Soft-Tissue Skin Deformation under Probe Contact
+        if self.torso_polydata is not None and self.base_torso_verts is not None:
+            if latest_skin_msg is not None:
+                pts = getattr(latest_skin_msg, "positions", None) or getattr(latest_skin_msg, "points", None)
+                if pts is not None and len(pts) == len(self.base_torso_verts):
+                    pts_array = np.ascontiguousarray(pts, dtype=np.float32)
+                    self.torso_polydata.GetPoints().SetData(vtk_np.numpy_to_vtk(pts_array, deep=False))
+                    self.torso_polydata.GetPoints().Modified()
+                    self.torso_polydata.Modified()
+                    self.is_tissue_deformed = True
+            elif latest_forces_msg is not None:
+                try:
+                    import json
+                    c_data = json.loads(latest_forces_msg.string)
+                    if isinstance(c_data, list) and len(c_data) > 0 and len(c_data[0]) >= 7:
+                        x, y, z = float(c_data[0][0]), float(c_data[0][1]), float(c_data[0][2])
+                        nx, ny, nz = float(c_data[0][3]), float(c_data[0][4]), float(c_data[0][5])
+                        fn = float(c_data[0][6])
+
+                        if fn >= 0.5:
+                            cp = np.array([x, y, z], dtype=np.float32)
+                            f_vec = np.array([nx, ny, nz], dtype=np.float32) * fn
+                            diff = self.base_torso_verts - cp
+                            r_sq = np.sum(diff**2, axis=-1)
+                            roi = r_sq < (65.0**2)
+                            if np.any(roi):
+                                eps = 14.0
+                                mu = 4.5e-3 # N/mm^2 (compliant soft tissue)
+                                nu = 0.46
+                                const_a = (3.0 - 4.0 * nu) / (4.0 * (1.0 - nu))
+                                const_b = 1.0 / (4.0 * (1.0 - nu))
+                                prefactor = 1.0 / (4.0 * np.pi * mu)
+                                r_roi = diff[roi]
+                                r_eps = np.sqrt(r_sq[roi] + eps**2)
+                                r_dot_f = np.sum(r_roi * f_vec, axis=-1, keepdims=True)
+                                disp = prefactor * ((const_a / r_eps[:, None]) * f_vec + (const_b / (r_eps[:, None]**3)) * r_dot_f * r_roi)
+                                # Smooth tapering at outer boundary
+                                dists = np.sqrt(r_sq[roi])
+                                taper = np.clip(1.0 - (dists / 65.0)**2, 0.0, 1.0)[:, None]
+                                disp = disp * taper
+
+                                deformed = self.base_torso_verts.copy()
+                                deformed[roi] += disp
+                                self.torso_polydata.GetPoints().SetData(vtk_np.numpy_to_vtk(deformed, deep=False))
+                                self.torso_polydata.GetPoints().Modified()
+                                self.torso_polydata.Modified()
+                                self.is_tissue_deformed = True
+                        elif self.is_tissue_deformed:
+                            self.torso_polydata.GetPoints().SetData(vtk_np.numpy_to_vtk(self.base_torso_verts, deep=False))
+                            self.torso_polydata.GetPoints().Modified()
+                            self.torso_polydata.Modified()
+                            self.is_tissue_deformed = False
+                except Exception:
+                    pass
 
     def disconnect(self):
         self.timer.stop()

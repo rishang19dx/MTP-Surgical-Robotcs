@@ -50,3 +50,6 @@ checkpoints/*.pth
 # Temporary outputs
 *.log
 slides_preview/
+
+# Local agent scratch (may contain credentials)
+.agents/

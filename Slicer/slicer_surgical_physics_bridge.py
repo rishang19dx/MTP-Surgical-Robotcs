@@ -67,6 +67,13 @@ from surgical_physics_bridge.src.obj_io import read_obj  # noqa: E402
 PATIENT_DIR = os.path.join(PROJECT_ROOT, "data", "sample_totalsegmentator_patient")
 LAYOUT_ID = 501
 
+# B-mode frame geometry, copied from ReconstructionPipeline/planning/env_reconstruction.py
+# (IMAGE_SIZE = (200, 150) px, PHYSICAL_SIZE_MM = (75, 50) mm) and the linspace pixel grid in
+# ReconstructionPipeline/simulation/slice_extractor.py. Not imported: that module pulls in torch.
+US_IMAGE_HW = (200, 150)
+US_DEPTH_MM, US_WIDTH_MM = 75.0, 50.0
+US_SPACING_MM = (US_WIDTH_MM / (US_IMAGE_HW[1] - 1), US_DEPTH_MM / (US_IMAGE_HW[0] - 1))  # (lateral, axial)
+
 
 def _array_payload(msg, ncols):
     """Image-message array transport -> (rows, ncols) float32, or None if the shape does not fit."""
@@ -168,9 +175,9 @@ class SlicerSurgicalPhysicsBridge:
         self._model_node("UltrasoundProbeModel", self._probe_polydata(), (0.2, 0.5, 0.85), 0.85,
                          parent=self.probe_transform_node)
         beam = vtk.vtkPlaneSource()  # in probe frame: x lateral, +y = beam (depth)
-        beam.SetOrigin(-19.0, 0.0, 0.0)
-        beam.SetPoint1(19.0, 0.0, 0.0)
-        beam.SetPoint2(-19.0, 60.0, 0.0)
+        beam.SetOrigin(-US_WIDTH_MM / 2.0, 0.0, 0.0)
+        beam.SetPoint1(US_WIDTH_MM / 2.0, 0.0, 0.0)
+        beam.SetPoint2(-US_WIDTH_MM / 2.0, US_DEPTH_MM, 0.0)
         beam.Update()
         beam_node = self._model_node("UltrasoundBeamPlane", beam.GetOutput(), (0.0, 0.85, 1.0), 0.35,
                                      parent=self.probe_transform_node)
@@ -178,14 +185,19 @@ class SlicerSurgicalPhysicsBridge:
 
         # 2D B-mode image, shown face-on in the Red slice view (not in patient space).
         self.us_volume_node = self._get_or_add("vtkMRMLScalarVolumeNode", "US_Image")
-        slicer.util.updateVolumeFromArray(self.us_volume_node, np.zeros((1, 160, 100), dtype=np.uint8))
-        self.us_volume_node.SetSpacing(0.38, 0.375, 1.0)
-        self.us_volume_node.SetOrigin(-19.0, -30.0, 0.0)
+        slicer.util.updateVolumeFromArray(self.us_volume_node, np.zeros((1, *US_IMAGE_HW), dtype=np.uint8))
+        self.us_volume_node.SetSpacing(US_SPACING_MM[0], US_SPACING_MM[1], 1.0)
+        self.us_volume_node.SetOrigin(-US_WIDTH_MM / 2.0, -US_DEPTH_MM, 0.0)
+        # updateVolumeFromArray does not create a display node. If we leave it to
+        # setSliceViewerLayers, the default node has auto window/level, computed from this
+        # all-zero placeholder: W/L = 0/0, which thresholds every live frame to binary noise.
+        # B-mode is already display-scaled uint8 (0..255), so pin a fixed linear grey map.
+        if not self.us_volume_node.GetDisplayNode():
+            self.us_volume_node.CreateDefaultDisplayNodes()
         dnode = self.us_volume_node.GetDisplayNode()
-        if dnode:
-            dnode.SetAutoWindowLevel(False)
-            dnode.SetWindow(255.0)
-            dnode.SetLevel(127.5)
+        dnode.SetAndObserveColorNodeID("vtkMRMLColorTableNodeGrey")
+        dnode.SetAutoWindowLevel(False)
+        dnode.SetWindowLevel(255.0, 127.5)
         slicer.util.setSliceViewerLayers(background=self.us_volume_node, fit=True)
 
         # Reconstructed bone point cloud (P).

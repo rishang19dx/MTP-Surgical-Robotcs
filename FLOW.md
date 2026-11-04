@@ -185,9 +185,14 @@ flowchart LR
 4. `DeformedSkin` handling: one float32 array is bound to the skin-patch `vtkPoints` once
    (`numpy_to_vtk(deep=False)`). Each frame does `arr[:] = base; arr[idx] += disp` followed by `Modified()`. No
    per-frame VTK allocation takes place.
-5. `US_Image` is shown in the Red view, and `Telemetry` is logged every 5 s.
+5. `US_Image` is shown in the Red view, and `Telemetry` is logged every 5 s. The image node has an explicit
+   display node with a fixed grey W/L of 255/127.5 (the frames are already scaled to 0..255 uint8). Its spacing
+   is 50/149 mm lateral by 75/199 mm axial, matching `IMAGE_SIZE`/`PHYSICAL_SIZE_MM` in `env_reconstruction.py`.
+   Auto W/L must stay off: it would be computed from the all-zero placeholder (W/L = 0/0) and threshold every
+   frame to binary noise.
 
-This flow is not covered by automated tests inside Slicer.
+This flow is not covered by automated tests inside Slicer. It was checked by hand on 2026-11-05 in
+Slicer 5.12.4 (recipe 10).
 
 ---
 
@@ -238,6 +243,12 @@ tests them, including the check that the P→PB mapping matches the exported PyB
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui
 Slicer --python-script Slicer/slicer_surgical_physics_bridge.py
 #    or: bash scripts/launch_dual_pybullet_slicer.sh --mode raster_l4
+
+# 10. Screenshots on Wayland (external capture tools cannot see these windows)
+#     PyBullet: the GUI viewer process renders its own debug camera to PNG every N s (viewer process only).
+MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
+  ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui
+#     Slicer: in its Python console, slicer.app.layoutManager().sliceWidget("Red").sliceView().grab().save("red.png")
 
 # 9. Remote GPU host (must be inside */workspace/rishang/*)
 rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/

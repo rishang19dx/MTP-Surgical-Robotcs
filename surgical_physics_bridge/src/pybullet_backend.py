@@ -515,6 +515,16 @@ def exclude_dedicated_cpu(cpu: Optional[int]) -> None:
             pass
 
 
+def _save_viewer_snapshot(cid: int, out_dir: str, width: int = 1280, height: int = 800) -> None:
+    """Render the GUI client's current debug camera to ``out_dir/viewer_<unix ms>.png``."""
+    cam = p.getDebugVisualizerCamera(physicsClientId=cid)
+    _, _, rgba, _, _ = p.getCameraImage(width, height, viewMatrix=cam[2], projectionMatrix=cam[3],
+                                        renderer=p.ER_BULLET_HARDWARE_OPENGL, physicsClientId=cid)
+    rgb = np.asarray(rgba, dtype=np.uint8).reshape(height, width, 4)[:, :, :3]
+    from PIL import Image  # local import: only needed when snapshots are enabled
+    Image.fromarray(rgb).save(os.path.join(out_dir, f"viewer_{int(time.time() * 1e3)}.png"))
+
+
 def run_viewer(backend: PyBulletBackend, channels: PhysicsChannels, fps: float = 60.0,
                skin_hz: float = SKIN_VIEW_HZ, log_interval_s: float = 10.0) -> None:
     """Viewer loop (GUI client): mirror the physics state, draw overlays, rebuild the skin mesh."""
@@ -523,6 +533,13 @@ def run_viewer(backend: PyBulletBackend, channels: PhysicsChannels, fps: float =
     pending_skin = None
     skin_ms = []
     last_log = time.perf_counter()
+    # Opt-in debug snapshots (viewer process only, never the physics loop): on Wayland an
+    # external tool cannot capture the GUI window, so the GUI client renders its own view.
+    snapshot_dir = os.environ.get("MTP_VIEWER_SNAPSHOT_DIR")
+    snapshot_interval_s = float(os.environ.get("MTP_VIEWER_SNAPSHOT_S", "5"))
+    last_snapshot = 0.0
+    if snapshot_dir:
+        os.makedirs(snapshot_dir, exist_ok=True)
     while not channels.stop.is_set():
         t0 = time.perf_counter()
         target = None
@@ -549,6 +566,9 @@ def run_viewer(backend: PyBulletBackend, channels: PhysicsChannels, fps: float =
             skin_ms.append(1e3 * (time.perf_counter() - ts))
             pending_skin = None
             last_skin = t0
+        if snapshot_dir and t0 - last_snapshot >= snapshot_interval_s:
+            last_snapshot = t0
+            _save_viewer_snapshot(backend.cid, snapshot_dir)
         if skin_ms and t0 - last_log >= log_interval_s:
             last_log = t0
             print(f"[viewer] skin mesh rebuild: median {np.median(skin_ms):.2f} ms, max {np.max(skin_ms):.2f} ms "

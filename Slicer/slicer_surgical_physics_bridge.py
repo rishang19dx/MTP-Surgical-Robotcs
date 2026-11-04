@@ -1,33 +1,51 @@
 """
-3D Slicer Python Bridge for Surgical Physics & Autonomous Robotic Ultrasound.
-Connects directly to the PyBullet & Acoustic Simulation Server via OpenIGTLink (pyigtl),
-subscribing to live ultrasound images, probe transforms, and 3D reconstructed bone points.
+3D Slicer Python bridge for the Surgical Physics & Autonomous Robotic Ultrasound server.
 
-Compatible with Slicer 5.0+ and embedded Python (pyigtl).
+Run inside Slicer (5.0+):  Slicer --python-script Slicer/slicer_surgical_physics_bridge.py
+It connects to ``surgical_physics_bridge/src/unified_server.py`` with ``pyigtl`` and keeps
+reconnecting until the server is up.
 
-Features:
-- True Side-by-side clinical layout (Left: 2D Live B-mode ultrasound, Right: 3D Patient Scene).
-- In-place memory buffer mutation of vtkImageData and vtkPoints (zero memory leak, <0.2ms latency).
-- Physical 3D Ultrasound Transducer Model & Cyan Acoustic Beam Plane dynamically tracking robot end-effector.
-- Automatic 2D Red Slice Viewer background binding with calibrated 8-bit window/level.
-- Optional TotalSegmentator lumbar spine anatomical surface model in 3D viewer.
-- Automatic 3D camera auto-centering and focal point tracking.
-- Continuous auto-reconnection loop resilient to process start order and server restarts.
+Frames
+------
+All patient content (meshes, probe pose, reconstructed bone points, skin deformation) arrives and
+is stored in the simulation patient frame **P** (mm). P is an LPS frame (+X left, +Y posterior =
+toward the dorsal skin, +Z superior), *not* RAS, although ``ct.nii.gz`` and the ``*_ras.obj`` mesh
+files label it RAS (contract C7; see ``surgical_physics_bridge/src/coordinates.py``). Every patient
+node is parented under one ``vtkMRMLLinearTransformNode`` named ``PatientToRAS`` that holds
+``P_TO_RAS = diag(-1, -1, 1)`` (det +1). Nothing is flipped in the data itself. Meshes are read
+with the order-preserving ``obj_io.read_obj`` (not ``slicer.util.loadModel``, which would assume
+the OBJ is LPS and flip it a second time, and may reorder vertices).
+
+Messages consumed (device name / type / payload)
+------------------------------------------------
+``UltrasoundProbe``   TransformMessage  4x4 T_P<-probe, mm (indented probe face = image plane, +Y = beam).
+``US_Image``          ImageMessage      uint8 (H, W, 1) B-mode frame, row 0 = probe face. Shown in the Red view.
+``ReconstructedBone`` ImageMessage      float32 (1, N, 3) bone points in P (mm).
+``DeformedSkin``      ImageMessage      float32 (1, K, 4) rows ``[vertex_index, dx, dy, dz]``: displacement (mm, P)
+                                        of vertex ``vertex_index`` of ``meshes/patient_torso_skin_ras.obj`` (file
+                                        vertex order) from its undeformed position, computed by the server's tissue
+                                        model. Vertices not listed are undeformed. A single row with index -1 resets
+                                        the skin. Alternatively float32 (1, N, 3) = all N deformed vertex positions.
+``Telemetry``         StringMessage     JSON (force, indentation, coupling, physics-rate stats); logged periodically.
+
+Skin updates are in place: one persistent float32 array is bound to the torso ``vtkPoints`` once
+(``numpy_to_vtk(deep=False)``); each frame writes ``arr[:] = base; arr[idx] += disp`` and calls
+``Modified()``. No per-frame VTK arrays or copies are allocated.
 """
 
-import sys
+import json
 import os
-import glob
+import sys
 import time
+
 import numpy as np
 
 try:
     import slicer
-    from slicer.util import VTKObservationMixin
     import vtk
     import vtk.util.numpy_support as vtk_np
 except ImportError:
-    print("[ERROR] This script must be run within 3D Slicer Python environment.")
+    print("[ERROR] This script must be run within the 3D Slicer Python environment.")
     sys.exit(1)
 
 try:
@@ -36,526 +54,347 @@ except ImportError:
     slicer.util.pip_install("pyigtl")
     import pyigtl
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from surgical_physics_bridge.src.coordinates import P_TO_RAS  # noqa: E402
+from surgical_physics_bridge.src.obj_io import read_obj  # noqa: E402
+
+PATIENT_DIR = os.path.join(PROJECT_ROOT, "data", "sample_totalsegmentator_patient")
+LAYOUT_ID = 501
+
+
+def _array_payload(msg, ncols):
+    """Image-message array transport -> (rows, ncols) float32, or None if the shape does not fit."""
+    arr = np.asarray(msg.image, dtype=np.float32)
+    if arr.size == 0 or arr.size % ncols != 0:
+        return None
+    return arr.reshape(-1, ncols)
+
 
 class SlicerSurgicalPhysicsBridge:
     def __init__(self, host="127.0.0.1", port=18944, update_interval_ms=33):
         self.host = host
         self.port = port
-        self.update_interval_ms = update_interval_ms
         self.client = None
         self.is_connected = False
         self.last_connect_attempt = 0.0
         self.frames_received = 0
         self.camera_initialized = False
+        self.last_telemetry_log = 0.0
+        self._warned = set()
 
-        # MRML Nodes
+        self.patient_to_ras_node = None
         self.us_volume_node = None
         self.probe_transform_node = None
-        self.probe_model_node = None
-        self.beam_model_node = None
-        self.bone_model_node = None
         self.bone_points = None
         self.bone_polydata = None
-        self.torso_model_node = None
         self.torso_polydata = None
-        self.base_torso_verts = None
-        self.is_tissue_deformed = False
-        self.l4_model_node = None
+        self.skin_base = None      # (N, 3) float32 undeformed vertices (P)
+        self.skin_live = None      # (N, 3) float32 array bound to the torso vtkPoints (deep=False)
+        self.skin_deformed = False
 
-        self._setup_layout_and_views()
-        self._setup_mrml_nodes()
-        self._load_patient_spine_model()
+        self._setup_layout()
+        self._setup_nodes()
+        self._load_patient_models()
 
-        # Qt Timer for continuous non-blocking polling and auto-reconnection
         from qt import QTimer
         self.timer = QTimer()
         self.timer.timeout.connect(self.on_timer_tick)
-        self.timer.start(self.update_interval_ms)
-        print(f"[*] Slicer Surgical Physics Bridge initialized. Polling {self.host}:{self.port} at {1000//self.update_interval_ms} Hz...")
+        self.timer.start(update_interval_ms)
+        print(f"[*] Slicer bridge polling {self.host}:{self.port} every {update_interval_ms} ms")
 
-    def _setup_layout_and_views(self):
-        """Sets up clinical side-by-side view (Left: 2D Live Ultrasound | Right: 3D Scene)."""
-        layoutManager = slicer.app.layoutManager()
-        if layoutManager:
-            # Custom clinical layout XML: Left = Red Slice (Axial), Right = 3D View (View 1)
-            custom_layout_xml = (
-                '<layout type="horizontal" split="true">'
-                ' <item splitSize="500">'
-                '  <view class="vtkMRMLSliceNode" singletontag="Red">'
-                '   <property name="orientation" action="default">Axial</property>'
-                '   <property name="viewlabel" action="default">R</property>'
-                '   <property name="viewcolor" action="default">#F34A33</property>'
-                '  </view>'
-                ' </item>'
-                ' <item splitSize="500">'
-                '  <view class="vtkMRMLViewNode" singletontag="1">'
-                '   <property name="viewlabel" action="default">1</property>'
-                '  </view>'
-                ' </item>'
-                '</layout>'
-            )
-            layout_node = layoutManager.layoutLogic().GetLayoutNode()
-            custom_layout_id = 501
-            layout_node.AddLayoutDescription(custom_layout_id, custom_layout_xml)
-            layout_node.SetViewArrangement(custom_layout_id)
-            print("[+] Configured Slicer UI layout: True Side-by-Side (2D Ultrasound Left | 3D View Right)")
+    def _warn_once(self, key, text):
+        if key not in self._warned:
+            self._warned.add(key)
+            print(f"[!] {text}")
 
-            # Configure 3D view styling (dark medical slate background)
-            view_node = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLViewNode")
-            if view_node:
-                view_node.SetBackgroundColor(0.12, 0.14, 0.18)
-                view_node.SetBackgroundColor2(0.08, 0.09, 0.12)
-                view_node.SetBoxVisible(True)
-                view_node.SetAxisLabelsVisible(True)
-
-    def _setup_mrml_nodes(self):
-        """Creates or retrieves MRML nodes in Slicer scene."""
-        scene = slicer.mrmlScene
-
-        # 1. Transform Node for Probe
-        self.probe_transform_node = scene.GetFirstNodeByName("UltrasoundProbe")
-        if not self.probe_transform_node:
-            self.probe_transform_node = scene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "UltrasoundProbe")
-            print("[+] Created vtkMRMLLinearTransformNode: UltrasoundProbe")
-
-        # 2. 3D Visual Mesh for Ultrasound Probe Transducer
-        self.probe_model_node = scene.GetFirstNodeByName("UltrasoundProbeModel")
-        if not self.probe_model_node:
-            self.probe_model_node = self._create_probe_3d_model(scene)
-            if self.probe_model_node:
-                self.probe_model_node.SetAndObserveTransformNodeID(self.probe_transform_node.GetID())
-                print("[+] Attached 3D Transducer Model to UltrasoundProbe transform")
-
-        # 3. 3D Visual Mesh for Ultrasound Acoustic Beam Plane
-        self.beam_model_node = scene.GetFirstNodeByName("UltrasoundBeamPlane")
-        if not self.beam_model_node:
-            self.beam_model_node = self._create_beam_plane_model(scene)
-            if self.beam_model_node:
-                self.beam_model_node.SetAndObserveTransformNodeID(self.probe_transform_node.GetID())
-                print("[+] Attached 3D Acoustic Beam Plane to UltrasoundProbe transform")
-
-        # 4. Volume Node for 2D Ultrasound Image (Dedicated monitor view)
-        self.us_volume_node = scene.GetFirstNodeByName("US_Image")
-        if not self.us_volume_node:
-            self.us_volume_node = scene.AddNewNodeByClass("vtkMRMLScalarVolumeNode", "US_Image")
-            init_img = np.zeros((1, 160, 100), dtype=np.uint8)
-            slicer.util.updateVolumeFromArray(self.us_volume_node, init_img)
-            # US_Image is viewed directly face-on in the 2D Red slice view (un-transformed)
-            self.us_volume_node.SetAndObserveTransformNodeID(None)
-            self.us_volume_node.SetSpacing(0.38, 0.375, 1.0)
-            self.us_volume_node.SetOrigin(-19.0, -30.0, 0.0)
-
-            # Calibrated Window/Level for 8-bit B-mode ultrasound
-            dnode = self.us_volume_node.GetDisplayNode()
-            if dnode:
-                dnode.SetAutoWindowLevel(False)
-                dnode.SetWindow(255.0)
-                dnode.SetLevel(127.5)
-
-            # Bind immediately to Red slice viewer background
-            slicer.util.setSliceViewerLayers(background=self.us_volume_node, fit=True)
-            layoutManager = slicer.app.layoutManager()
-            if layoutManager:
-                red_widget = layoutManager.sliceWidget("Red")
-                if red_widget:
-                    red_slice = red_widget.mrmlSliceNode()
-                    red_slice.SetOrientation("Axial")
-                    red_slice.SetSliceOffset(0.0)
-                    red_widget.sliceController().fitSliceToBackground()
-            print("[+] Created vtkMRMLScalarVolumeNode: US_Image and framed in 2D Red Slice Viewer")
-
-        # 5. Model Node for Reconstructed Bone Points
-        self.bone_model_node = scene.GetFirstNodeByName("ReconstructedBone")
-        if not self.bone_model_node:
-            self.bone_model_node = scene.AddNewNodeByClass("vtkMRMLModelNode", "ReconstructedBone")
-            self.bone_polydata = vtk.vtkPolyData()
-            self.bone_points = vtk.vtkPoints()
-            self.bone_polydata.SetPoints(self.bone_points)
-
-            verts = vtk.vtkCellArray()
-            self.bone_polydata.SetVerts(verts)
-            self.bone_model_node.SetAndObservePolyData(self.bone_polydata)
-
-            # High-visibility glowing green point styling
-            dnode = self.bone_model_node.GetDisplayNode()
-            if not dnode:
-                dnode = scene.AddNewNodeByClass("vtkMRMLModelDisplayNode")
-                self.bone_model_node.SetAndObserveDisplayNodeID(dnode.GetID())
-            dnode.SetColor(0.15, 0.95, 0.35)  # Glowing emerald green
-            dnode.SetPointSize(7.0)
-            dnode.SetLighting(False)  # Unshaded for maximum point brilliance
-            dnode.SetVisibility(True)
-            print("[+] Created vtkMRMLModelNode: ReconstructedBone (Emerald Point Cloud)")
-
-    def _create_probe_3d_model(self, scene):
-        """Builds a realistic 3D ultrasound probe transducer geometry using VTK."""
-        try:
-            # Handle: cylindrical ergonomic shaft
-            cyl = vtk.vtkCylinderSource()
-            cyl.SetRadius(10.0)
-            cyl.SetHeight(75.0)
-            cyl.SetResolution(32)
-            cyl.Update()
-
-            # Rotate handle along Z-axis (pointing away from skin)
-            trans_cyl = vtk.vtkTransform()
-            trans_cyl.RotateX(90)
-            trans_cyl.Translate(0, 0, 37.5)
-            f_cyl = vtk.vtkTransformPolyDataFilter()
-            f_cyl.SetInputConnection(cyl.GetOutputPort())
-            f_cyl.SetTransform(trans_cyl)
-            f_cyl.Update()
-
-            # Transducer Head: wedge housing
-            head = vtk.vtkCubeSource()
-            head.SetXLength(38.0)  # Lateral width
-            head.SetYLength(16.0)  # Elevation thickness
-            head.SetZLength(20.0)  # Head height
-            head.SetCenter(0.0, 0.0, 10.0)
-            head.Update()
-
-            # Acoustic Lens: transducer contact face
-            lens = vtk.vtkCubeSource()
-            lens.SetXLength(36.0)
-            lens.SetYLength(14.0)
-            lens.SetZLength(3.0)
-            lens.SetCenter(0.0, 0.0, -1.5)
-            lens.Update()
-
-            # Combine geometries into single polydata
-            append = vtk.vtkAppendPolyData()
-            append.AddInputData(f_cyl.GetOutput())
-            append.AddInputData(head.GetOutput())
-            append.AddInputData(lens.GetOutput())
-            append.Update()
-
-            model_node = scene.AddNewNodeByClass("vtkMRMLModelNode", "UltrasoundProbeModel")
-            model_node.SetAndObservePolyData(append.GetOutput())
-
-            dnode = scene.AddNewNodeByClass("vtkMRMLModelDisplayNode")
-            model_node.SetAndObserveDisplayNodeID(dnode.GetID())
-            dnode.SetColor(0.2, 0.5, 0.85)  # Medical blue
-            dnode.SetOpacity(0.85)
-            dnode.SetVisibility(True)
-            return model_node
-        except Exception as e:
-            print(f"[!] Warning: Could not create probe 3D model: {e}")
-            return None
-
-    def _create_beam_plane_model(self, scene):
-        """Creates a semi-transparent 3D acoustic scanning plane originating at transducer contact face."""
-        try:
-            plane_source = vtk.vtkPlaneSource()
-            plane_source.SetOrigin(-19.0, 0.0, -3.0)
-            plane_source.SetPoint1(19.0, 0.0, -3.0)
-            plane_source.SetPoint2(-19.0, 0.0, -63.0)
-            plane_source.SetResolution(1, 1)
-            plane_source.Update()
-
-            beam_node = scene.AddNewNodeByClass("vtkMRMLModelNode", "UltrasoundBeamPlane")
-            beam_node.SetAndObservePolyData(plane_source.GetOutput())
-            dnode = scene.AddNewNodeByClass("vtkMRMLModelDisplayNode")
-            beam_node.SetAndObserveDisplayNodeID(dnode.GetID())
-            dnode.SetColor(0.0, 0.85, 1.0)  # Glowing cyan
-            dnode.SetOpacity(0.35)
-            dnode.SetBackfaceCulling(False)
-            dnode.SetVisibility(True)
-            return beam_node
-        except Exception as e:
-            print(f"[!] Warning: Could not create acoustic beam model: {e}")
-            return None
-
-    def _load_patient_spine_model(self):
-        """Extracts and displays patient lumbar spine surface mesh in 3D viewer without disrupting slice viewers."""
-        scene = slicer.mrmlScene
-        if scene.GetFirstNodeByName("GroundTruthSpine"):
+    # ------------------------------------------------------------------ scene
+    def _setup_layout(self):
+        lm = slicer.app.layoutManager()
+        if not lm:
             return
+        xml = (
+            '<layout type="horizontal" split="true">'
+            ' <item splitSize="500"><view class="vtkMRMLSliceNode" singletontag="Red">'
+            '  <property name="orientation" action="default">Axial</property>'
+            '  <property name="viewlabel" action="default">R</property>'
+            '  <property name="viewcolor" action="default">#F34A33</property></view></item>'
+            ' <item splitSize="500"><view class="vtkMRMLViewNode" singletontag="1">'
+            '  <property name="viewlabel" action="default">1</property></view></item>'
+            '</layout>'
+        )
+        layout_node = lm.layoutLogic().GetLayoutNode()
+        layout_node.AddLayoutDescription(LAYOUT_ID, xml)
+        layout_node.SetViewArrangement(LAYOUT_ID)
+        view_node = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLViewNode")
+        if view_node:
+            view_node.SetBackgroundColor(0.12, 0.14, 0.18)
+            view_node.SetBackgroundColor2(0.08, 0.09, 0.12)
 
-        patient_dir = os.path.join(os.path.dirname(__file__), "..", "data", "sample_totalsegmentator_patient")
-        mesh_ras_path = os.path.join(patient_dir, "meshes", "patient_lumbar_spine_ras.obj")
-        torso_ras_path = os.path.join(patient_dir, "meshes", "patient_torso_skin_ras.obj")
+    def _get_or_add(self, cls, name):
+        node = slicer.mrmlScene.GetFirstNodeByName(name)
+        return node if node else slicer.mrmlScene.AddNewNodeByClass(cls, name)
 
-        # Optional Patient Torso Skin Mesh (Translucent Flesh with Real-Time Soft Body Deformation)
-        if os.path.exists(torso_ras_path) and not scene.GetFirstNodeByName("PatientTorso"):
-            try:
-                torso_model = slicer.util.loadModel(torso_ras_path)
-                if torso_model:
-                    torso_model.SetName("PatientTorso")
-                    tdnode = torso_model.GetDisplayNode()
-                    if tdnode:
-                        tdnode.SetColor(0.86, 0.68, 0.58)  # Flesh tint
-                        tdnode.SetOpacity(0.24)  # Translucent envelope
-                        tdnode.SetVisibility(True)
-                    self.torso_model_node = torso_model
-                    self.torso_polydata = torso_model.GetPolyData()
-                    if self.torso_polydata and self.torso_polydata.GetPoints():
-                        self.base_torso_verts = vtk_np.vtk_to_numpy(self.torso_polydata.GetPoints().GetData()).copy()
-                    print("[+] Successfully loaded PatientTorso anatomical envelope (Soft Body Deformable) in 3D Scene")
-            except Exception as e:
-                print(f"[!] Warning: Could not load torso mesh: {e}")
+    def _model_node(self, name, polydata, color, opacity, parent=None):
+        node = self._get_or_add("vtkMRMLModelNode", name)
+        node.SetAndObservePolyData(polydata)
+        if not node.GetDisplayNode():
+            node.CreateDefaultDisplayNodes()
+        d = node.GetDisplayNode()
+        d.SetColor(*color)
+        d.SetOpacity(opacity)
+        d.SetVisibility(True)
+        node.SetAndObserveTransformNodeID((parent or self.patient_to_ras_node).GetID())
+        return node
 
-        # Dedicated Anatomical L4 Vertebra Reference Model (SonoGym Target)
-        l4_ras_path = os.path.join(patient_dir, "meshes", "patient_l4_vertebra_ras.obj")
-        if os.path.exists(l4_ras_path) and not scene.GetFirstNodeByName("GroundTruthL4"):
-            try:
-                l4_model = slicer.util.loadModel(l4_ras_path)
-                if l4_model:
-                    l4_model.SetName("GroundTruthL4")
-                    l4_dnode = l4_model.GetDisplayNode()
-                    if l4_dnode:
-                        l4_dnode.SetColor(1.0, 0.88, 0.45)  # Highlighted warm gold/ivory for L4
-                        l4_dnode.SetOpacity(0.40)  # Revealing inner bone surfaces
-                        l4_dnode.SetVisibility(True)
-                    self.l4_model_node = l4_model
-                    print("[+] Successfully loaded GroundTruthL4 anatomical vertebra model in 3D Scene")
-            except Exception as e:
-                print(f"[!] Warning: Could not load L4 vertebra mesh: {e}")
+    def _setup_nodes(self):
+        # Fixed P -> RAS transform: parent of every patient-frame node.
+        self.patient_to_ras_node = self._get_or_add("vtkMRMLLinearTransformNode", "PatientToRAS")
+        m = vtk.vtkMatrix4x4()
+        for r in range(4):
+            for c in range(4):
+                m.SetElement(r, c, float(P_TO_RAS[r, c]))
+        self.patient_to_ras_node.SetMatrixTransformToParent(m)
 
-        if os.path.exists(mesh_ras_path):
-            try:
-                model = slicer.util.loadModel(mesh_ras_path)
-                if model:
-                    model.SetName("GroundTruthSpine")
-                    dnode = model.GetDisplayNode()
-                    if dnode:
-                        dnode.SetColor(0.92, 0.89, 0.78)  # Bone ivory
-                        dnode.SetOpacity(0.40)  # Semi-transparent to reveal reconstructed points
-                        dnode.SetVisibility(True)
-                    print("[+] Successfully loaded GroundTruthSpine anatomical surface in 3D Scene")
-                    return
-            except Exception as e:
-                print(f"[!] Warning: Could not load spine mesh: {e}")
+        # Probe pose (T_P<-probe) lives in P, so it is a child of PatientToRAS.
+        self.probe_transform_node = self._get_or_add("vtkMRMLLinearTransformNode", "UltrasoundProbe")
+        self.probe_transform_node.SetAndObserveTransformNodeID(self.patient_to_ras_node.GetID())
+        self._model_node("UltrasoundProbeModel", self._probe_polydata(), (0.2, 0.5, 0.85), 0.85,
+                         parent=self.probe_transform_node)
+        beam = vtk.vtkPlaneSource()  # in probe frame: x lateral, +y = beam (depth)
+        beam.SetOrigin(-19.0, 0.0, 0.0)
+        beam.SetPoint1(19.0, 0.0, 0.0)
+        beam.SetPoint2(-19.0, 60.0, 0.0)
+        beam.Update()
+        beam_node = self._model_node("UltrasoundBeamPlane", beam.GetOutput(), (0.0, 0.85, 1.0), 0.35,
+                                     parent=self.probe_transform_node)
+        beam_node.GetDisplayNode().SetBackfaceCulling(False)
 
-        # Fallback to marching cubes if mesh obj not found
-        seg_dir = os.path.join(patient_dir, "segmentations")
-        files = sorted(glob.glob(os.path.join(seg_dir, "vertebrae_*.nii.gz")))
-        if not files:
-            return
+        # 2D B-mode image, shown face-on in the Red slice view (not in patient space).
+        self.us_volume_node = self._get_or_add("vtkMRMLScalarVolumeNode", "US_Image")
+        slicer.util.updateVolumeFromArray(self.us_volume_node, np.zeros((1, 160, 100), dtype=np.uint8))
+        self.us_volume_node.SetSpacing(0.38, 0.375, 1.0)
+        self.us_volume_node.SetOrigin(-19.0, -30.0, 0.0)
+        dnode = self.us_volume_node.GetDisplayNode()
+        if dnode:
+            dnode.SetAutoWindowLevel(False)
+            dnode.SetWindow(255.0)
+            dnode.SetLevel(127.5)
+        slicer.util.setSliceViewerLayers(background=self.us_volume_node, fit=True)
 
-        try:
-            append = vtk.vtkAppendPolyData()
-            for f in files:
-                vol = slicer.util.loadVolume(f)
-                fe = vtk.vtkDiscreteFlyingEdges3D()
-                fe.SetInputData(vol.GetImageData())
-                fe.SetValue(0, 1)
-                fe.Update()
+        # Reconstructed bone point cloud (P).
+        self.bone_polydata = vtk.vtkPolyData()
+        self.bone_points = vtk.vtkPoints()
+        self.bone_polydata.SetPoints(self.bone_points)
+        self.bone_polydata.SetVerts(vtk.vtkCellArray())
+        bone_node = self._model_node("ReconstructedBone", self.bone_polydata, (0.15, 0.95, 0.35), 1.0)
+        bone_node.GetDisplayNode().SetPointSize(7.0)
+        bone_node.GetDisplayNode().SetLighting(False)
 
-                mat = vtk.vtkMatrix4x4()
-                vol.GetIJKToRASMatrix(mat)
-                trans = vtk.vtkTransform()
-                trans.SetMatrix(mat)
+    @staticmethod
+    def _probe_polydata():
+        """Probe geometry in the probe frame: face at y=0, beam along +y, handle along -y."""
+        append = vtk.vtkAppendPolyData()
+        handle = vtk.vtkCylinderSource()  # cylinder axis is y
+        handle.SetRadius(10.0)
+        handle.SetHeight(75.0)
+        handle.SetCenter(0.0, -57.5, 0.0)
+        handle.SetResolution(32)
+        head = vtk.vtkCubeSource()
+        head.SetXLength(38.0)
+        head.SetYLength(20.0)
+        head.SetZLength(16.0)
+        head.SetCenter(0.0, -10.0, 0.0)
+        for src in (handle, head):
+            src.Update()
+            append.AddInputData(src.GetOutput())
+        append.Update()
+        return append.GetOutput()
 
-                tf = vtk.vtkTransformPolyDataFilter()
-                tf.SetInputConnection(fe.GetOutputPort())
-                tf.SetTransform(trans)
-                tf.Update()
-                append.AddInputData(tf.GetOutput())
-                scene.RemoveNode(vol)
+    @staticmethod
+    def _polydata_from_obj(path):
+        verts, faces = read_obj(path)
+        poly = vtk.vtkPolyData()
+        points = vtk.vtkPoints()
+        points.SetData(vtk_np.numpy_to_vtk(verts, deep=True))
+        poly.SetPoints(points)
+        cells = np.hstack([np.full((len(faces), 1), 3, dtype=np.int64), faces]).ravel()
+        polys = vtk.vtkCellArray()
+        polys.ImportLegacyFormat(vtk_np.numpy_to_vtkIdTypeArray(cells, deep=True))
+        poly.SetPolys(polys)
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(poly)
+        normals.SplittingOff()  # keep vertex count/order identical to the file
+        normals.Update()
+        out = vtk.vtkPolyData()
+        out.DeepCopy(normals.GetOutput())
+        return out, verts
 
-            append.Update()
-            model = slicer.modules.models.logic().AddModel(append.GetOutput())
-            model.SetName("GroundTruthSpine")
-            dnode = model.GetDisplayNode()
-            if dnode:
-                dnode.SetColor(0.92, 0.89, 0.78)  # Bone ivory
-                dnode.SetOpacity(0.40)
-                dnode.SetVisibility(True)
-            print("[+] Successfully loaded GroundTruthSpine anatomical surface in 3D Scene")
-        except Exception as e:
-            print(f"[!] Warning: Could not generate spine surface model: {e}")
+    def _load_patient_models(self):
+        mesh_dir = os.path.join(PATIENT_DIR, "meshes")
+        specs = [
+            ("GroundTruthSpine", "patient_lumbar_spine_ras.obj", (0.92, 0.89, 0.78), 0.40),
+            ("GroundTruthL4", "patient_l4_vertebra_ras.obj", (1.0, 0.88, 0.45), 0.40),
+            ("PatientTorso", "patient_torso_skin_ras.obj", (0.86, 0.68, 0.58), 0.24),
+        ]
+        for name, fname, color, opacity in specs:
+            path = os.path.join(mesh_dir, fname)
+            if not os.path.exists(path):
+                print(f"[!] Missing {path}; run ./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets")
+                continue
+            poly, verts = self._polydata_from_obj(path)
+            self._model_node(name, poly, color, opacity)
+            if name == "PatientTorso":
+                self.torso_polydata = poly
+                n = poly.GetNumberOfPoints()
+                if n != len(verts):
+                    self._warn_once("skin_count", f"Torso point count {n} != OBJ vertex count {len(verts)}; "
+                                                  "skin deformation disabled.")
+                    continue
+                # Bind ONE persistent float32 buffer to the vtkPoints; per-frame updates write into it.
+                self.skin_base = np.ascontiguousarray(verts, dtype=np.float32)
+                self.skin_live = self.skin_base.copy()
+                self._skin_vtk_array = vtk_np.numpy_to_vtk(self.skin_live, deep=False)  # keep a reference
+                poly.GetPoints().SetData(self._skin_vtk_array)
 
+    # ------------------------------------------------------------- networking
     def connect_server(self):
-        """Attempts connection to OpenIGTLink server."""
         try:
             self.client = pyigtl.OpenIGTLinkClient(host=self.host, port=self.port)
             self.is_connected = True
-            print(f"[✓] Successfully connected to OpenIGTLink Server at {self.host}:{self.port}!")
-            return True
+            print(f"[+] Connected to OpenIGTLink server at {self.host}:{self.port}")
         except Exception as e:
             self.is_connected = False
-            return False
+            self._warn_once("connect", f"Waiting for server at {self.host}:{self.port} ({e})")
 
     def on_timer_tick(self):
-        """Non-blocking periodic update for packet streaming and auto-reconnect."""
         now = time.time()
-
-        # Auto-reconnection logic
         if not self.is_connected:
             if now - self.last_connect_attempt >= 1.0:
                 self.last_connect_attempt = now
                 self.connect_server()
             return
-
-        # Connected: process incoming messages
         try:
             messages = self.client.get_latest_messages()
         except Exception as e:
-            print(f"[!] Error reading OpenIGTLink socket: {e}. Reconnecting...")
-            self.is_connected = False
-            if self.client:
-                try:
-                    self.client.stop()
-                except Exception:
-                    pass
-                self.client = None
+            print(f"[!] OpenIGTLink read error: {e}. Reconnecting...")
+            self.disconnect_client()
             return
 
-        # Coalesce messages to retain only latest payload per type (prevents redundant VTK updates)
-        latest_probe_msg = None
-        latest_image_msg = None
-        latest_points_msg = None
-        latest_forces_msg = None
-        latest_skin_msg = None
-
+        latest = {}  # get_latest_messages already keeps one message per device; keep the last anyway
         for msg in messages:
-            if isinstance(msg, pyigtl.TransformMessage) and msg.device_name == "UltrasoundProbe":
-                latest_probe_msg = msg
-            elif isinstance(msg, pyigtl.ImageMessage) and msg.device_name == "US_Image":
-                latest_image_msg = msg
-            elif isinstance(msg, pyigtl.PointMessage) and msg.device_name == "ReconstructedBone":
-                latest_points_msg = msg
-            elif isinstance(msg, pyigtl.StringMessage) and msg.device_name == "ContactForces":
-                latest_forces_msg = msg
-            elif hasattr(pyigtl, "PolyDataMessage") and isinstance(msg, pyigtl.PolyDataMessage) and msg.device_name == "DeformedSkin":
-                latest_skin_msg = msg
-            elif isinstance(msg, pyigtl.PointMessage) and msg.device_name == "DeformedSkin":
-                latest_skin_msg = msg
+            latest[msg.device_name] = msg
 
-        # A. Apply Latest Probe Transform
-        if latest_probe_msg is not None:
-            vtk_mat = vtk.vtkMatrix4x4()
+        msg = latest.get("UltrasoundProbe")
+        if isinstance(msg, pyigtl.TransformMessage):
+            m = vtk.vtkMatrix4x4()
             for r in range(4):
                 for c in range(4):
-                    vtk_mat.SetElement(r, c, latest_probe_msg.matrix[r, c])
-            self.probe_transform_node.SetMatrixTransformToParent(vtk_mat)
+                    m.SetElement(r, c, float(msg.matrix[r, c]))
+            self.probe_transform_node.SetMatrixTransformToParent(m)
 
-        # B. Apply Latest 2D Ultrasound B-mode Slice (Top-down clinical display)
-        if latest_image_msg is not None:
-            img_data = latest_image_msg.image
-            if img_data.ndim == 3 and img_data.shape[2] == 1:
-                img_data = img_data[:, :, 0]
+        msg = latest.get("US_Image")
+        if isinstance(msg, pyigtl.ImageMessage):
+            self._update_us_image(msg)
 
-            # Invert row order so probe face (depth 0) is at screen top (+Y in Axial view)
-            oriented_img = np.ascontiguousarray(img_data[::-1, :])
-            vol_slice = oriented_img[np.newaxis, :, :]
-            slicer.util.updateVolumeFromArray(self.us_volume_node, vol_slice)
+        msg = latest.get("ReconstructedBone")
+        if isinstance(msg, pyigtl.ImageMessage):
+            pts = _array_payload(msg, 3)
+            if pts is not None:
+                self._update_bone_points(pts)
 
-            # Ensure Side-by-Side layout and bind US_Image to Red slice viewer
-            if self.frames_received < 5:
-                layoutManager = slicer.app.layoutManager()
-                if layoutManager:
-                    layout_node = layoutManager.layoutLogic().GetLayoutNode()
-                    if layout_node.GetViewArrangement() != 501:
-                        layout_node.SetViewArrangement(501)
-                    red_widget = layoutManager.sliceWidget("Red")
-                    if red_widget:
-                        comp_node = red_widget.mrmlSliceCompositeNode()
-                        if comp_node.GetBackgroundVolumeID() != self.us_volume_node.GetID():
-                            comp_node.SetBackgroundVolumeID(self.us_volume_node.GetID())
-                        slice_node = red_widget.mrmlSliceNode()
-                        slice_node.SetOrientationToAxial()
-                        red_widget.sliceController().fitSliceToBackground()
-            self.frames_received += 1
+        msg = latest.get("DeformedSkin")
+        if isinstance(msg, pyigtl.ImageMessage):
+            self._update_skin(msg)
 
-        # C. Apply Latest 3D Reconstructed Bone Points
-        if latest_points_msg is not None:
-            pts = latest_points_msg.positions
-            if pts is not None and len(pts) > 0:
-                n_pts = len(pts)
-                pts_array = np.ascontiguousarray(pts, dtype=np.float32)
-                vtk_data_array = vtk_np.numpy_to_vtk(pts_array, deep=False)
-                self.bone_points.SetData(vtk_data_array)
-                self.bone_points.Modified()
+        msg = latest.get("Telemetry")
+        if isinstance(msg, pyigtl.StringMessage) and now - self.last_telemetry_log >= 5.0:
+            self.last_telemetry_log = now
+            try:
+                t = json.loads(msg.string)
+                phys = t.get("physics", {})
+                print(f"[telemetry] F={t.get('normal_force_n', float('nan')):.2f} N, "
+                      f"indent={t.get('indentation_mm', float('nan')):.2f} mm, points={t.get('num_points')}, "
+                      f"physics={phys.get('achieved_hz', float('nan')):.0f} Hz")
+            except (ValueError, TypeError) as e:
+                self._warn_once("telemetry", f"Bad Telemetry payload: {e}")
 
-                # Fast vectorized cell array construction without deprecation warnings
-                cell_data = np.empty((n_pts, 2), dtype=np.int64)
-                cell_data[:, 0] = 1
-                cell_data[:, 1] = np.arange(n_pts, dtype=np.int64)
-                cell_array = vtk_np.numpy_to_vtkIdTypeArray(cell_data.ravel(), deep=False)
-                verts = vtk.vtkCellArray()
-                verts.ImportLegacyFormat(cell_array)
-                self.bone_polydata.SetVerts(verts)
-                self.bone_polydata.Modified()
+    def _update_us_image(self, msg):
+        img = np.asarray(msg.image)
+        if img.ndim == 3 and img.shape[2] == 1:
+            img = img[:, :, 0]
+        # Row 0 = probe face; flip so the face is at the top of the axial view.
+        slicer.util.updateVolumeFromArray(self.us_volume_node, np.ascontiguousarray(img[::-1, :])[np.newaxis])
+        if self.frames_received < 5:
+            lm = slicer.app.layoutManager()
+            if lm:
+                red = lm.sliceWidget("Red")
+                if red:
+                    red.mrmlSliceCompositeNode().SetBackgroundVolumeID(self.us_volume_node.GetID())
+                    red.sliceController().fitSliceToBackground()
+        self.frames_received += 1
 
-                # Auto-reset camera focal point to center onto patient spine on first batch of points
-                if not self.camera_initialized and n_pts >= 30:
-                    layoutManager = slicer.app.layoutManager()
-                    if layoutManager:
-                        threeDWidget = layoutManager.threeDWidget(0)
-                        if threeDWidget:
-                            threeDWidget.threeDView().resetFocalPoint()
-                            threeDWidget.threeDView().resetCamera()
-                            self.camera_initialized = True
-                            print(f"[+] 3D Camera centered on reconstructed bone ({n_pts} points)")
+    def _update_bone_points(self, pts):
+        n = len(pts)
+        self._bone_array = np.ascontiguousarray(pts, dtype=np.float32)  # referenced while VTK uses it
+        self.bone_points.SetData(vtk_np.numpy_to_vtk(self._bone_array, deep=False))
+        cells = np.empty((n, 2), dtype=np.int64)
+        cells[:, 0] = 1
+        cells[:, 1] = np.arange(n, dtype=np.int64)
+        verts = vtk.vtkCellArray()
+        verts.ImportLegacyFormat(vtk_np.numpy_to_vtkIdTypeArray(cells.ravel(), deep=True))
+        self.bone_polydata.SetVerts(verts)
+        self.bone_points.Modified()
+        self.bone_polydata.Modified()
+        if not self.camera_initialized and n >= 30:
+            lm = slicer.app.layoutManager()
+            if lm and lm.threeDWidget(0):
+                lm.threeDWidget(0).threeDView().resetFocalPoint()
+                self.camera_initialized = True
 
-        # D. Apply Real-Time Soft-Tissue Skin Deformation under Probe Contact
-        if self.torso_polydata is not None and self.base_torso_verts is not None:
-            if latest_skin_msg is not None:
-                pts = getattr(latest_skin_msg, "positions", None) or getattr(latest_skin_msg, "points", None)
-                if pts is not None and len(pts) == len(self.base_torso_verts):
-                    pts_array = np.ascontiguousarray(pts, dtype=np.float32)
-                    self.torso_polydata.GetPoints().SetData(vtk_np.numpy_to_vtk(pts_array, deep=False))
-                    self.torso_polydata.GetPoints().Modified()
-                    self.torso_polydata.Modified()
-                    self.is_tissue_deformed = True
-            elif latest_forces_msg is not None:
-                try:
-                    import json
-                    c_data = json.loads(latest_forces_msg.string)
-                    if isinstance(c_data, list) and len(c_data) > 0 and len(c_data[0]) >= 7:
-                        x, y, z = float(c_data[0][0]), float(c_data[0][1]), float(c_data[0][2])
-                        nx, ny, nz = float(c_data[0][3]), float(c_data[0][4]), float(c_data[0][5])
-                        fn = float(c_data[0][6])
+    def _update_skin(self, msg):
+        if self.skin_live is None:
+            return
+        arr = np.asarray(msg.image, dtype=np.float32)
+        if arr.ndim >= 2 and arr.shape[-1] == 1:
+            arr = arr[..., 0]
+        n = len(self.skin_base)
+        ncols = arr.shape[-1] if arr.ndim >= 2 else 0
+        if ncols == 3 and arr.size == n * 3:  # full deformed vertex positions
+            self.skin_live[:] = arr.reshape(n, 3)
+            self.skin_deformed = True
+        elif ncols == 4:  # sparse [index, dx, dy, dz]; index -1 = reset
+            rows = arr.reshape(-1, 4)
+            self.skin_live[:] = self.skin_base
+            if rows[0, 0] >= 0:
+                idx = rows[:, 0].astype(np.int64)
+                if idx.max() >= n:
+                    self._warn_once("skin_idx", f"DeformedSkin index {idx.max()} out of range ({n} vertices)")
+                    return
+                self.skin_live[idx] += rows[:, 1:]
+            self.skin_deformed = bool(rows[0, 0] >= 0)
+        else:
+            self._warn_once("skin_shape", f"Unexpected DeformedSkin shape {np.asarray(msg.image).shape}")
+            return
+        self.torso_polydata.GetPoints().Modified()
+        self.torso_polydata.Modified()
 
-                        if fn >= 0.5:
-                            cp = np.array([x, y, z], dtype=np.float32)
-                            f_vec = np.array([nx, ny, nz], dtype=np.float32) * fn
-                            diff = self.base_torso_verts - cp
-                            r_sq = np.sum(diff**2, axis=-1)
-                            roi = r_sq < (65.0**2)
-                            if np.any(roi):
-                                eps = 14.0
-                                mu = 4.5e-3 # N/mm^2 (compliant soft tissue)
-                                nu = 0.46
-                                const_a = (3.0 - 4.0 * nu) / (4.0 * (1.0 - nu))
-                                const_b = 1.0 / (4.0 * (1.0 - nu))
-                                prefactor = 1.0 / (4.0 * np.pi * mu)
-                                r_roi = diff[roi]
-                                r_eps = np.sqrt(r_sq[roi] + eps**2)
-                                r_dot_f = np.sum(r_roi * f_vec, axis=-1, keepdims=True)
-                                disp = prefactor * ((const_a / r_eps[:, None]) * f_vec + (const_b / (r_eps[:, None]**3)) * r_dot_f * r_roi)
-                                # Smooth tapering at outer boundary
-                                dists = np.sqrt(r_sq[roi])
-                                taper = np.clip(1.0 - (dists / 65.0)**2, 0.0, 1.0)[:, None]
-                                disp = disp * taper
-
-                                deformed = self.base_torso_verts.copy()
-                                deformed[roi] += disp
-                                self.torso_polydata.GetPoints().SetData(vtk_np.numpy_to_vtk(deformed, deep=False))
-                                self.torso_polydata.GetPoints().Modified()
-                                self.torso_polydata.Modified()
-                                self.is_tissue_deformed = True
-                        elif self.is_tissue_deformed:
-                            self.torso_polydata.GetPoints().SetData(vtk_np.numpy_to_vtk(self.base_torso_verts, deep=False))
-                            self.torso_polydata.GetPoints().Modified()
-                            self.torso_polydata.Modified()
-                            self.is_tissue_deformed = False
-                except Exception:
-                    pass
-
-    def disconnect(self):
-        self.timer.stop()
+    def disconnect_client(self):
         if self.client:
             try:
                 self.client.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                self._warn_once("stop", f"Error stopping client: {e}")
             self.client = None
         self.is_connected = False
+
+    def disconnect(self):
+        self.timer.stop()
+        self.disconnect_client()
         print("[*] Slicer bridge disconnected.")
 
 
-# Instantiate bridge in Slicer Python runtime
 if __name__ == "__main__":
     bridge = SlicerSurgicalPhysicsBridge()

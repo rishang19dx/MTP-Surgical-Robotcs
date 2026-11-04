@@ -12,8 +12,7 @@
 #      --exclude '__pycache__' \
 #      --exclude '.pytest_cache' \
 #      --exclude '*.log' \
-#      --exclude 'demonstrations/*.mp4' \
-#      --exclude 'demonstrations/*.gif' \
+#      --exclude 'demonstrations/*.npz' \
 #      /path/to/local/MTP/ user@172.18.17.35:/home/user/workspace/rishang/MTP/
 #
 # 2. SSH into remote machine and run:
@@ -127,6 +126,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# All remote activity must stay inside the dedicated workspace (.../workspace/rishang/).
+# Refuse to run elsewhere unless explicitly overridden (e.g. local testing).
+if [[ "${PROJECT_ROOT}" != */workspace/rishang/* && "${ALLOW_OUTSIDE_WORKSPACE:-0}" != "1" ]]; then
+    echo -e "${RED}[ERROR] Project root ${PROJECT_ROOT} is not inside a */workspace/rishang/ directory.${NC}"
+    echo "        Set ALLOW_OUTSIDE_WORKSPACE=1 to run anyway (local testing only)."
+    exit 1
+fi
+# Keep every cache/temp file (pip, HuggingFace, torch, matplotlib) inside the project, not in $HOME or /tmp.
+export XDG_CACHE_HOME="${PROJECT_ROOT}/.cache"
+export PIP_CACHE_DIR="${XDG_CACHE_HOME}/pip"
+export HF_HOME="${XDG_CACHE_HOME}/huggingface"
+export TORCH_HOME="${XDG_CACHE_HOME}/torch"
+export MPLCONFIGDIR="${XDG_CACHE_HOME}/matplotlib"
+export TMPDIR="${PROJECT_ROOT}/.tmp"
+mkdir -p "${XDG_CACHE_HOME}" "${TMPDIR}"
+
 # ==============================================================================
 # Phase 1: Environment & Dependency Setup
 # ==============================================================================
@@ -176,20 +191,9 @@ setup_environment() {
             ${PYTHON_BIN} -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
         fi
 
-        # Install required robotics, clinical medical imaging, and simulation libraries
-        echo -e "${YELLOW}[*] Installing scientific & clinical dependencies...${NC}"
-        ${PYTHON_BIN} -m pip install \
-            nibabel \
-            trimesh \
-            open3d \
-            pyigtl \
-            pytest \
-            scipy \
-            matplotlib \
-            imageio \
-            imageio-ffmpeg \
-            pybullet \
-            tqdm
+        # Install the project's single source of truth for dependencies
+        echo -e "${YELLOW}[*] Installing dependencies from requirements.txt...${NC}"
+        ${PYTHON_BIN} -m pip install -r requirements.txt
     fi
 
     # Verify critical package imports
@@ -208,8 +212,8 @@ prepare_dataset() {
 
     if [[ -z "${DATASET_DIR}" ]]; then
         echo -e "${YELLOW}[!] No --dataset-dir specified. Checking sample data or falling back to synthetic phantom.${NC}"
-        if [[ -d "ReconstructionPipeline/data/sample_patient" ]]; then
-            DATASET_DIR="ReconstructionPipeline/data/sample_patient"
+        if [[ -d "data/sample_totalsegmentator_patient" ]]; then
+            DATASET_DIR="data/sample_totalsegmentator_patient"
             echo -e "${CYAN}[*] Using local sample directory: ${DATASET_DIR}${NC}"
         else
             echo -e "${YELLOW}[!] Proceeding with synthetic lumbar anatomy.${NC}"

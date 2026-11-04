@@ -53,3 +53,9 @@ slides_preview/
 
 # Local agent scratch (may contain credentials)
 .agents/
+
+# Generated demonstration datasets (regenerate with record_soft_body_demonstrations.py)
+demonstrations/*.npz
+
+# FEM tissue precompute cache (DEC-037)
+ReconstructionPipeline/.fem_cache/

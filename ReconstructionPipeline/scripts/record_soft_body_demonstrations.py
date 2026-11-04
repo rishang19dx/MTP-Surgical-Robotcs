@@ -3,13 +3,12 @@ Comprehensive Demonstration Recording Suite with Soft-Body Integrations.
 
 Records:
 1. Visual 3-Panel Synchronized Robot Ultrasound Scan (MP4 & GIF):
-   - Panel 1: PyBullet 3D Robot & Patient Suite (Franka Panda, translucent torso, ivory L1-L5 spine, dynamic Kelvinlet indentation crater)
+   - Panel 1: PyBullet 3D Robot & Patient Suite (Franka Panda, translucent torso, ivory L1-L5 spine, contact marker)
    - Panel 2: Live 2D Ultrasound Slicer B-Mode Echogram (dynamic soft-tissue compression & hyperechoic bone echo shift)
    - Panel 3: Real-Time Biomechanical Telemetry & Strip Charts (F_N, delta, kappa, mu, reconstructed point count)
-2. Multi-Stiffness Soft-Body Comparison (MP4 & GIF):
-   - Side-by-side comparison of soft adipose (2 kPa), normal torso (4 kPa), and stiff muscle (8 kPa)
-3. Expert Demonstration Dataset (.npz):
-   - 20 episodes of expert demonstrations collected with active Kelvinlet soft-body deformation
+2. Expert Demonstration Dataset (.npz, git-ignored):
+   - 20 episodes of expert demonstrations; force and indentation are the values reported by the
+     environment's tissue model (``env.current_normal_force``, ``env.tissue_state.indentation_mm``).
    - Ready for SOTA 3D Diffusion Policy (DP3 / EDM) and Continuous Flow Matching (CFM) training
 """
 
@@ -30,9 +29,14 @@ from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGener
 from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
 from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner
 from ReconstructionPipeline.registration.icp_registration import IntraoperativeRegistration
-from ReconstructionPipeline.simulation.kelvinlet_deformation import RegularizedKelvinletDeformation
-from ReconstructionPipeline.simulation.slice_extractor import VolumeSliceExtractor
-from ReconstructionPipeline.simulation.ultrasound_model_based import ModelBasedUltrasoundSimulator
+from surgical_physics_bridge.src.coordinates import P_TO_PB_ROT, patient_to_pybullet_points, probe_axes_to_pybullet_quaternion
+
+
+def _indentation_mm(env) -> float:
+    ts = getattr(env, "tissue_state", None)
+    if ts is not None and hasattr(ts, "indentation_mm"):
+        return float(ts.indentation_mm)
+    return float(getattr(env, "current_indentation_mm", 0.0))
 
 
 def record_robot_soft_body_scan_video(
@@ -43,7 +47,7 @@ def record_robot_soft_body_scan_video(
 ):
     """
     Renders and records a synchronized 3-panel MP4 and GIF video of the Franka Panda
-    robot performing an ultrasound scan over patient lumbar anatomy with soft-tissue Kelvinlet deformation.
+    robot performing an ultrasound scan over patient lumbar anatomy with the environment's tissue model.
     """
     os.makedirs(os.path.dirname(output_mp4), exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -102,7 +106,7 @@ def record_robot_soft_body_scan_video(
     )
     proj_matrix = p.computeProjectionMatrixFOV(fov=48, aspect=1.333, nearVal=0.1, farVal=3.0)
 
-    # 2. Initialize Reconstruction Environment with soft-tissue Kelvinlet mechanics
+    # 2. Reconstruction environment (tissue model provides force and indentation)
     env = UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=num_frames, device=device)
     env.reset()
 
@@ -133,34 +137,23 @@ def record_robot_soft_body_scan_video(
 
         obs, reward, terminated, truncated, info = env.step(act)
 
-        c1 = float(env.current_pose_params[0])
-        c2 = float(env.current_pose_params[1])
-        yaw = float(env.current_pose_params[2])
-        pitch = float(env.current_pose_params[3])
-
-        # Realistic compliant contact force variation across trajectory and tissue curvature
-        fn_mod = np.clip(4.0 * np.cos(pitch) * np.cos(yaw) + 1.5 * np.sin(i / 3.5), 2.0, 6.5)
-        fn = float(fn_mod)
-        env.current_normal_force = fn
+        fn = float(env.current_normal_force)  # tissue-model output, never overwritten here
         coupling = float(env.current_coupling)
-
-        # Kelvinlet indentation depth
-        delta_m = (fn / 2500.0) # up to 6 mm
-        delta_mm = delta_m * 1000.0
+        delta_mm = _indentation_mm(env)
 
         force_history.append(fn)
         indentation_history.append(delta_mm)
         coupling_history.append(coupling)
         pts_count_history.append(len(env.accumulator.get_points()))
 
-        # Update PyBullet robot IK
-        x_pb = 0.55 + c1 * 1e-3
-        y_pb = 0.0 + c2 * 1e-3
-        z_contact = 0.42 - delta_m
-        z_ee = z_contact + 0.09
-
-        target_pos = [x_pb, y_pb, z_ee]
-        target_orn = p.getQuaternionFromEuler([np.pi + pitch, 0.0, yaw])
+        # Probe face (frame P) -> PyBullet end-effector target (same mapping as the unified server)
+        t_p = env.skin_pose(*env.current_pose_params)  # undeformed skin point; indentation added below
+        beam_p, lateral_p = t_p[:3, 1], t_p[:3, 0]
+        contact = patient_to_pybullet_points(t_p[:3, 3] + delta_mm * beam_p)
+        beam_pb = P_TO_PB_ROT @ beam_p
+        target_pos = (contact - 0.09 * beam_pb).tolist()
+        target_orn = probe_axes_to_pybullet_quaternion(beam_p, lateral_p)
+        x_pb, y_pb, z_contact = contact.tolist()
 
         joint_targets = p.calculateInverseKinematics(
             robot_id, ee_idx, target_pos, target_orn, maxNumIterations=35, residualThreshold=1e-4
@@ -169,9 +162,9 @@ def record_robot_soft_body_scan_video(
             p.resetJointState(robot_id, j_idx, q_val)
 
         # Position probe tool & indentation crater
-        p.resetBasePositionAndOrientation(probe_id, [x_pb, y_pb, z_contact + 0.045], target_orn)
+        p.resetBasePositionAndOrientation(probe_id, (contact - 0.045 * beam_pb).tolist(), target_orn)
         
-        # Color code crater by von Mises stress
+        # Color code contact marker by normal force
         if fn <= 6.0:
             c_rgba = [0.1, 0.95, 0.3, 0.85]  # Green: Safe
         elif fn <= 8.0:
@@ -256,118 +249,6 @@ def record_robot_soft_body_scan_video(
     return output_mp4, output_gif
 
 
-def record_multistiffness_comparison_video(
-    patient_dir: str = "data/sample_totalsegmentator_patient",
-    output_mp4: str = "demonstrations/demo_multistiffness_comparison.mp4",
-    output_gif: str = "demonstrations/demo_multistiffness_comparison.gif",
-    num_frames: int = 36,
-):
-    """
-    Renders a synchronized 3-way side-by-side video comparing soft-tissue deformation
-    under identical probe loading across 3 physiological stiffness regimes:
-    1. Soft Adipose/Fat (mu = 2.0 kPa)
-    2. Physiological Torso (mu = 4.0 kPa)
-    3. Stiff Muscle/Fascia (mu = 8.0 kPa)
-    """
-    os.makedirs(os.path.dirname(output_mp4), exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[*] Initializing Multi-Stiffness Comparison Recording on device: {device}")
-
-    assets = PatientAssetGenerator.load_totalsegmentator_subject(patient_dir)
-    ct_vol = assets["ct_volume"]
-    spacing = assets["spacing_mm"]
-    origin = assets["origin_mm"]
-
-    # 3 Solvers with varied shear modulus
-    stiffnesses = [2.0, 4.0, 8.0]
-    names = ["Soft Adipose/Fat", "Lumbar Torso", "Stiff Muscle/Fascia"]
-    extractors = []
-    for mu in stiffnesses:
-        solver = RegularizedKelvinletDeformation(
-            shear_modulus_kpa=mu,
-            poissons_ratio=0.46,
-            probe_radius_mm=14.0,
-            device=device,
-        )
-        ext = VolumeSliceExtractor(
-            volume=ct_vol,
-            spacing=spacing,
-            origin=origin,
-            deformation_solver=solver,
-            device=device,
-        )
-        extractors.append(ext)
-
-    sim = ModelBasedUltrasoundSimulator(device=device)
-
-    # Probe pose at dorsal skin center
-    pose = np.array([
-        [1.0,  0.0,  0.0,  0.0],
-        [0.0, -1.0,  0.0, 52.0],
-        [0.0,  0.0, -1.0,  0.0],
-        [0.0,  0.0,  0.0,  1.0]
-    ], dtype=np.float32)
-
-    # Force profile: 0.5 N -> 7.5 N -> 0.5 N
-    ts = np.linspace(0.0, np.pi, num_frames)
-    forces = 0.5 + 7.0 * np.sin(ts)
-
-    frames = []
-    fig = plt.figure(figsize=(16, 5.0), dpi=100)
-
-    print(f"[*] Rendering {num_frames} multi-stiffness frames...")
-
-    for frame_idx, fn in enumerate(forces):
-        fig.clear()
-
-        for col_idx, (mu, name, ext) in enumerate(zip(stiffnesses, names, extractors)):
-            # Compute indentation for this stiffness
-            delta_mm = float(fn / (mu * 0.625))  # Analytical Kelvinlet indentation
-
-            slice_ct = ext.extract_slices(pose, interpolation="bilinear", contact_force_n=float(fn))
-            us_res = sim.simulate_bmode(slice_ct)
-            bmode = us_res["bmode"].cpu().numpy()
-
-            ax = fig.add_subplot(1, 3, col_idx + 1)
-            ax.imshow(bmode, cmap="gray", vmin=0.0, vmax=1.0, extent=[-20.0, 20.0, 60.0, 0.0])
-            ax.axhline(0.0, color="yellow", linewidth=2.5)
-
-            # Indentation visual marker
-            ax.axhline(delta_mm, color="cyan", linestyle="--", linewidth=1.5, label=f"Indentation: {delta_mm:.2f}mm")
-
-            ax.set_title(f"{col_idx+1}. {name}\n$\mu = {mu:.1f}$ kPa | $F_N = {fn:.2f}$ N", fontsize=10, fontweight="bold")
-            ax.set_xlabel("Width (mm)")
-            ax.set_ylabel("Depth (mm)")
-            ax.legend(loc="lower right", fontsize=8)
-
-            badge_txt = f"Modulus: {mu:.1f} kPa\nForce: {fn:.2f} N\nIndentation: {delta_mm:.2f} mm"
-            ax.text(
-                0.05, 0.06, badge_txt, transform=ax.transAxes, fontsize=8,
-                bbox=dict(boxstyle="round,pad=0.4", facecolor="black", alpha=0.75, edgecolor="cyan")
-            )
-
-        fig.tight_layout()
-        fig.canvas.draw()
-        rgba_buf = np.asarray(fig.canvas.buffer_rgba())
-        frames.append(np.array(rgba_buf[:, :, :3], copy=True))
-
-    plt.close(fig)
-
-    # Save GIF
-    print(f"[*] Saving Multi-Stiffness GIF to {output_gif}...")
-    imageio.mimsave(output_gif, frames, fps=8)
-
-    # Save MP4
-    print(f"[*] Saving Multi-Stiffness MP4 to {output_mp4}...")
-    writer = imageio.get_writer(output_mp4, fps=8, codec="libx264", quality=8)
-    for frame in frames:
-        writer.append_data(frame)
-    writer.close()
-
-    print(f"[+] Multi-stiffness demonstration successfully saved to {output_mp4} and {output_gif}!")
-    return output_mp4, output_gif
-
-
 def record_expert_demonstrations_dataset(
     patient_dir: str = "data/sample_totalsegmentator_patient",
     output_npz: str = "demonstrations/soft_body_expert_demonstrations.npz",
@@ -376,7 +257,7 @@ def record_expert_demonstrations_dataset(
 ):
     """
     Collects and records a structured expert demonstration dataset (.npz) across 20 episodes
-    (10 linear raster sweeps, 10 orbital sweeps) with Kelvinlet soft-body deformations active.
+    (10 linear raster sweeps, 10 orbital sweeps) with the tissue model active.
     
     Stores state observations, 4-DoF actions, contact forces, indentation depths,
     acoustic couplings, 2D B-mode echograms, and reconstructed 3D bone point clouds.
@@ -422,7 +303,7 @@ def record_expert_demonstrations_dataset(
             ep_states.append(curr_p.copy())
             ep_actions.append(act.copy())
             ep_forces.append(float(env.current_normal_force))
-            ep_indentations.append(float(env.current_normal_force / 2.5)) # mm
+            ep_indentations.append(_indentation_mm(env))
             ep_couplings.append(float(env.current_coupling))
 
             bmode = obs["bmode"]
@@ -463,9 +344,7 @@ def record_expert_demonstrations_dataset(
         total_transition_steps=total_steps,
         metadata={
             "patient_dir": patient_dir,
-            "soft_body_solver": "RegularizedKelvinlet",
-            "shear_modulus_kpa": 4.5,
-            "poissons_ratio": 0.46,
+            "tissue_model": type(getattr(env, "tissue_model", None)).__name__,
             "recorded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
     )
@@ -478,7 +357,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Record Expert Demonstrations with Soft-Body Integrations")
     parser.add_argument("--patient-dir", type=str, default="data/sample_totalsegmentator_patient")
     parser.add_argument("--video", action="store_true", help="Record synchronized 3-panel robot scan video (MP4 & GIF)")
-    parser.add_argument("--multistiffness", action="store_true", help="Record multi-stiffness comparison video (MP4 & GIF)")
     parser.add_argument("--dataset", action="store_true", help="Record expert demonstrations dataset (.npz)")
     parser.add_argument("--all", action="store_true", help="Record all videos, comparisons, and demonstration dataset")
     args = parser.parse_args()
@@ -486,14 +364,10 @@ if __name__ == "__main__":
     if args.all or args.video:
         record_robot_soft_body_scan_video(patient_dir=args.patient_dir)
 
-    if args.all or args.multistiffness:
-        record_multistiffness_comparison_video(patient_dir=args.patient_dir)
-
     if args.all or args.dataset:
         record_expert_demonstrations_dataset(patient_dir=args.patient_dir)
 
-    if not (args.all or args.video or args.multistiffness or args.dataset):
+    if not (args.all or args.video or args.dataset):
         # Default: record all
         record_robot_soft_body_scan_video(patient_dir=args.patient_dir)
-        record_multistiffness_comparison_video(patient_dir=args.patient_dir)
         record_expert_demonstrations_dataset(patient_dir=args.patient_dir)

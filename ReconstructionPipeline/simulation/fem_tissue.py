@@ -115,22 +115,40 @@ def _tet_stiffness(P: np.ndarray, E: float, nu: float) -> np.ndarray:
     return V * B.T @ C @ B
 
 
-_OPENBLAS_LIMITED = False
+class _BlasScope:
+    """Re-entrant context limiting numpy/scipy OpenBLAS to one thread while a contact solve runs.
 
+    numpy's bundled OpenBLAS busy-waits its thread pool between the many tiny (50x50) BLAS calls of the
+    contact solve, which doubles the latency (measured: force_at median 1.8 ms unlimited vs 0.9 ms with
+    one thread).  The limit is applied only inside this scope (torch's own BLAS is untouched), so the
+    rest of the process keeps multi-threaded BLAS.  Entering costs ~0.1 ms, so callers doing many
+    queries (the env's admittance loop) open one scope around all of them; nested scopes are free.
+    No-op without threadpoolctl."""
 
-def _limit_openblas_threads():
-    """numpy's bundled OpenBLAS busy-waits its 2-thread pool between the many tiny (50x50) BLAS/LAPACK
-    calls of the contact solve, which costs ~2x latency (measured).  Limit OpenBLAS (numpy/scipy only;
-    torch's own BLAS is untouched) to one thread for the process.  No-op without threadpoolctl."""
-    global _OPENBLAS_LIMITED
-    if _OPENBLAS_LIMITED:
-        return
-    try:
-        import threadpoolctl
-        threadpoolctl.threadpool_limits(limits=1, user_api="blas")
-    except Exception:
-        pass
-    _OPENBLAS_LIMITED = True
+    _depth = 0
+    _ctl = None
+    _limiter = None
+
+    def __enter__(self):
+        cls = _BlasScope
+        if cls._depth == 0:
+            try:
+                if cls._ctl is None:
+                    import threadpoolctl
+                    cls._ctl = threadpoolctl.ThreadpoolController()
+                cls._limiter = cls._ctl.limit(limits=1, user_api="blas")
+            except Exception:
+                cls._limiter = None
+        cls._depth += 1
+        return self
+
+    def __exit__(self, *exc):
+        cls = _BlasScope
+        cls._depth -= 1
+        if cls._depth == 0 and cls._limiter is not None:
+            cls._limiter.restore_original_limits()
+            cls._limiter = None
+        return False
 
 
 def _gen_solve(M: np.ndarray, rhs: np.ndarray) -> np.ndarray:
@@ -214,7 +232,6 @@ class FEMTissueModel:
         self.max_indent_fraction = float(max_indent_fraction)
         self.field_dtype = field_dtype
         self.timings: Dict[str, float] = {}
-        _limit_openblas_threads()
         self._pcg_rtol = float(pcg_rtol)
         self._pcg_batch = int(pcg_batch)
 
@@ -480,11 +497,17 @@ class FEMTissueModel:
                           c1_bounds=(-32.0, 32.0), c2_bounds=(-55.0, -10.0), k0_n_per_mm: float = 0.5,
                           **kwargs) -> "FEMTissueModel":
         """Build (or load from cache) and, by default, calibrate the global modulus on a 3x3 grid of
-        untilted poses over the scan window so the window on average follows the literature curve."""
+        untilted poses over the scan window so the window on average follows the literature curve.
+        Unless given, the mesh ROI is `default_roi` around this scan window (30 mm footprint margin)."""
+        if kwargs.get("roi_min_mm") is None or kwargs.get("roi_max_mm") is None:
+            lo, hi = default_roi(patient_data, c1_bounds=tuple(c1_bounds), c2_bounds=tuple(c2_bounds))
+            kwargs["roi_min_mm"] = lo if kwargs.get("roi_min_mm") is None else kwargs["roi_min_mm"]
+            kwargs["roi_max_mm"] = hi if kwargs.get("roi_max_mm") is None else kwargs["roi_max_mm"]
         model = cls(patient_data, **kwargs)
         if calibrate:
-            model.calibrate_e_scale(model.window_poses(c1_bounds, c2_bounds), k0_n_per_mm=k0_n_per_mm,
-                                    beta_per_mm=model.beta)
+            with _BlasScope():
+                model.calibrate_e_scale(model.window_poses(c1_bounds, c2_bounds), k0_n_per_mm=k0_n_per_mm,
+                                        beta_per_mm=model.beta)
         return model
 
     # ------------------------------------------------------------- geometry
@@ -610,17 +633,27 @@ class FEMTissueModel:
         eps = 1e-3
         return (self._forces(ct, ct["f"] + eps * df)["F"] - F0) / eps
 
+    @staticmethod
+    def blas_scope() -> _BlasScope:
+        """Context limiting OpenBLAS to one thread (see `_BlasScope`); wrap batches of queries in it."""
+        return _BlasScope()
+
     def force_at(self, probe_pose_P: np.ndarray, indentation_mm: float) -> float:
         """Reaction force (N, along the probe axis); CPU only, no field evaluation."""
         key = np.asarray(probe_pose_P, dtype=np.float64).tobytes()
         if self._cache_last is not None and self._cache_last[0] == key and self._cache_last[1] == float(indentation_mm):
             return self._cache_last[2].reaction_force_n
-        ct = self._contact(probe_pose_P, indentation_mm)
-        if len(ct["f"]) == 0:
-            return 0.0
-        return self._forces(ct, ct["f"])["F"]
+        with _BlasScope():
+            ct = self._contact(probe_pose_P, indentation_mm)
+            if len(ct["f"]) == 0:
+                return 0.0
+            return self._forces(ct, ct["f"])["F"]
 
     def solve(self, probe_pose_P: np.ndarray, indentation_mm: float) -> FEMTissueState:
+        with _BlasScope():
+            return self._solve(probe_pose_P, indentation_mm)
+
+    def _solve(self, probe_pose_P: np.ndarray, indentation_mm: float) -> FEMTissueState:
         T = np.asarray(probe_pose_P, dtype=np.float64)
         key = T.tobytes()
         if self._cache_last is not None and self._cache_last[0] == key and self._cache_last[1] == float(indentation_mm):

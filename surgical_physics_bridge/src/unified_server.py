@@ -20,16 +20,21 @@ the documented P->RAS matrix, see ``coordinates.P_TO_RAS``):
     US_Image           ImageMessage      uint8 (H, W, 1) B-mode frame
     ReconstructedBone  ImageMessage      float32 (1, N, 3) accumulated bone points in P (array transport;
                                          pyigtl 0.3.4 has no NDARRAY and its PointMessage packer is O(N^2))
-    DeformedSkin       ImageMessage      float32 (1, K, 4) rows [vertex_index, dx, dy, dz] = displacement (mm, P)
-                                         of skin vertices of ``meshes/patient_torso_skin_ras.obj`` (file vertex
-                                         order) computed by the env's tissue model; a single row with
-                                         index -1 means "undeformed". Full (1, N, 3) deformed vertices are also
-                                         accepted by the Slicer bridge.
+    DeformedSkin       ImageMessage      float32 (1, N, 3) all N deformed skin-patch vertices (mm, P), in the
+                                         vertex order of ``meshes/patient_fem_skin.obj``, which this server
+                                         writes at startup from the tissue model's skin surface
+                                         (``FEMTissueModel.skin_surface_mesh``). Sent when the deformation
+                                         changes (and once undeformed after contact is lost).
     Telemetry          StringMessage     JSON: force, indentation, coupling, physics-rate stats, rigid contacts
 
 Incoming (StringMessage):
     CMD             JSON {"reset": true} | {"mode": "<scan mode>"} | {"roi_target": [R, A, S]}
     VirtualFixture  JSON {"vertices": [[R,A,S],...], "indices": [...], "policy": "keep_out"}
+
+Physics coupling (DEC-037): every streaming step sends the env's latest tissue solution (FEM force F0,
+contact stiffness K_c, indentation delta0, undeformed contact point and beam) with the end-effector
+target; the 1 kHz loop applies F = F0 + K_c (delta - delta0) to the probe without waiting on the FEM.
+With ``--gui`` a separate viewer process renders the scene and the deformed skin patch.
 
 Usage:
     ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode orbital_l4 --fps 30 [--gui]
@@ -89,7 +94,7 @@ from surgical_physics_bridge.src.coordinates import (  # noqa: E402
     probe_axes_to_pybullet_quaternion,
     ras_to_patient_points,
 )
-from surgical_physics_bridge.src.obj_io import read_obj  # noqa: E402
+from surgical_physics_bridge.src.obj_io import write_obj  # noqa: E402
 from surgical_physics_bridge.src.physics_rate import PhysicsRateMonitor  # noqa: E402
 from surgical_physics_bridge.src.pybullet_backend import (  # noqa: E402
     PhysicsChannels,
@@ -98,6 +103,7 @@ from surgical_physics_bridge.src.pybullet_backend import (  # noqa: E402
     exclude_dedicated_cpu,
     physics_process_main,
     run_physics_loop,
+    viewer_process_main,
 )
 from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv  # noqa: E402
 from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner  # noqa: E402
@@ -110,8 +116,8 @@ BENCH_CLIENT_SRC = (
     "    c.get_latest_messages(); time.sleep(0.01)\n"
 )
 SCAN_MODES = ["orbital_l4", "raster_l4", "orbital", "raster", "nbv", "diffusion", "cfm", "interactive"]
-SKIN_DEFORM_RADIUS_MM = 60.0
-SKIN_DEFORM_MIN_MM = 0.01
+FEM_SKIN_OBJ = "patient_fem_skin.obj"
+SKIN_CHANGE_MIN_MM = 0.01
 MAX_OUTGOING_QUEUE = 64
 
 
@@ -129,6 +135,7 @@ class UnifiedSurgicalBridgeServer:
         physics_hz: float = 1000.0,
         rate_log_interval_s: float = 5.0,
         rate_window: int = 60000,
+        tissue_backend: str = "fem",
     ):
         if physics_mode not in ("process", "thread", "inline"):
             raise ValueError(f"physics_mode must be process|thread|inline, got {physics_mode}")
@@ -148,8 +155,6 @@ class UnifiedSurgicalBridgeServer:
 
         self.patient_dir = self._resolve_patient_data(patient_dir)
         self._ensure_meshes()
-        self.skin_vertices = self._load_skin_vertices()
-        self.skin_deformed = False
 
         # Physics: never constructed in this process unless thread/inline mode.
         self.channels = PhysicsChannels(ctx=mp.get_context("spawn") if physics_mode == "process" else None,
@@ -159,16 +164,27 @@ class UnifiedSurgicalBridgeServer:
         self.backend: Optional[PyBulletBackend] = None
         self.physics_proc = None
         self.physics_thread = None
-        self._physics_config = dict(gui=gui, patient_dir=self.patient_dir, urdf_path=urdf_path, dt=self.dt_physics)
+        self.viewer_proc = None
+        # The physics client is always DIRECT; the GUI is a separate viewer process (process mode only).
+        self._physics_config = dict(gui=False, patient_dir=self.patient_dir, urdf_path=urdf_path, dt=self.dt_physics)
         self._start_physics()
+        if gui:
+            self._start_viewer()
 
-        print("[*] Initializing Ultrasound Reconstruction Environment (dorsal)...")
+        print(f"[*] Initializing Ultrasound Reconstruction Environment (dorsal, {tissue_backend} tissue)...")
         self.env = UltrasoundReconstructionEnv(
             patient_data=self.patient_dir,
             target_vertebra="vertebrae_L4",
             max_steps=10000,
             device=self.device,
+            tissue_backend=tissue_backend,
         )
+        self.skin_vertices, self.skin_tris = self._skin_patch()
+        self.skin_obj_path = self._export_skin_obj()
+        self._last_skin_sent: Optional[np.ndarray] = None
+        if self.viewer_proc is not None:
+            self.channels.viewer.put(("skin_mesh", {"vertices_pb": patient_to_pybullet_points(self.skin_vertices),
+                                                    "indices": self.skin_tris.ravel().tolist()}))
         self.obs = self.env.reset()
 
         self.planner = HeuristicScanPlanner()
@@ -222,6 +238,17 @@ class UnifiedSurgicalBridgeServer:
                     target=run_physics_loop, args=(self.backend, self.channels, self.physics_hz),
                     daemon=True, name="PyBulletPhysicsThread")
 
+    def _start_viewer(self) -> None:
+        if self.physics_mode != "process":
+            print("[!] --gui needs --physics-mode process (separate viewer process); running headless.")
+            return
+        ctx = mp.get_context("spawn")
+        cfg = dict(self._physics_config, gui=True)
+        self.viewer_proc = ctx.Process(target=viewer_process_main, args=(cfg, self.channels),
+                                       name="PyBulletViewerProcess", daemon=True)
+        self.viewer_proc.start()
+        print(f"[+] PyBullet GUI viewer process started (pid {self.viewer_proc.pid})")
+
     def _resolve_patient_data(self, patient_dir: Optional[str]) -> str:
         if patient_dir and os.path.isdir(patient_dir):
             return patient_dir
@@ -237,12 +264,27 @@ class UnifiedSurgicalBridgeServer:
         if not all(os.path.exists(os.path.join(mesh_dir, n)) for n in needed):
             PatientAssetGenerator.export_patient_meshes(self.patient_dir)
 
-    def _load_skin_vertices(self) -> Optional[np.ndarray]:
-        path = os.path.join(self.patient_dir, "meshes", "patient_torso_skin_ras.obj")
-        if not os.path.exists(path):
-            return None
-        verts, _ = read_obj(path)  # frame P (mm), file vertex order
-        return verts
+    def _skin_patch(self):
+        """Undeformed skin patch (vertices (S,3) P mm, triangles (T,3)) whose deformation is streamed:
+        the FEM skin surface (`FEMTissueModel.skin_surface_mesh`, deformed = state.displace(vertices))."""
+        model = self.env.tissue_model
+        if hasattr(model, "skin_surface_mesh"):
+            v, f = model.skin_surface_mesh(None)
+        else:  # Kelvinlet backend: 4 mm grid on the CT skin height map over the scan window +- 30 mm
+            xs = np.arange(self.env.c1_bounds[0] - 30.0, self.env.c1_bounds[1] + 30.01, 4.0)
+            zs = np.arange(self.env.c2_bounds[0] - 30.0, self.env.c2_bounds[1] + 30.01, 4.0)
+            X, Z = np.meshgrid(xs, zs, indexing="ij")
+            v = np.stack([X.ravel(), self.env.skin.height(X.ravel(), Z.ravel()), Z.ravel()], 1)
+            nx, nz = len(xs), len(zs)
+            a = (np.arange(nx - 1)[:, None] * nz + np.arange(nz - 1)[None, :]).ravel()
+            f = np.concatenate([np.stack([a, a + nz, a + 1], 1), np.stack([a + 1, a + nz, a + nz + 1], 1)])
+        return np.ascontiguousarray(v, dtype=np.float32), np.asarray(f, dtype=np.int64)
+
+    def _export_skin_obj(self) -> str:
+        """Write the undeformed skin patch (frame P mm, streamed vertex order) for the Slicer bridge."""
+        path = os.path.join(self.patient_dir, "meshes", FEM_SKIN_OBJ)
+        write_obj(path, self.skin_vertices, self.skin_tris)
+        return path
 
     def _load_policies(self) -> None:
         if self.scan_mode == "diffusion" and os.path.exists("checkpoints/diffusion_policy.pt"):
@@ -329,7 +371,7 @@ class UnifiedSurgicalBridgeServer:
 
     # -------------------------------------------------------- env -> physics
     def _tissue_state(self):
-        return getattr(self.env, "tissue_state", None)
+        return self.env.tissue_state
 
     def _indentation_mm(self) -> float:
         ts = self._tissue_state()
@@ -360,7 +402,19 @@ class UnifiedSurgicalBridgeServer:
             f"Reconstructed {len(self.env.accumulator.get_points())} pts | "
             f"physics {stats['achieved_hz']:.0f} Hz (p99 {stats['period_p99_ms']:.2f} ms)"
         )
+        ts = self._tissue_state()
+        in_contact = bool(ts is not None and ts.in_contact)
+        tissue = {
+            "contact_pb": patient_to_pybullet_points(t_p[:3, 3]).tolist(),
+            "beam_pb": beam_pb.tolist(),
+            "force_n": float(ts.reaction_force_n) if in_contact else 0.0,
+            "stiffness_n_per_mm": float(getattr(ts, "contact_stiffness_n_per_mm", ts.stiffness_n_per_mm))
+            if in_contact else 0.0,
+            "indentation_mm": indent,
+            "in_contact": in_contact,
+        }
         target = {
+            "tissue": tissue,
             "ee_pos": ee_pos.tolist(),
             "ee_orn": list(probe_axes_to_pybullet_quaternion(beam_p, lateral_p)),
             "contact_pb": contact_pb.tolist(),
@@ -372,6 +426,8 @@ class UnifiedSurgicalBridgeServer:
         }
         self.last_target = target
         self.channels.commands.put(("target", target))
+        if self.viewer_proc is not None:
+            self.channels.viewer.put(("target", target))
 
     # --------------------------------------------------------------- scanning
     def _policy_action(self) -> Optional[np.ndarray]:
@@ -428,27 +484,27 @@ class UnifiedSurgicalBridgeServer:
                       f"coverage {info.get('coverage_ratio', float('nan')) * 100:.1f}%")
         self.publish(current_time)
 
-    def _skin_displacement_rows(self) -> Optional[np.ndarray]:
-        """Sparse skin displacement rows [index, dx, dy, dz] from the tissue model, or None if unavailable."""
+    def deformed_skin_vertices(self) -> np.ndarray:
+        """(S, 3) float32 deformed skin-patch vertices (P mm, same order as ``self.skin_vertices``)."""
         ts = self._tissue_state()
-        if self.skin_vertices is None or ts is None or not hasattr(ts, "displace"):
-            return None
-        if not getattr(ts, "in_contact", False):
-            return np.array([[-1.0, 0.0, 0.0, 0.0]], dtype=np.float32) if self.skin_deformed else None
-        cp = np.asarray(ts.contact_point_mm, dtype=np.float32)
-        idx = np.nonzero(np.sum((self.skin_vertices - cp) ** 2, axis=1) < SKIN_DEFORM_RADIUS_MM ** 2)[0]
-        if idx.size == 0:
-            return None
-        x_ref = torch.as_tensor(self.skin_vertices[idx], dtype=torch.float32, device=self.device)
+        if ts is None or not ts.in_contact:
+            return self.skin_vertices
+        model = self.env.tissue_model
         with torch.no_grad():
-            disp = (ts.displace(x_ref) - x_ref).detach().cpu().numpy()
-        keep = np.linalg.norm(disp, axis=1) >= SKIN_DEFORM_MIN_MM
-        if not np.any(keep):
-            return np.array([[-1.0, 0.0, 0.0, 0.0]], dtype=np.float32) if self.skin_deformed else None
-        rows = np.empty((int(keep.sum()), 4), dtype=np.float32)
-        rows[:, 0] = idx[keep]
-        rows[:, 1:] = disp[keep]
-        return rows
+            if hasattr(model, "skin_surface_mesh"):
+                v = model.skin_surface_mesh(ts)[0]
+            else:
+                x = torch.as_tensor(self.skin_vertices, dtype=torch.float32, device=self.device)
+                v = ts.displace(x).detach().cpu().numpy()
+        return np.ascontiguousarray(v, dtype=np.float32)
+
+    def _skin_message(self) -> Optional[np.ndarray]:
+        """(1, S, 3) DeformedSkin payload, or None if the skin did not change since the last one sent."""
+        v = self.deformed_skin_vertices()
+        if self._last_skin_sent is not None and np.max(np.abs(v - self._last_skin_sent)) < SKIN_CHANGE_MIN_MM:
+            return None
+        self._last_skin_sent = v
+        return v[np.newaxis]
 
     def publish(self, current_time: float) -> None:
         env = self.env
@@ -466,16 +522,18 @@ class UnifiedSurgicalBridgeServer:
             self.last_points_sent = n_pts
             self.last_points_publish_time = current_time
 
-        rows = self._skin_displacement_rows()
-        if rows is not None:
-            self._safe_send(pyigtl.ImageMessage(np.ascontiguousarray(rows[np.newaxis]), device_name="DeformedSkin"))
-            self.skin_deformed = rows[0, 0] >= 0
+        skin = self._skin_message()
+        if skin is not None:
+            self._safe_send(pyigtl.ImageMessage(skin, device_name="DeformedSkin"))
+            if self.viewer_proc is not None:
+                self.channels.viewer.put(("skin", patient_to_pybullet_points(skin[0]).astype(np.float32)))
 
         ts = self._tissue_state()
         telemetry = {
             "normal_force_n": float(env.current_normal_force),
             "indentation_mm": self._indentation_mm(),
-            "in_contact": bool(getattr(ts, "in_contact", False)) if ts is not None else None,
+            "in_contact": bool(ts.in_contact) if ts is not None else None,
+            "contact_stiffness_n_per_mm": float(getattr(ts, "contact_stiffness_n_per_mm", 0.0)) if ts is not None else None,
             "coupling": float(env.current_coupling),
             "num_points": int(n_pts),
             "physics": self._cached_stats,
@@ -555,10 +613,11 @@ class UnifiedSurgicalBridgeServer:
         self.channels.stop.set()
         if self.physics_thread is not None and self.physics_thread.is_alive():
             self.physics_thread.join(timeout=2.0)
-        if self.physics_proc is not None:
-            self.physics_proc.join(timeout=5.0)
-            if self.physics_proc.is_alive():
-                self.physics_proc.terminate()
+        for proc in (self.physics_proc, self.viewer_proc):
+            if proc is not None:
+                proc.join(timeout=5.0)
+                if proc.is_alive():
+                    proc.terminate()
         if self.backend is not None:
             self.backend.disconnect()
             self.backend = None
@@ -579,6 +638,8 @@ def main():
     parser.add_argument("--physics-mode", choices=["process", "thread"], default="process",
                         help="Run the 1 kHz physics loop in its own process (default) or in a thread")
     parser.add_argument("--physics-hz", type=float, default=1000.0, help="Physics loop rate (Hz)")
+    parser.add_argument("--tissue-backend", choices=["fem", "kelvinlet"], default="fem",
+                        help="Soft-tissue model: precomputed GPU FEM (default) or analytic Kelvinlet")
     parser.add_argument("--benchmark-seconds", type=float, default=0.0,
                         help="Headless benchmark: run both loops (PyBullet DIRECT) for N s and print physics-rate stats")
     parser.add_argument("--no-benchmark-client", action="store_true",
@@ -601,6 +662,7 @@ def main():
         scan_mode=args.mode,
         physics_mode=args.physics_mode,
         physics_hz=args.physics_hz,
+        tissue_backend=args.tissue_backend,
     )
     if client is not None:
         t_wait = time.time()

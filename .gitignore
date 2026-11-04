@@ -59,3 +59,6 @@ demonstrations/*.npz
 
 # FEM tissue precompute cache (DEC-037)
 ReconstructionPipeline/.fem_cache/
+
+# Generated at server startup from the FEM skin surface
+data/sample_totalsegmentator_patient/meshes/patient_fem_skin.obj

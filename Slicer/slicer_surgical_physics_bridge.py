@@ -21,14 +21,17 @@ Messages consumed (device name / type / payload)
 ``UltrasoundProbe``   TransformMessage  4x4 T_P<-probe, mm (indented probe face = image plane, +Y = beam).
 ``US_Image``          ImageMessage      uint8 (H, W, 1) B-mode frame, row 0 = probe face. Shown in the Red view.
 ``ReconstructedBone`` ImageMessage      float32 (1, N, 3) bone points in P (mm).
-``DeformedSkin``      ImageMessage      float32 (1, K, 4) rows ``[vertex_index, dx, dy, dz]``: displacement (mm, P)
-                                        of vertex ``vertex_index`` of ``meshes/patient_torso_skin_ras.obj`` (file
-                                        vertex order) from its undeformed position, computed by the server's tissue
-                                        model. Vertices not listed are undeformed. A single row with index -1 resets
-                                        the skin. Alternatively float32 (1, N, 3) = all N deformed vertex positions.
+``DeformedSkin``      ImageMessage      float32 (1, N, 3): all N deformed vertices (mm, P) of the soft-tissue skin
+                                        patch ``meshes/patient_fem_skin.obj`` (file vertex order), which the server
+                                        writes at startup from its tissue model (FEM skin surface). Also accepted:
+                                        float32 (1, K, 4) rows ``[vertex_index, dx, dy, dz]`` = displacements of
+                                        listed vertices (others undeformed; a single row with index -1 resets).
 ``Telemetry``         StringMessage     JSON (force, indentation, coupling, physics-rate stats); logged periodically.
 
-Skin updates are in place: one persistent float32 array is bound to the torso ``vtkPoints`` once
+The full torso (``patient_torso_skin_ras.obj``) is shown as static context; the deformable
+``PatientSkinPatch`` model is (re)loaded from ``patient_fem_skin.obj`` when the server has written it
+(at startup, or lazily on the first ``DeformedSkin`` whose vertex count does not match).
+Skin updates are in place: one persistent float32 array is bound to the skin-patch ``vtkPoints`` once
 (``numpy_to_vtk(deep=False)``); each frame writes ``arr[:] = base; arr[idx] += disp`` and calls
 ``Modified()``. No per-frame VTK arrays or copies are allocated.
 """
@@ -90,10 +93,11 @@ class SlicerSurgicalPhysicsBridge:
         self.probe_transform_node = None
         self.bone_points = None
         self.bone_polydata = None
-        self.torso_polydata = None
-        self.skin_base = None      # (N, 3) float32 undeformed vertices (P)
-        self.skin_live = None      # (N, 3) float32 array bound to the torso vtkPoints (deep=False)
+        self.skin_polydata = None
+        self.skin_base = None      # (N, 3) float32 undeformed skin-patch vertices (P)
+        self.skin_live = None      # (N, 3) float32 array bound to the skin-patch vtkPoints (deep=False)
         self.skin_deformed = False
+        self._skin_reload_size = None
 
         self._setup_layout()
         self._setup_nodes()
@@ -244,20 +248,30 @@ class SlicerSurgicalPhysicsBridge:
             if not os.path.exists(path):
                 print(f"[!] Missing {path}; run ./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets")
                 continue
-            poly, verts = self._polydata_from_obj(path)
+            poly, _ = self._polydata_from_obj(path)
             self._model_node(name, poly, color, opacity)
-            if name == "PatientTorso":
-                self.torso_polydata = poly
-                n = poly.GetNumberOfPoints()
-                if n != len(verts):
-                    self._warn_once("skin_count", f"Torso point count {n} != OBJ vertex count {len(verts)}; "
-                                                  "skin deformation disabled.")
-                    continue
-                # Bind ONE persistent float32 buffer to the vtkPoints; per-frame updates write into it.
-                self.skin_base = np.ascontiguousarray(verts, dtype=np.float32)
-                self.skin_live = self.skin_base.copy()
-                self._skin_vtk_array = vtk_np.numpy_to_vtk(self.skin_live, deep=False)  # keep a reference
-                poly.GetPoints().SetData(self._skin_vtk_array)
+        self._load_skin_patch()
+
+    def _load_skin_patch(self):
+        """Deformable skin patch written by the server (vertex order = DeformedSkin vertex order)."""
+        path = os.path.join(PATIENT_DIR, "meshes", "patient_fem_skin.obj")
+        if not os.path.exists(path):
+            self._warn_once("skin_patch", f"{path} not written yet (the server writes it at startup).")
+            return False
+        poly, verts = self._polydata_from_obj(path)
+        n = poly.GetNumberOfPoints()
+        if n != len(verts):
+            self._warn_once("skin_count", f"Skin patch point count {n} != OBJ vertex count {len(verts)}; "
+                                          "skin deformation disabled.")
+            return False
+        # Bind ONE persistent float32 buffer to the vtkPoints; per-frame updates write into it.
+        self.skin_base = np.ascontiguousarray(verts, dtype=np.float32)
+        self.skin_live = self.skin_base.copy()
+        self._skin_vtk_array = vtk_np.numpy_to_vtk(self.skin_live, deep=False)  # keep a reference
+        poly.GetPoints().SetData(self._skin_vtk_array)
+        self.skin_polydata = poly
+        self._model_node("PatientSkinPatch", poly, (0.93, 0.62, 0.52), 0.85)
+        return True
 
     # ------------------------------------------------------------- networking
     def connect_server(self):
@@ -355,13 +369,18 @@ class SlicerSurgicalPhysicsBridge:
                 self.camera_initialized = True
 
     def _update_skin(self, msg):
-        if self.skin_live is None:
-            return
         arr = np.asarray(msg.image, dtype=np.float32)
         if arr.ndim >= 2 and arr.shape[-1] == 1:
             arr = arr[..., 0]
-        n = len(self.skin_base)
         ncols = arr.shape[-1] if arr.ndim >= 2 else 0
+        if self.skin_live is None or (ncols == 3 and arr.size != self.skin_live.size):
+            # Server started after us, or restarted with another patch: reload its OBJ (once per payload size).
+            if self._skin_reload_size == arr.size:
+                return
+            self._skin_reload_size = arr.size
+            if not self._load_skin_patch():
+                return
+        n = len(self.skin_base)
         if ncols == 3 and arr.size == n * 3:  # full deformed vertex positions
             self.skin_live[:] = arr.reshape(n, 3)
             self.skin_deformed = True
@@ -378,8 +397,8 @@ class SlicerSurgicalPhysicsBridge:
         else:
             self._warn_once("skin_shape", f"Unexpected DeformedSkin shape {np.asarray(msg.image).shape}")
             return
-        self.torso_polydata.GetPoints().Modified()
-        self.torso_polydata.Modified()
+        self.skin_polydata.GetPoints().Modified()
+        self.skin_polydata.Modified()
 
     def disconnect_client(self):
         if self.client:

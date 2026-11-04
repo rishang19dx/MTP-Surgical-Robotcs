@@ -176,19 +176,6 @@ def test_bone_appears_shallower_by_the_indentation(model, phantom):
     assert abs(shift_mm - 4.0) < 1.0, shift_mm
 
 
-def test_legacy_force_path_compresses(phantom):
-    ext = VolumeSliceExtractor(phantom["ct_volume"], spacing=phantom["spacing_mm"], origin=phantom["origin_mm"],
-                               image_size=(200, 80), physical_size_mm=(75.0, 40.0), device=DEV)
-    T = np.eye(4)
-    T[:3, :3] = np.diag([1.0, -1.0, -1.0])
-    T[:3, 3] = [0.0, phantom["skin_y_mm"], 0.0]
-    first = []
-    for f in (0.5, 8.0):
-        sl = ext.extract_slices(T, contact_force_n=f)[:, 38:42].mean(dim=1).cpu().numpy()
-        first.append(int(np.argmax(sl > 500.0)))
-    assert first[1] < first[0], first
-
-
 def test_solve_and_warp_latency(model):
     T = dorsal_pose(model, 10.0, 0.0)
     x = torch.randn(30000, 3, device=DEV) * 10 + torch.tensor(T[:3, 3], dtype=torch.float32, device=DEV)

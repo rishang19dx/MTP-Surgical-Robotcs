@@ -5,12 +5,10 @@ env -> physics target path, and tissue-model-driven skin deformation messages.
 
 import inspect
 import time
-from types import SimpleNamespace
 
 import numpy as np
 import pyigtl
 import pytest
-import torch
 
 from surgical_physics_bridge.src.physics_rate import PhysicsRateMonitor
 from surgical_physics_bridge.src.pybullet_backend import PhysicsChannels, run_physics_loop
@@ -121,32 +119,43 @@ def test_inline_server_steps_and_tracks_target(inline_server):
     assert stats["total_ticks"] >= 249
 
 
-def test_skin_deformation_rows_come_from_tissue_state(inline_server):
+def test_deformed_skin_message_matches_exported_base_mesh(inline_server):
+    """DeformedSkin = (1, S, 3) deformed FEM skin vertices in the vertex order of the OBJ the server exports
+    for the Slicer bridge; the probe really deforms it (inward, near the contact point only)."""
+    from surgical_physics_bridge.src.obj_io import read_obj
     s = inline_server
-    assert s.skin_vertices is not None
-    cp = s.skin_vertices[np.argmax(s.skin_vertices[:, 1])].astype(np.float64)
-    push = torch.tensor([0.0, -2.0, 0.0])
+    assert type(s.env.tissue_model).__name__ == "FEMTissueModel"
+    base_v, base_f = read_obj(s.skin_obj_path)
+    ref_v, ref_f = s.env.tissue_model.skin_surface_mesh(None)
+    assert np.allclose(base_v, ref_v, atol=1e-4) and np.array_equal(base_f, ref_f)
+    s.step_simulation_and_stream(physics_ticks=5)
+    ts = s.env.tissue_state
+    assert ts is not None and ts.in_contact and ts.reaction_force_n > 1.0
+    payload = s.deformed_skin_vertices()[np.newaxis]
+    assert payload.shape == (1, len(base_v), 3) and payload.dtype == np.float32
+    out = _roundtrip(pyigtl.ImageMessage(np.ascontiguousarray(payload), device_name="DeformedSkin"))
+    v = np.asarray(out.image, dtype=np.float32).reshape(-1, 3)
+    assert v.shape == base_v.shape
+    disp = v - base_v
+    moved = np.linalg.norm(disp, axis=1) > 0.2
+    assert moved.any(), "probe contact must deform the skin patch"
+    r = np.linalg.norm(base_v[:, [0, 2]] - np.asarray(ts.contact_point_mm)[[0, 2]], axis=1)
+    k = int(np.argmax(np.linalg.norm(disp, axis=1)))
+    assert disp[k, 1] < 0.0 and r[k] < 30.0, "largest displacement is inward (-Y_P) under the probe"
+    far = r > 60.0
+    assert np.abs(disp[far]).max() < 0.5 * np.abs(disp).max()
 
-    def displace(x):
-        d = torch.linalg.norm(x - torch.as_tensor(cp, dtype=x.dtype, device=x.device), dim=1, keepdim=True)
-        return x + push.to(x.device) * torch.clamp(1.0 - d / 30.0, min=0.0)
 
-    original = getattr(s.env, "tissue_state", None)
-    try:
-        s.env.tissue_state = SimpleNamespace(in_contact=True, contact_point_mm=cp, indentation_mm=2.0,
-                                             displace=displace)
-        rows = s._skin_displacement_rows()
-        assert rows is not None and rows.shape[1] == 4 and rows[0, 0] >= 0
-        idx = rows[:, 0].astype(int)
-        dist = np.linalg.norm(s.skin_vertices[idx] - cp, axis=1)
-        assert np.all(dist < 30.0)
-        assert np.allclose(rows[:, 2], -2.0 * (1.0 - dist / 30.0), atol=1e-4)
-        assert s._indentation_mm() == 2.0
-        s.skin_deformed = True
-        s.env.tissue_state = SimpleNamespace(in_contact=False, contact_point_mm=cp, indentation_mm=0.0,
-                                             displace=displace)
-        reset = s._skin_displacement_rows()
-        assert reset.shape == (1, 4) and reset[0, 0] == -1
-    finally:
-        s.env.tissue_state = original
-        s.skin_deformed = False
+def test_physics_loop_applies_fem_force_extrapolation(inline_server):
+    """The 1 kHz loop applies F = F0 + K_c (delta - delta0) from the latest FEM tissue state."""
+    s = inline_server
+    for _ in range(3):
+        s.step_simulation_and_stream(physics_ticks=100)
+    tis = s.last_target["tissue"]
+    assert tis["in_contact"] and tis["stiffness_n_per_mm"] > 0.0
+    c = s.channels.read_contact()
+    expect = tis["force_n"] + tis["stiffness_n_per_mm"] * (c["tissue_indentation_mm"] - tis["indentation_mm"])
+    assert c["tissue_force_n"] == pytest.approx(float(np.clip(expect, 0.0, 40.0)), rel=1e-6, abs=1e-6)
+    # the robot holds the face near the commanded indentation, so the applied force is near the FEM force
+    assert abs(c["tissue_indentation_mm"] - tis["indentation_mm"]) < 5.0
+    assert c["tissue_force_n"] > 0.0

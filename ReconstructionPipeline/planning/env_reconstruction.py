@@ -10,11 +10,19 @@ Per step:
   3. An inner-loop admittance controller (contract C2) adjusts the indentation along the beam to
      track `target_force_n` using the TissueModel's force (contract C1).  Force is an OUTPUT of the
      tissue model: it varies with anatomy (tissue thickness over bone), tilt and transients.
+     The indentation is measured from the undeformed skin under the probe CENTRE and may be negative:
+     a flat transverse probe over the midline groove touches the paraspinal ridges first (FEM
+     `first_contact_indentation`, about -9 mm on the sample patient).  The controller works in
+     [first_contact, max_indentation] and is warm-started across steps relative to first contact.
   4. The tissue model is solved at the final indentation; CT/label slices are sampled with backward
      Eulerian warping at the indented probe-face pose.
   5. B-mode simulation (explicit pixel spacing, contract C3), image-only confidence (C4),
      bone segmentation from B-mode, back-projection and fusion.
   6. Coverage = fraction of the US-visible target ROI within `coverage_tol_mm` of the reconstruction (C6).
+
+Tissue backends (`tissue_backend`): "fem" (default) = patient-specific precomputed GPU linear FEM
+(`simulation.fem_tissue.FEMTissueModel`, calibrated over the scan window); "kelvinlet" = the analytic
+regularised-Kelvinlet model (`simulation.tissue_model.KelvinletTissueModel`), kept for comparison.
 
 Deformation modes (for ablations):
   "aware"   (default) deformed images, back-projection with the tracked (indented) face pose.
@@ -23,6 +31,7 @@ Deformation modes (for ablations):
   "rigid"   SonoGym-style rigid patient: images are not deformed and the probe sits on the skin.
 """
 
+from contextlib import nullcontext
 from typing import Optional, Tuple, Dict, Any
 import os
 import warnings
@@ -78,6 +87,7 @@ class UltrasoundReconstructionEnv:
         pybullet_backend: Optional[Any] = None,             # visualisation only; force no longer read from it
         device: Optional[torch.device] = None,
         tissue_model: Optional[Any] = None,
+        tissue_backend: str = "fem",
         deformation_mode: str = "aware",
         admittance_gain_mm_per_n: float = 0.5,
         admittance_max_step_mm: float = 1.5,
@@ -93,6 +103,8 @@ class UltrasoundReconstructionEnv:
             raise ValueError("Only the dorsal scan approach is supported (lateral flank mode was removed).")
         if deformation_mode not in ("aware", "unaware", "rigid"):
             raise ValueError(f"deformation_mode must be aware|unaware|rigid, got {deformation_mode}")
+        if tissue_backend not in ("fem", "kelvinlet"):
+            raise ValueError(f"tissue_backend must be fem|kelvinlet, got {tissue_backend}")
         self.scan_approach = "dorsal"
         self.deformation_mode = deformation_mode
         self.max_steps = max_steps
@@ -144,9 +156,26 @@ class UltrasoundReconstructionEnv:
         self.skin = SkinSurface.from_patient_data(patient_data)
         self.skin_y = float(patient_data.get("skin_y_mm", np.median(patient_data["skin_height_map"])))
 
-        # Tissue model (contract C1); FEM backend can be passed in.
-        self.tissue_model = tissue_model if tissue_model is not None else KelvinletTissueModel.from_patient_data(
-            patient_data, skin_surface=self.skin, device=self.device)
+        # Scan window (probe-centre bounds, frame P mm)
+        if self.is_l4_target:
+            self.c1_bounds = (-32.0, 32.0)
+            self.c2_bounds = (-55.0, -10.0)
+        else:
+            self.c1_bounds = (-45.0, 45.0)
+            self.c2_bounds = (-30.0, 30.0)
+
+        # Tissue model (contract C1): FEM by default; an explicit `tissue_model` overrides the backend.
+        if tissue_model is not None:
+            self.tissue_model = tissue_model
+        elif tissue_backend == "fem":
+            from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel
+            self.tissue_model = FEMTissueModel.from_patient_data(
+                patient_data, c1_bounds=self.c1_bounds, c2_bounds=self.c2_bounds, device=self.device, verbose=False)
+        else:
+            self.tissue_model = KelvinletTissueModel.from_patient_data(
+                patient_data, skin_surface=self.skin, device=self.device)
+        self.tissue_backend = "fem" if hasattr(self.tissue_model, "first_contact_indentation") else "kelvinlet"
+        self._fit_window_to_tissue_region()
 
         # Target ROI: US-visible (outermost-along-beam) dorsal bone surface
         pts = self.gt_bone_points
@@ -163,6 +192,8 @@ class UltrasoundReconstructionEnv:
         # All bone surface in the volume (any vertebra / pelvis, CT > 300 HU or label 1): used for precision so
         # that echoes from neighbouring vertebrae are not counted as false positives.
         self.all_bone_points = self._all_bone_surface(self.ct_vol, self.label_vol, self.origin, self.spacing)
+        # Stricter precision reference: the dorsal-visible bone surface (outermost bone voxel per (x, z) column).
+        self.visible_bone_points = self._dorsal_visible_bone(self.ct_vol, self.label_vol, self.origin, self.spacing)
         self._roi_tree = cKDTree(self.target_roi_bone_points) if len(self.target_roi_bone_points) else None
 
         # 2. Subsystems
@@ -193,12 +224,6 @@ class UltrasoundReconstructionEnv:
         self.action_scale_trans = 5.0
         self.action_scale_yaw = np.radians(10.0)
         self.action_scale_pitch = np.radians(15.0)
-        if self.is_l4_target:
-            self.c1_bounds = (-32.0, 32.0)
-            self.c2_bounds = (-55.0, -10.0)
-        else:
-            self.c1_bounds = (-45.0, 45.0)
-            self.c2_bounds = (-30.0, 30.0)
         self.x_bounds = self.c1_bounds
         self.z_bounds = self.c2_bounds
 
@@ -206,6 +231,7 @@ class UltrasoundReconstructionEnv:
         self.current_step = 0
         self.current_pose_params = np.zeros(4, dtype=np.float32)
         self.current_indentation_mm = 0.0
+        self._indent_rel_mm = 0.0           # indentation beyond first contact (controller warm start)
         self.current_state: Optional[TissueState] = None
         self.previous_area = 0.0
         self.trajectory_length = 0.0
@@ -216,6 +242,32 @@ class UltrasoundReconstructionEnv:
         self.coverage_history = []
 
     # ------------------------------------------------------------------ geometry
+    WINDOW_MARGIN_MM = 5.0
+
+    def _fit_window_to_tissue_region(self) -> None:
+        """Shrink the scan window so the whole probe face (any yaw) stays `WINDOW_MARGIN_MM` inside the
+        tissue model's region (FEM ROI: its side faces are Dirichlet, so contact near them is over-stiff)."""
+        lo = getattr(self.tissue_model, "roi_min", None)
+        hi = getattr(self.tissue_model, "roi_max", None)
+        if lo is None or hi is None:
+            return
+        half = 0.5 * float(getattr(self.tissue_model, "face_dims", (45.0, 10.0))[0]) + self.WINDOW_MARGIN_MM
+        new = []
+        for (a, b), i in ((self.c1_bounds, 0), (self.c2_bounds, 2)):
+            a2, b2 = max(a, float(lo[i]) + half), min(b, float(hi[i]) - half)
+            if a2 >= b2:
+                raise ValueError(f"tissue model region {lo[i]:.0f}..{hi[i]:.0f} mm cannot hold the scan window")
+            new.append((a2, b2))
+        if (tuple(new[0]), tuple(new[1])) != (tuple(self.c1_bounds), tuple(self.c2_bounds)):
+            warnings.warn(f"scan window {self.c1_bounds} x {self.c2_bounds} clipped to {new[0]} x {new[1]} "
+                          "to stay inside the tissue model region")
+        self.c1_bounds, self.c2_bounds = new[0], new[1]
+
+    @property
+    def tissue_state(self) -> Optional[TissueState]:
+        """Latest TissueState (None in rigid mode or before the first acquisition)."""
+        return self.current_state
+
     @staticmethod
     def _dorsal_visible_surface(pts: np.ndarray) -> np.ndarray:
         """Outermost (max +Y) bone point per 1 mm (x, z) column = surface reachable by a dorsal beam."""
@@ -236,6 +288,18 @@ class UltrasoundReconstructionEnv:
             mask |= np.asarray(lbl) == 1
         surf = mask & ~binary_erosion(mask)
         idx = np.argwhere(surf)[:, ::-1].astype(np.float64)  # (x, y, z) voxel indices
+        return (np.asarray(origin, float) + idx * np.asarray(spacing, float)).astype(np.float32)
+
+    @staticmethod
+    def _dorsal_visible_bone(ct, lbl, origin, spacing) -> np.ndarray:
+        """Outermost (max +Y) voxel of CT > 300 HU or label 1 per (z, x) voxel column, in P mm."""
+        mask = np.asarray(ct) > 300.0
+        if lbl is not None:
+            mask |= np.asarray(lbl) == 1
+        ny = mask.shape[1]
+        top = ny - 1 - np.argmax(mask[:, ::-1, :], axis=1)          # (nz, nx)
+        iz, ix = np.nonzero(mask.any(axis=1))
+        idx = np.stack([ix, top[iz, ix], iz], axis=1).astype(np.float64)
         return (np.asarray(origin, float) + idx * np.asarray(spacing, float)).astype(np.float32)
 
     def get_skin_surface(self, c1: float, c2: float) -> float:
@@ -278,20 +342,33 @@ class UltrasoundReconstructionEnv:
         fn = getattr(self.tissue_model, "max_indentation", None)
         return float(fn(t_skin)) if fn is not None else 30.0
 
-    def regulate_force(self, t_skin: np.ndarray, d0: float, iterations: Optional[int] = None) -> Tuple[float, float]:
+    def _first_contact(self, t_skin: np.ndarray) -> float:
+        """Indentation (mm, may be < 0) at which the probe face first touches the undeformed skin."""
+        fn = getattr(self.tissue_model, "first_contact_indentation", None)
+        d0 = float(fn(t_skin)) if fn is not None else 0.0
+        return d0 if np.isfinite(d0) else 0.0
+
+    def _blas_scope(self):
+        fn = getattr(self.tissue_model, "blas_scope", None)
+        return fn() if fn is not None else nullcontext()
+
+    def regulate_force(self, t_skin: np.ndarray, d_rel0: float, iterations: Optional[int] = None) -> Tuple[float, float]:
         """
-        Admittance controller along the beam (contract C2):
-            d_{k+1} = clip(d_k + clip(K_a (F_target - F(d_k)), +-max_step), 0, d_max)
+        Admittance controller along the beam (contract C2), from first contact d_fc (may be < 0):
+            d_{k+1} = clip(d_k + clip(K_a (F_target - F(d_k)), +-max_step), d_fc, d_max)
+        `d_rel0` is the warm start relative to first contact (d = d_fc + d_rel0).
         Returns (indentation_mm, force_n) with force = TissueModel.force_at(final indentation).
         """
         n_it = self.adm_iters if iterations is None else int(iterations)
-        d_max = self._max_indentation(t_skin)
-        d = float(np.clip(d0, 0.0, d_max))
-        for _ in range(n_it):
-            f = self.tissue_model.force_at(t_skin, d)
-            step = np.clip(self.k_adm * (self.target_force_n - f), -self.adm_max_step, self.adm_max_step)
-            d = float(np.clip(d + step, 0.0, d_max))
-        return d, float(self.tissue_model.force_at(t_skin, d))
+        with self._blas_scope():
+            d_fc = self._first_contact(t_skin)
+            d_max = max(self._max_indentation(t_skin), d_fc)
+            d = float(np.clip(d_fc + d_rel0, d_fc, d_max))
+            for _ in range(n_it):
+                f = self.tissue_model.force_at(t_skin, d)
+                step = np.clip(self.k_adm * (self.target_force_n - f), -self.adm_max_step, self.adm_max_step)
+                d = float(np.clip(d + step, d_fc, d_max))
+            return d, float(self.tissue_model.force_at(t_skin, d))
 
     def _coupling(self, force_n: float, beam: np.ndarray, c1: float, c2: float) -> Tuple[float, str, float]:
         """kappa from contact force and the angle between the beam and the local skin normal."""
@@ -330,11 +407,11 @@ class UltrasoundReconstructionEnv:
         t_skin = self.skin_pose(c1, c2, yaw, pitch)
         beam = t_skin[:3, 1]
         if probe_y is not None:
-            d = max(0.0, (t_skin[1, 3] - float(probe_y)) / max(-beam[1], 1e-3))
+            d = (t_skin[1, 3] - float(probe_y)) / max(-beam[1], 1e-3)
             d = min(d, self._max_indentation(t_skin))
             f = float(self.tissue_model.force_at(t_skin, d))
         else:
-            _, f = self.regulate_force(t_skin, self.current_indentation_mm)
+            _, f = self.regulate_force(t_skin, self._indent_rel_mm)
         kappa, status, _ = self._coupling(f, beam, c1, c2)
         return f, kappa, status
 
@@ -369,6 +446,7 @@ class UltrasoundReconstructionEnv:
         # Approach phase: let the controller converge from first touch.
         t_skin = self.skin_pose(*self.current_pose_params)
         self.current_indentation_mm, _ = self.regulate_force(t_skin, 0.0, iterations=15)
+        self._indent_rel_mm = self.current_indentation_mm - self._first_contact(t_skin)
         obs, _ = self._acquire(self.current_pose_params)
         return obs
 
@@ -438,16 +516,17 @@ class UltrasoundReconstructionEnv:
         """Force control -> tissue solve -> warped slices -> B-mode -> segmentation -> fusion."""
         c1, c2, yaw, pitch = (float(v) for v in pose_params)
         t_skin = self.skin_pose(c1, c2, yaw, pitch)
-        d, f_n = self.regulate_force(t_skin, self.current_indentation_mm)
-        self.current_indentation_mm = d
-
-        if self.deformation_mode == "rigid":
-            state = None
-            t_img = t_skin
-        else:
-            state = self.tissue_model.solve(t_skin, d)
-            f_n = float(state.reaction_force_n)
-            t_img = state.probe_face_pose(t_skin)
+        with self._blas_scope():
+            d, f_n = self.regulate_force(t_skin, self._indent_rel_mm)
+            self.current_indentation_mm = d
+            self._indent_rel_mm = d - self._first_contact(t_skin)
+            if self.deformation_mode == "rigid":
+                state = None
+                t_img = t_skin
+            else:
+                state = self.tissue_model.solve(t_skin, d)
+                f_n = float(state.reaction_force_n)
+                t_img = state.probe_face_pose(t_skin)
         self.current_state = state
         kappa, status, tilt = self._coupling(f_n, t_skin[:3, 1], c1, c2)
         self.current_normal_force, self.current_coupling, self.current_contact_status = f_n, kappa, status

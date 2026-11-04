@@ -29,3 +29,13 @@ def read_obj(path: str) -> Tuple[np.ndarray, np.ndarray]:
     v = np.asarray(verts, dtype=np.float32).reshape(-1, 3)
     f = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
     return v, f
+
+
+def write_obj(path: str, vertices: np.ndarray, faces: np.ndarray) -> None:
+    """Writes ``v`` / ``f`` records in array order (1-based faces), readable by ``read_obj`` unchanged."""
+    v = np.asarray(vertices, dtype=np.float64).reshape(-1, 3)
+    f = np.asarray(faces, dtype=np.int64).reshape(-1, 3) + 1
+    with open(path, "w") as fh:
+        fh.write("# skin patch, frame P (mm)\n")
+        fh.writelines(f"v {a:.6f} {b:.6f} {c:.6f}\n" for a, b, c in v)
+        fh.writelines(f"f {a} {b} {c}\n" for a, b, c in f)

@@ -62,7 +62,6 @@ class VolumeSliceExtractor:
 
         # Deprecated: kept only for constructor backward compatibility (unused).
         self.deformation_solver = deformation_solver
-        self._legacy_model = None
 
         # Precompute the local 2D pixel coordinates in probe frame {U} (in mm)
         # Probe convention:
@@ -88,27 +87,12 @@ class VolumeSliceExtractor:
         local_coords = torch.stack([grid_x, grid_y, grid_z, grid_ones], dim=-1)
         return local_coords
 
-    def _legacy_tissue_model(self):
-        """Kelvinlet model built from this extractor's own volume (legacy force-driven API)."""
-        if self._legacy_model is None:
-            from ReconstructionPipeline.simulation.tissue_model import KelvinletTissueModel
-            vol = self.volume[0, 0].detach().cpu().numpy()
-            is_label = float(vol.max()) <= 16.0 and np.allclose(vol, np.round(vol))
-            bone = (vol == 1) if is_label else (vol > 300.0)
-            self._legacy_model = KelvinletTissueModel(
-                bone, tuple(self.spacing.tolist()), tuple(self.origin.tolist()), device=self.device
-            )
-        return self._legacy_model
-
     def extract_slices(
         self,
         probe_poses: Union[torch.Tensor, np.ndarray],
         interpolation: str = "bilinear",
         tissue_state: Optional[Any] = None,
         warp_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
-        contact_force_n: float = 0.0,
-        contact_normal: Optional[Union[torch.Tensor, np.ndarray]] = None,
-        bone_depth_mm: Optional[float] = None,
     ) -> torch.Tensor:
         """
         Extracts 2D slices for one or more probe poses with backward Eulerian warping:
@@ -117,15 +101,10 @@ class VolumeSliceExtractor:
         Args:
             probe_poses: 4x4 or (B,4,4) T_P<-U of the IMAGE plane (probe face).  When a
                 `tissue_state` / `warp_fn` is given this must be the indented face pose
-                (`TissueState.probe_face_pose`).  On the legacy `contact_force_n` path it is the pose
-                at the undeformed skin and the face indentation is computed internally.
+                (`TissueState.probe_face_pose`).
             interpolation: 'bilinear' (CT) or 'nearest' (labels).
             tissue_state: `TissueState` (contract C1); its `warp_to_reference` is applied.
             warp_fn: alternative callable (N,3) deformed -> (N,3) reference points (mm, frame P).
-            contact_force_n: LEGACY. If > 0 and no state/warp is given, a `KelvinletTissueModel`
-                built from this extractor's volume finds the indentation for this force and warps.
-            contact_normal, bone_depth_mm: deprecated and ignored (beam = +Y_probe; the bone depth
-                is ray-marched from the volume).
 
         Returns:
             (H, W) for a single pose, else (B, H, W).
@@ -146,16 +125,6 @@ class VolumeSliceExtractor:
             warps = [tissue_state.warp_to_reference] * batch_size
         elif warp_fn is not None:
             warps = [warp_fn] * batch_size
-        elif contact_force_n > 0.05:
-            model = self._legacy_tissue_model()
-            new_poses = []
-            for bi in range(batch_size):
-                T = poses[bi].detach().cpu().numpy().astype(np.float64)
-                d = model.indentation_for_force(T, float(contact_force_n))
-                state = model.solve(T, d)
-                warps[bi] = state.warp_to_reference
-                new_poses.append(torch.from_numpy(state.probe_face_pose(T)).float())
-            poses = torch.stack(new_poses).to(self.device)
 
         # Local probe grid (H*W,4) -> world (B,H*W,3) deformed coordinates
         pts_local = self.local_grid.view(-1, 4).t()

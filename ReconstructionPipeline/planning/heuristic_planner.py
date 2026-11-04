@@ -1,9 +1,13 @@
 """
-Heuristic Scan Planners for Robotic Ultrasound Reconstruction Benchmarking.
-Provides baseline open-loop trajectories:
-1. Linear Raster Sweep (standard clinical zigzag pattern)
-2. Orbital / Circular Sweep (orbits vertebra with inward acoustic tilt)
-Based on SonoGym (Ao et al., 2025) and Li et al. (IJCARS 2023).
+Heuristic open-loop scan planners (baselines).
+
+Frame/pose convention (see env_reconstruction): waypoints are [c1, c2, yaw, pitch] with c1 = lateral X,
+c2 = cranio-caudal Z (mm, on the dorsal skin), yaw = rotation about the beam, pitch = cranio-caudal tilt.
+The dorsal image plane is TRANSVERSE (probe x = world X), so a useful raster moves the probe
+ELEVATIONALLY (along Z) between frames; sweeping along X would only re-image the same plane.
+
+1. Elevational raster: cranio-caudal sweeps at a few lateral offsets (standard clinical transverse sweep).
+2. Orbital: elliptical orbit around the target with the beam tilted cranio-caudally toward the centre.
 """
 
 from typing import List, Tuple, Optional
@@ -11,36 +15,26 @@ import numpy as np
 
 
 class HeuristicScanPlanner:
-    """Generates deterministic scanning patterns across the anatomical region of interest."""
     @staticmethod
     def generate_linear_raster_trajectory(
-        x_range: Tuple[float, float] = (-35.0, 35.0),
+        x_range: Tuple[float, float] = (-20.0, 20.0),
         z_range: Tuple[float, float] = (-25.0, 25.0),
-        num_sweep_lines: int = 7,
-        points_per_line: int = 15,
+        num_sweep_lines: int = 3,
+        points_per_line: int = 20,
     ) -> np.ndarray:
         """
-        Generates a 2D zigzag raster scanning pattern on the patient's skin.
-        Returns:
-            trajectory: (N, 4) array of [x, z, yaw, pitch].
+        Elevational zigzag: `num_sweep_lines` lateral offsets spread over `x_range`; along each line the probe
+        moves cranio-caudally over `z_range` with `points_per_line` frames (alternating direction).
+        Returns (num_sweep_lines * points_per_line, 4) waypoints [x, z, yaw=0, pitch=0].
         """
-        x_min, x_max = x_range
-        z_min, z_max = z_range
-        z_coords = np.linspace(z_min, z_max, num_sweep_lines)
-        
-        trajectory = []
-        for i, z in enumerate(z_coords):
-            # Alternating direction for zigzag
-            if i % 2 == 0:
-                xs = np.linspace(x_min, x_max, points_per_line)
-            else:
-                xs = np.linspace(x_max, x_min, points_per_line)
-            
-            for x in xs:
-                # Linear sweep maintains probe perpendicular to skin (yaw=0, pitch=0)
-                trajectory.append([x, z, 0.0, 0.0])
-
-        return np.array(trajectory, dtype=np.float32)
+        xs = np.linspace(x_range[0], x_range[1], num_sweep_lines) if num_sweep_lines > 1 else np.array([np.mean(x_range)])
+        traj = []
+        for i, x in enumerate(xs):
+            zs = np.linspace(z_range[0], z_range[1], points_per_line)
+            if i % 2 == 1:
+                zs = zs[::-1]
+            traj.extend([[x, z, 0.0, 0.0] for z in zs])
+        return np.array(traj, dtype=np.float32)
 
     @staticmethod
     def generate_spine_raster_trajectory(
@@ -49,58 +43,30 @@ class HeuristicScanPlanner:
         step_distance_mm: float = 0.33,
         num_sweep_lines: int = 5,
     ) -> np.ndarray:
-        """
-        Generates a continuous clinical lumbar spine (L1-L5) raster scan with
-        dense sub-millimeter waypoints (e.g. 0.33 mm at 30 Hz = 10 mm/s probe velocity).
-        Sweeps cranio-caudally along Z to match anatomical orientation.
-        """
-        x_min, x_max = x_range
-        z_min, z_max = z_range
-        x_coords = np.linspace(x_min, x_max, num_sweep_lines)
-
-        trajectory = []
-        for i, x in enumerate(x_coords):
-            # Alternating cranio-caudal sweep
-            num_pts = max(10, int(np.ceil((z_max - z_min) / step_distance_mm)))
-            if i % 2 == 0:
-                zs = np.linspace(z_min, z_max, num_pts)
-            else:
-                zs = np.linspace(z_max, z_min, num_pts)
-
-            for z in zs:
-                # Small inward facet tilt for lateral lines
-                yaw = float(np.radians(-6.0 * (x / max(abs(x_min), abs(x_max))))) if abs(x) > 2.0 else 0.0
-                trajectory.append([x, z, yaw, 0.0])
-
-        return np.array(trajectory, dtype=np.float32)
+        """Dense elevational raster with a fixed cranio-caudal step (e.g. 0.33 mm at 30 Hz = 10 mm/s)."""
+        n = max(10, int(np.ceil((z_range[1] - z_range[0]) / step_distance_mm)) + 1)
+        return HeuristicScanPlanner.generate_linear_raster_trajectory(x_range, z_range, num_sweep_lines, n)
 
     @staticmethod
     def generate_orbital_trajectory(
         center: Tuple[float, float] = (0.0, 0.0),
-        radii: List[float] = [20.0, 32.0],
+        radii: List[float] = (20.0, 32.0),
         points_per_orbit: Optional[int] = None,
         step_distance_mm: float = 0.33,
         inward_pitch_deg: float = 12.0,
+        yaw_amplitude_deg: float = 20.0,
     ) -> np.ndarray:
         """
-        Generates an elliptical orbital trajectory orbiting the vertebra center,
-        with inward probe pitch tilt to capture steep lateral facets.
-        Returns:
-            trajectory: (N, 4) array of [x, z, yaw, pitch].
+        Elliptical orbits (semi-axes r laterally, 0.75 r cranio-caudally) around `center` = (x, z).
+        pitch leans the beam cranio-caudally toward the centre (positive pitch leans the beam toward -Z);
+        yaw rotates the image plane about the beam (|yaw| <= yaw_amplitude_deg) to vary insonation of the facets.
         """
         cx, cz = center
-        pitch_rad = np.radians(inward_pitch_deg)
-        trajectory = []
-
+        tilt = np.radians(inward_pitch_deg)
+        yaw_amp = np.radians(yaw_amplitude_deg)
+        traj = []
         for r in radii:
-            num_pts = points_per_orbit if points_per_orbit is not None else max(36, int(np.ceil(2 * np.pi * r / step_distance_mm)))
-            thetas = np.linspace(0, 2 * np.pi, num_pts, endpoint=False)
-            for theta in thetas:
-                x = cx + r * np.cos(theta)
-                z = cz + (r * 0.75) * np.sin(theta) # Elliptical along spine
-                # Inward probe acoustic tilt towards anatomical center (yaw=lateral tilt, pitch=sagittal tilt)
-                yaw = pitch_rad * np.sin(theta)
-                pitch = pitch_rad * np.cos(theta)
-                trajectory.append([x, z, yaw, pitch])
-
-        return np.array(trajectory, dtype=np.float32)
+            n = points_per_orbit if points_per_orbit is not None else max(36, int(np.ceil(2 * np.pi * r / step_distance_mm)))
+            for th in np.linspace(0, 2 * np.pi, n, endpoint=False):
+                traj.append([cx + r * np.cos(th), cz + 0.75 * r * np.sin(th), yaw_amp * np.cos(th), tilt * np.sin(th)])
+        return np.array(traj, dtype=np.float32)

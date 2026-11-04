@@ -1,184 +1,206 @@
 """
-Unit & Integration Tests for GPU Regularized Kelvinlet Soft-Body Deformation.
-Tests:
-1. Kelvinlet mathematical invariants (singularity-free, asymptotic decay, physiological scale).
-2. Backward Eulerian coordinate warping in VolumeSliceExtractor.
-3. Dynamic bone echo shift under increasing contact force.
-4. Latency benchmarks (< 2 ms GPU execution budget).
+Soft-tissue model tests (contract C1): regularized Kelvinlet kernel, half-space correction, bone rigidity,
+force-indentation behaviour, inverse warping and B-mode geometry under compression.
 """
 
 import time
+
 import numpy as np
 import pytest
 import torch
 
-from ReconstructionPipeline.simulation.kelvinlet_deformation import RegularizedKelvinletDeformation
-from ReconstructionPipeline.simulation.slice_extractor import VolumeSliceExtractor
-from ReconstructionPipeline.simulation.ultrasound_model_based import ModelBasedUltrasoundSimulator
 from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
+from ReconstructionPipeline.simulation.kelvinlet_deformation import (
+    RegularizedKelvinletDeformation,
+    kelvinlet_constants,
+    regularized_kelvinlet,
+)
+from ReconstructionPipeline.simulation.slice_extractor import VolumeSliceExtractor
+from ReconstructionPipeline.simulation.tissue_model import KelvinletTissueModel, TissueModel
+
+DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def test_kelvinlet_mathematical_invariants():
-    """Verifies that Regularized Kelvinlets have no singularity, decay with 1/r, and match elasticity theory."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    solver = RegularizedKelvinletDeformation(
-        shear_modulus_kpa=6.0,
-        poissons_ratio=0.48,
-        probe_radius_mm=15.0,
-        device=device,
-    )
-
-    contact_pt = torch.tensor([0.0, 50.0, 0.0], device=device)
-    force_vec = torch.tensor([0.0, -4.0, 0.0], device=device) # 4 N pushing down along -y
-
-    # 1. Zero force -> zero displacement
-    zero_disp = solver.compute_displacement(contact_pt.unsqueeze(0), contact_pt, torch.zeros(3, device=device))
-    assert torch.allclose(zero_disp, torch.zeros_like(zero_disp)), "Zero force must yield zero displacement"
-
-    # 2. Indentation at contact center (r = 0)
-    disp_center = solver.compute_displacement(contact_pt.unsqueeze(0), contact_pt, force_vec)
-    indent_y = float(torch.abs(disp_center[0, 1]))
-    theoretical_indent = solver.get_contact_indentation(4.0)
-
-    # Indentation should match theoretical formula within 5%
-    assert abs(indent_y - theoretical_indent) < 0.05, f"Indent {indent_y} != theory {theoretical_indent}"
-    assert 1.0 <= indent_y <= 5.0, f"4 N force should cause 1-5 mm soft tissue indentation, got {indent_y:.2f} mm"
-
-    # 3. Spatial decay: displacement at r = 50 mm should be much smaller than at r = 0
-    far_pt = torch.tensor([[0.0, 50.0, 50.0]], device=device)
-    disp_far = solver.compute_displacement(far_pt, contact_pt, force_vec)
-    indent_far = float(torch.norm(disp_far))
-    assert indent_far < indent_y * 0.35, f"Far displacement {indent_far} should decay significantly compared to {indent_y}"
-
-    # 4. Bone depth damping: displacement at depth >= bone_depth should decay to zero
-    bone_depth = 25.0
-    deep_pt = torch.tensor([[0.0, 50.0 - bone_depth - 5.0, 0.0]], device=device)
-    disp_deep = solver.compute_displacement(deep_pt, contact_pt, force_vec, bone_depth_mm=bone_depth)
-    assert float(torch.norm(disp_deep)) < 1e-4, "Displacement beneath rigid bone boundary must be zero"
+@pytest.fixture(scope="module")
+def phantom():
+    np.random.seed(0)
+    return PatientAssetGenerator.generate_lumbar_phantom()
 
 
-def test_backward_eulerian_slice_warping():
-    """Verifies that backward Eulerian coordinate warping shifts anatomy shallower in the B-scan."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    assets = PatientAssetGenerator.generate_lumbar_phantom(shape=(80, 80, 60))
-
-    ct_vol = assets["ct_volume"]
-    spacing = assets["spacing_mm"]
-    origin = assets["origin_mm"]
-
-    extractor = VolumeSliceExtractor(
-        volume=ct_vol,
-        spacing=spacing,
-        origin=origin,
-        image_size=(100, 80),
-        physical_size_mm=(50.0, 40.0),
-        device=device,
-    )
-
-    # Define a probe pose at the dorsal skin pointing inward (-Y)
-    pose = np.array([
-        [1.0,  0.0,  0.0,  0.0],
-        [0.0, -1.0,  0.0, 50.0],
-        [0.0,  0.0, -1.0,  0.0],
-        [0.0,  0.0,  0.0,  1.0]
-    ], dtype=np.float32)
-
-    # 1. Undeformed slice (0 N)
-    slice_undeformed = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=0.0)
-
-    # 2. Deformed slice under 6.0 N probe compression
-    slice_deformed = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=6.0)
-
-    assert slice_undeformed.shape == (100, 80)
-    assert slice_deformed.shape == (100, 80)
-
-    # Slices must differ under compression
-    diff = torch.abs(slice_deformed - slice_undeformed)
-    assert torch.max(diff) > 20.0, "Tissue deformation must noticeably alter CT resliced intensities"
+@pytest.fixture(scope="module")
+def model(phantom):
+    return KelvinletTissueModel.from_patient_data(phantom, device=DEV)
 
 
-def test_bmode_echo_shift_under_compression():
-    """Verifies that increasing probe pressure physically compresses tissue and shifts the bone reflection shallower."""
-    np.random.seed(42)
-    torch.manual_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    assets = PatientAssetGenerator.generate_lumbar_phantom(shape=(80, 80, 60))
-
-    extractor = VolumeSliceExtractor(
-        volume=assets["ct_volume"],
-        spacing=assets["spacing_mm"],
-        origin=assets["origin_mm"],
-        image_size=(120, 80),
-        physical_size_mm=(60.0, 40.0),
-        device=device,
-    )
-
-    sim = ModelBasedUltrasoundSimulator(device=device)
-
-    # Position probe precisely at the patient skin surface boundary
-    skin_y = float(assets["skin_y_mm"])
-    pose = np.array([
-        [1.0,  0.0,  0.0,   0.0],
-        [0.0, -1.0,  0.0, skin_y],
-        [0.0,  0.0, -1.0,   0.0],
-        [0.0,  0.0,  0.0,   1.0]
-    ], dtype=np.float32)
-
-    # Low force (0.5 N) vs High force (8.0 N)
-    slice_low = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=0.5)
-    slice_high = extractor.extract_slices(pose, interpolation="bilinear", contact_force_n=8.0)
-
-    # 1. CT slice bone peak verification (direct physical density shift)
-    slice_c_low = slice_low[:, 38:42].mean(dim=1).cpu().numpy()
-    slice_c_high = slice_high[:, 38:42].mean(dim=1).cpu().numpy()
-    peak_slice_low = np.argmax(slice_c_low)
-    peak_slice_high = np.argmax(slice_c_high)
-    assert peak_slice_high < peak_slice_low, (
-        f"CT bone peak under compression ({peak_slice_high}) must be shallower than uncompressed ({peak_slice_low})"
-    )
-
-    # 2. Specular acoustic reflection peak verification (bone cortex boundary echo)
-    out_low = sim.simulate_bmode(slice_low)
-    out_high = sim.simulate_bmode(slice_high)
-    refl_low = out_low["reflection"][:, 38:42].mean(dim=1).cpu().numpy()
-    refl_high = out_high["reflection"][:, 38:42].mean(dim=1).cpu().numpy()
-
-    peak_refl_low = np.argmax(refl_low)
-    peak_refl_high = np.argmax(refl_high)
-
-    # Under compression, specular bone reflection must appear shallower (smaller row depth index)
-    assert peak_refl_high < peak_refl_low, (
-        f"Bone reflection peak under compression ({peak_refl_high}) must be shallower than uncompressed ({peak_refl_low})"
-    )
+def dorsal_pose(model, x, z):
+    T = np.eye(4)
+    T[:3, :3] = np.diag([1.0, -1.0, -1.0])  # beam = -Y (into the back)
+    T[:3, 3] = [x, model.skin.height(x, z), z]
+    return T
 
 
-def test_deformation_latency_budget():
-    """Verifies that Kelvinlet deformation + backward warping runs in < 2 ms on GPU/CPU."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    assets = PatientAssetGenerator.generate_lumbar_phantom(shape=(60, 60, 40))
+# ----------------------------------------------------------------- kernel
+def test_kelvinlet_centre_value_matches_closed_form():
+    mu, nu, eps = 5.0, 0.45, 6.0
+    a, b = kelvinlet_constants(mu, nu)
+    f = torch.tensor([0.0, -2.0, 0.0], dtype=torch.float64)
+    u0 = regularized_kelvinlet(torch.zeros(1, 3, dtype=torch.float64), f, a, b, eps)
+    expected = a * (5 - 6 * nu) / (4 * (1 - nu) * eps) * 2.0  # de Goes & James, r = 0
+    assert abs(float(-u0[0, 1]) - expected) / expected < 1e-9
 
-    extractor = VolumeSliceExtractor(
-        volume=assets["ct_volume"],
-        spacing=assets["spacing_mm"],
-        origin=assets["origin_mm"],
-        image_size=(200, 150), # Full resolution
-        physical_size_mm=(75.0, 50.0),
-        device=device,
-    )
 
-    pose = np.eye(4, dtype=np.float32)
+def test_kelvinlet_far_field_is_classical_kelvin():
+    mu, nu, eps = 5.0, 0.45, 2.0
+    a, b = kelvinlet_constants(mu, nu)
+    f = torch.tensor([0.0, 0.0, 1.0], dtype=torch.float64)
+    r = torch.tensor([[60.0, 40.0, 70.0]], dtype=torch.float64)
+    u = regularized_kelvinlet(r, f, a, b, eps)[0].numpy()
+    rn = np.linalg.norm(r.numpy())
+    rh = r.numpy()[0] / rn
+    mu_n = mu * 1e-3
+    kel = (1.0 / (16 * np.pi * mu_n * (1 - nu) * rn)) * ((3 - 4 * nu) * np.eye(3) + np.outer(rh, rh)) @ f.numpy()
+    assert np.allclose(u, kel, rtol=5e-3)
 
-    # Warmup
-    for _ in range(3):
-        _ = extractor.extract_slices(pose, contact_force_n=4.0)
 
-    # Benchmark 20 iterations
-    t0 = time.time()
-    num_runs = 20
-    for _ in range(num_runs):
-        _ = extractor.extract_slices(pose, contact_force_n=4.0)
-    avg_latency_ms = ((time.time() - t0) / num_runs) * 1000.0
+def test_half_space_centre_matches_boussinesq_circular_load():
+    """Kelvinlet x half-space factor vs Boussinesq uniform circular load centre w0 = (1-nu) F / (pi mu a)."""
+    mu, nu, eps, F = 6.0, 0.45, 8.0, 3.0
+    solver = RegularizedKelvinletDeformation(mu, nu, eps, half_space=True, device=torch.device("cpu"))
+    w0 = (1 - nu) * F / (np.pi * mu * 1e-3 * eps)
+    u = solver.compute_displacement(np.zeros((1, 3), np.float32), np.zeros(3, np.float32),
+                                    np.array([0, -F, 0], np.float32))
+    assert abs(float(-u[0, 1]) - w0) / w0 < 0.02
+    # Without the free-surface factor the full-space solution is ~2x too stiff
+    solver_fs = RegularizedKelvinletDeformation(mu, nu, eps, half_space=False, device=torch.device("cpu"))
+    u_fs = solver_fs.compute_displacement(np.zeros((1, 3), np.float32), np.zeros(3, np.float32),
+                                          np.array([0, -F, 0], np.float32))
+    assert float(-u_fs[0, 1]) < 0.6 * w0
 
-    print(f"[*] Deformable Slice Extraction Latency: {avg_latency_ms:.3f} ms")
-    threshold = 5.0 if torch.cuda.is_available() else 25.0
-    assert avg_latency_ms < threshold, f"Deformable slice extraction must be fast (< {threshold} ms), got {avg_latency_ms:.2f} ms"
+
+# ------------------------------------------------------------ tissue model
+def test_model_satisfies_protocol(model):
+    assert isinstance(model, TissueModel)
+
+
+def test_force_monotone_in_indentation(model):
+    T = dorsal_pose(model, 0.0, 0.0)
+    d_max = model.max_indentation(T)
+    ds = np.linspace(0.0, d_max, 12)
+    fs = np.array([model.force_at(T, d) for d in ds])
+    assert fs[0] == 0.0
+    assert np.all(np.diff(fs) > 0), fs
+
+
+def test_indentation_at_4n_is_physiological(model):
+    """Literature (paraspinal, linear probe): ~3 mm at 2 N, ~6 mm at 5 N; 4 N should give 3-9 mm."""
+    T = dorsal_pose(model, 25.0, 0.0)  # off the spinous process: ~45 mm of tissue over bone
+    d4 = model.indentation_for_force(T, 4.0)
+    assert 3.0 <= d4 <= 9.0, d4
+    assert abs(model.force_at(T, d4) - 4.0) < 1e-6
+
+
+def test_force_depends_on_anatomy(model):
+    """Thin tissue over the spinous process must be stiffer than thick tissue beside it."""
+    thin = model.contact_mechanics(dorsal_pose(model, 0.0, 0.0))
+    thick = model.contact_mechanics(dorsal_pose(model, 25.0, 0.0))
+    assert thin["bone_depth_mm"] < thick["bone_depth_mm"]
+    assert thin["k_lin"] > 1.1 * thick["k_lin"]  # only the central Kelvinlet sits over the 8 mm-wide process
+    assert model.force_at(dorsal_pose(model, 0.0, 0.0), 5.0) > model.force_at(dorsal_pose(model, 25.0, 0.0), 5.0)
+
+
+def test_stiffer_tissue_needs_less_indentation(phantom):
+    soft = KelvinletTissueModel.from_patient_data(phantom, reference_k0_n_per_mm=0.3, device=DEV)
+    stiff = KelvinletTissueModel.from_patient_data(phantom, reference_k0_n_per_mm=0.8, device=DEV)
+    assert stiff.shear_modulus_kpa > soft.shear_modulus_kpa
+    T = dorsal_pose(soft, 25.0, 0.0)
+    assert stiff.indentation_for_force(T, 4.0) < soft.indentation_for_force(T, 4.0)
+
+
+def test_bone_points_do_not_move(model, phantom):
+    T = dorsal_pose(model, 0.0, 0.0)
+    state = model.solve(T, model.indentation_for_force(T, 6.0))
+    assert state.in_contact and state.indentation_mm > 1.0
+    bone = phantom["bone_points"]
+    near = bone[(np.abs(bone[:, 0]) < 30) & (np.abs(bone[:, 2]) < 20)]
+    X = torch.tensor(near, dtype=torch.float32, device=DEV)
+    u = (state.displace(X) - X).norm(dim=1)
+    assert float(u.max()) < 1e-4
+    # ...while soft tissue right under the probe moves by ~the indentation
+    face = torch.tensor(T[:3, 3][None], dtype=torch.float32, device=DEV)
+    assert float((state.displace(face) - face).norm()) > 0.5 * state.indentation_mm
+
+
+def test_face_moves_by_indentation_and_warp_inverts(model):
+    T = dorsal_pose(model, 25.0, 0.0)
+    state = model.solve(T, 5.0)
+    face = state.probe_face_pose(T)
+    ys, xs = torch.meshgrid(torch.linspace(0, 75, 100), torch.linspace(-25, 25, 80), indexing="ij")
+    loc = torch.stack([xs, ys, torch.zeros_like(xs), torch.ones_like(xs)], -1).view(-1, 4).to(DEV)
+    x = (torch.tensor(face, dtype=torch.float32, device=DEV) @ loc.T).T[:, :3]
+    X = state.warp_to_reference(x)
+    err = (state.displace(X) - x).norm(dim=1)
+    assert float(torch.quantile(err, 0.99)) < 0.05
+    # probe-face centre maps back to (close to) the undeformed skin point
+    centre = torch.tensor(face[:3, 3][None], dtype=torch.float32, device=DEV)
+    assert float((state.warp_to_reference(centre)[0] - torch.tensor(T[:3, 3], device=DEV, dtype=torch.float32)).norm()) < 1.5
+
+
+def test_no_contact_is_identity(model):
+    T = dorsal_pose(model, 0.0, 0.0)
+    state = model.solve(T, 0.0)
+    assert not state.in_contact and state.reaction_force_n == 0.0
+    x = torch.randn(10, 3, device=DEV)
+    assert torch.equal(state.warp_to_reference(x), x)
+
+
+# -------------------------------------------------------------- imaging
+def _first_bone_row(label_slice, cols):
+    col = (label_slice[:, cols] == 1).any(dim=1).cpu().numpy()
+    return int(np.argmax(col)) if col.any() else -1
+
+
+def test_bone_appears_shallower_by_the_indentation(model, phantom):
+    """Bone is rigid, so its echo depth from the face must drop by exactly the extra indentation."""
+    ext = VolumeSliceExtractor(phantom["label_volume"], spacing=phantom["spacing_mm"], origin=phantom["origin_mm"],
+                               image_size=(301, 101), physical_size_mm=(75.0, 50.0), device=DEV)
+    T = dorsal_pose(model, 0.0, 0.0)
+    res = 75.0 / 300
+    cols = slice(48, 53)
+    rows = []
+    for d in (1.0, 5.0):
+        st = model.solve(T, d)
+        lbl = ext.extract_slices(st.probe_face_pose(T), interpolation="nearest", tissue_state=st)
+        rows.append(_first_bone_row(lbl, cols))
+    assert rows[0] > 0 and rows[1] > 0
+    shift_mm = (rows[0] - rows[1]) * res
+    assert abs(shift_mm - 4.0) < 1.0, shift_mm
+
+
+def test_legacy_force_path_compresses(phantom):
+    ext = VolumeSliceExtractor(phantom["ct_volume"], spacing=phantom["spacing_mm"], origin=phantom["origin_mm"],
+                               image_size=(200, 80), physical_size_mm=(75.0, 40.0), device=DEV)
+    T = np.eye(4)
+    T[:3, :3] = np.diag([1.0, -1.0, -1.0])
+    T[:3, 3] = [0.0, phantom["skin_y_mm"], 0.0]
+    first = []
+    for f in (0.5, 8.0):
+        sl = ext.extract_slices(T, contact_force_n=f)[:, 38:42].mean(dim=1).cpu().numpy()
+        first.append(int(np.argmax(sl > 500.0)))
+    assert first[1] < first[0], first
+
+
+def test_solve_and_warp_latency(model):
+    T = dorsal_pose(model, 10.0, 0.0)
+    x = torch.randn(30000, 3, device=DEV) * 10 + torch.tensor(T[:3, 3], dtype=torch.float32, device=DEV)
+    for _ in range(2):
+        model.solve(T, 5.0).warp_to_reference(x)
+    if DEV.type == "cuda":
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    for _ in range(10):
+        model.solve(T, 5.0).warp_to_reference(x)
+    if DEV.type == "cuda":
+        torch.cuda.synchronize()
+    ms = (time.perf_counter() - t0) * 100
+    print(f"[*] solve + 5-iteration warp of 30k points: {ms:.2f} ms")
+    assert ms < (25.0 if DEV.type == "cuda" else 400.0)

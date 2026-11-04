@@ -4,7 +4,8 @@ ultrasound:
   image_width: 150             # Pixels
   physical_height_mm: 75.0     # Scan depth in mm
   physical_width_mm: 50.0      # Transducer lateral width in mm
-  spatial_resolution_mm: 0.5   # mm per pixel
+  axial_resolution_mm: 0.3769  # physical_height_mm / (image_height - 1)
+  lateral_resolution_mm: 0.3356 # physical_width_mm / (image_width - 1)
   frequency_mhz: 5.0           # Ultrasound frequency (MHz)
   initial_energy: 1.0          # Normalized transmission energy E0
   attenuation_coefficients:
@@ -30,8 +31,21 @@ robot:
   joint_limits:
     velocity_max: [1.39, 1.39, 1.39, 1.39, 1.22, 1.22, 1.22] # rad/s
   contact:
-    desired_normal_force_n: 5.0
-    max_normal_force_n: 15.0
+    desired_normal_force_n: 4.0     # env target_force_n (configurable 3-12 N)
+    max_normal_force_n: 20.0        # hard safety limit: episode terminates above this
+
+tissue:                              # KelvinletTissueModel (simulation/tissue_model.py)
+  poissons_ratio: 0.45
+  reference_k0_n_per_mm: 0.5         # linear stiffness for 35 mm of tissue over bone (randomise 0.3-0.8)
+  beta_per_mm: 0.15                  # exponential strain stiffening (randomise 0.10-0.20)
+  num_kelvinlets: 5
+  aperture_mm: 40.0
+  eps_mm: 6.0
+  max_indent_fraction: 0.5           # of the local tissue thickness above bone
+admittance:
+  gain_mm_per_n: 0.5
+  max_step_mm: 1.5
+  iterations_per_step: 2
 
 planning:
   action_space:

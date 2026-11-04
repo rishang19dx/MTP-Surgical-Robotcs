@@ -1,73 +1,68 @@
-"""
-Unit & Integration Tests for SonoGym Benchmark Suite with Soft-Body Deformations.
-Verifies:
-1. Complete SonoGym Metric Formulation (Coverage, Chamfer Distance, MAD, Safe Force Ratio, Force RMSE, Coupling).
-2. Physical B-mode Bone Echo Shift under Contact Indentation (Kelvinlet Green's function).
-3. Soft-Tissue Multi-Stiffness Generalization.
-"""
+"""Benchmark-suite tests: metric bookkeeping, echo detection sanity checks, and the soft-body analyses."""
 
 import numpy as np
 import pytest
 import torch
 
-from ReconstructionPipeline.evaluation.benchmark_runner import ReconstructionBenchmarkSuite
-from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
+from ReconstructionPipeline.evaluation.benchmark_runner import (
+    ReconstructionBenchmarkSuite,
+    detect_bone_echo_depth,
+)
+
+PATIENT = "data/sample_totalsegmentator_patient"
 
 
-def test_sonogym_metric_calculation():
-    suite = ReconstructionBenchmarkSuite(num_trials=1, device=torch.device("cpu"))
-    env = UltrasoundReconstructionEnv(max_steps=10, device=torch.device("cpu"))
-    env.reset()
-
-    # Synthetic force & coupling history
-    force_history = [3.5, 4.0, 4.2, 5.0, 3.8, 4.1]
-    coupling_history = [0.95, 0.98, 1.0, 0.99, 0.94, 0.97]
-
-    metrics = suite._evaluate_trial_metrics(env, force_history, coupling_history)
-
-    assert "coverage_pct" in metrics
-    assert "chamfer_mm" in metrics
-    assert "mad_mm" in metrics
-    assert "safe_force_ratio_pct" in metrics
-    assert "max_force_n" in metrics
-    assert "mean_force_n" in metrics
-    assert "force_rmse_n" in metrics
-    assert "mean_coupling" in metrics
-    assert "path_length_mm" in metrics
-    assert "rotation_deg" in metrics
-
-    # All forces in [2.0, 8.0] N -> 100% compliance
-    assert np.isclose(metrics["safe_force_ratio_pct"], 100.0)
-    assert metrics["max_force_n"] == 5.0
-    assert np.isclose(metrics["mean_force_n"], np.mean(force_history))
-    assert metrics["force_rmse_n"] < 1.0
-    assert metrics["mean_coupling"] > 0.90
+@pytest.fixture(scope="module")
+def suite():
+    return ReconstructionBenchmarkSuite(num_trials=1, patient_dir=PATIENT, target_vertebra="vertebrae_L4")
 
 
-def test_soft_body_echo_shift_under_pressure():
-    """Verifies that probe pressure produces physical indentation and echo displacement."""
-    suite = ReconstructionBenchmarkSuite(num_trials=1, device=torch.device("cpu"))
-    res = suite.run_soft_body_deformation_benchmark()
+def test_force_metrics_can_fail(suite):
+    env = suite.make_env(5, seed=0)
+    env.reset(seed=0)
+    forces = [4.0, 4.5, 21.0, 3.0]
+    m = suite._evaluate_trial_metrics(env, forces, [0.9, 0.9, 0.1, 0.9])
+    assert m["safety_violations"] == 1.0
+    assert m["max_force_n"] == 21.0
+    assert np.isclose(m["force_rmse_n"], np.sqrt(np.mean((np.array(forces) - 4.0) ** 2)))
+    assert m["force_in_band_pct"] == 75.0
+    assert m["low_coupling_steps"] == 1.0
+    for k in ("coverage2_pct", "coverage3_pct", "precision2_pct", "precision3_pct", "chamfer_mm", "mad_mm"):
+        assert k in m
 
-    assert "echo_shifts" in res
-    shifts = res["echo_shifts"]
-    assert len(shifts) >= 4
 
-    # Indentation must increase strictly monotonically with normal force
-    for i in range(len(shifts) - 1):
-        assert shifts[i + 1]["force_n"] > shifts[i]["force_n"]
-        assert shifts[i + 1]["indentation_mm"] > shifts[i]["indentation_mm"]
+def test_echo_detector_rejects_non_bone():
+    res = 0.25
+    flat = np.full((300, 40), 0.3)
+    assert np.isnan(detect_bone_echo_depth(flat, res, slice(10, 30)))
+    edge = np.full((300, 40), 0.2)
+    edge[-1] = 1.0  # brightest row at the window edge: must not be reported
+    assert np.isnan(detect_bone_echo_depth(edge, res, slice(10, 30)))
+    no_shadow = np.full((300, 40), 0.2)
+    no_shadow[100] = 1.0
+    no_shadow[101:] = 0.8  # bright tissue below the peak: no shadow
+    assert np.isnan(detect_bone_echo_depth(no_shadow, res, slice(10, 30)))
+    bone = np.full((300, 40), 0.2)
+    bone[100] = 1.0
+    bone[101:] = 0.02
+    assert detect_bone_echo_depth(bone, res, slice(10, 30)) == pytest.approx(25.0)
 
-    # Reconstruction metrics for rigid vs deformable must be recorded
-    assert "cd_rigid_mm" in res
-    assert "cd_deform_mm" in res
-    assert res["cd_rigid_mm"] > 0.0
-    assert res["cd_deform_mm"] > 0.0
 
-    # Multi-stiffness generalization must cover soft, normal, and stiff tissue
-    stiffness = res["stiffness_generalization"]
-    assert "mu_2.0kPa" in stiffness
-    assert "mu_4.0kPa" in stiffness
-    assert "mu_8.0kPa" in stiffness
-    for k, v in stiffness.items():
-        assert v["safe_force_pct"] >= 95.0
+def test_force_sweep_is_physical(suite):
+    rows = suite.run_force_sweep(forces=(1.0, 2.0, 4.0, 6.0))
+    ind = [r["indentation_mm"] for r in rows]
+    assert all(b > a for a, b in zip(ind, ind[1:]))
+    for r in rows:
+        assert abs(r["model_force_n"] - r["target_force_n"]) < 0.05 or r["indentation_limited"]
+        assert np.isfinite(r["echo_depth_mm"]), r
+        # bone is rigid: the detected echo sits at (tissue thickness - indentation) within ~1.5 mm
+        assert abs(r["echo_depth_mm"] - r["expected_echo_depth_mm"]) < 1.5, r
+    depths = [r["echo_depth_mm"] for r in rows]
+    assert depths[-1] < depths[0] - 2.0
+
+
+def test_deformation_unaware_backprojection_is_worse(suite):
+    res = suite.run_deformation_ablation(seeds=[0])
+    aware, unaware = res["aware"], res["unaware"]
+    assert unaware["mean_mad_mm"] > aware["mean_mad_mm"] + 1.0
+    assert unaware["mean_coverage2_pct"] < aware["mean_coverage2_pct"]

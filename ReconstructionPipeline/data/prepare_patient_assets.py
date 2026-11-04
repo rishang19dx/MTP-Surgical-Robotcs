@@ -2,6 +2,12 @@
 Patient Anatomical Asset Loader and Lumbar Vertebra Phantom Generator.
 Provides synthetic anatomical CT volumes and vertebra segmentations for testing and benchmarking,
 as well as loaders for TotalSegmentator NIfTI datasets.
+
+Frame P (contract C7): every loader returns volumes indexed [z, y, x] with physical coordinates
+origin_mm + index * spacing_mm in mm, and +Y pointing toward the DORSAL skin.  P is the
+simulation frame and is NOT true RAS despite the NIfTI header; any Slicer export must go through
+an explicit P->RAS matrix.  Each patient dict carries a CT-derived dorsal skin height map
+(`skin_height_map`, see `compute_skin_height_map`).
 """
 
 from typing import Tuple, Dict, Optional, List, Any
@@ -117,7 +123,8 @@ class PatientAssetGenerator:
             "spacing": spacing_mm,
             "origin_mm": origin_mm,
             "origin": origin_mm,
-            "skin_y_mm": skin_y,
+            # Height map derived from the CT body mask exactly as for real data (median = skin_y_mm).
+            **PatientAssetGenerator.compute_skin_height_map(ct_vol, origin_mm, spacing_mm),
         }
 
     @staticmethod
@@ -222,6 +229,7 @@ class PatientAssetGenerator:
             label_vol[skin_mask] = 3
 
         # 4. Optional Bounding Box Cropping around Spine & Posterior Back
+        crop_offset = np.zeros(3, dtype=np.int64)  # voxel offset of the crop in the original array
         if crop_to_spine and np.any(bone_mask):
             coords = np.argwhere(bone_mask)
             min_c = np.maximum(0, coords.min(axis=0) - margin_voxels)
@@ -229,6 +237,7 @@ class PatientAssetGenerator:
             # Ensure dorsal back (posterior y) is retained for probe contact
             max_c[1] = ct_data.shape[1]
 
+            crop_offset = min_c.astype(np.int64)
             ct_data = ct_data[min_c[0]:max_c[0], min_c[1]:max_c[1], min_c[2]:max_c[2]]
             label_vol = label_vol[min_c[0]:max_c[0], min_c[1]:max_c[1], min_c[2]:max_c[2]]
             bone_mask = bone_mask[min_c[0]:max_c[0], min_c[1]:max_c[1], min_c[2]:max_c[2]]
@@ -242,17 +251,16 @@ class PatientAssetGenerator:
             # Standard NIfTI (nx, ny, nz) = (X, Y, Z) -> transpose to (nz, ny, nx) = (D, H, W) for VolumeSliceExtractor
             ct_data = ct_data.transpose(2, 1, 0)
             label_vol = label_vol.transpose(2, 1, 0)
-            bone_pts_trans = nib.affines.apply_affine(affine, bone_voxels)
+            # Cropping shifts voxel (0,0,0): fold the crop offset into the points and the origin.
+            bone_pts_trans = nib.affines.apply_affine(affine, bone_voxels + crop_offset)
             bone_points = bone_pts_trans.astype(np.float32)
-            origin_mm = (float(affine[0, 3]), float(affine[1, 3]), float(affine[2, 3]))
+            origin_mm = tuple(float(v) for v in nib.affines.apply_affine(affine, crop_offset))
             spacing = (float(affine[0, 0]), float(affine[1, 1]), float(affine[2, 2]))
-            skin_y_mm = 55.0
         elif len(bone_voxels) > 0:
             if np.allclose(affine[:3, :3], np.diag(np.diag(affine[:3, :3]))) and np.any(affine[:3, 3] != 0):
-                bone_points = nib.affines.apply_affine(affine, bone_voxels).astype(np.float32)
-                origin_mm = tuple(float(x) for x in affine[:3, 3])
+                bone_points = nib.affines.apply_affine(affine, bone_voxels + crop_offset).astype(np.float32)
+                origin_mm = tuple(float(v) for v in nib.affines.apply_affine(affine, crop_offset))
                 spacing = tuple(float(abs(affine[i, i])) for i in range(3))
-                skin_y_mm = 55.0
             else:
                 d, h, w = ct_data.shape
                 sx, sy, sz = spacing
@@ -261,12 +269,12 @@ class PatientAssetGenerator:
                 bone_pts_x = (bone_voxels[:, 2] - w / 2.0) * sx
                 bone_points = np.stack([bone_pts_x, bone_pts_y, bone_pts_z], axis=-1).astype(np.float32)
                 origin_mm = (-w / 2.0 * sx, -h / 3.0 * sy, -d / 2.0 * sz)
-                skin_indices = np.where(label_vol != 0)[1]
-                skin_y_mm = float((np.percentile(skin_indices, 95) - h / 3.0) * sy) if len(skin_indices) > 0 else 55.0
         else:
             bone_points = np.empty((0, 3), dtype=np.float32)
             origin_mm = (0.0, 0.0, 0.0)
-            skin_y_mm = 55.0
+
+        # 6. Dorsal skin height map from the CT body mask (frame P: +Y toward the dorsal skin)
+        skin_info = PatientAssetGenerator.compute_skin_height_map(ct_data, origin_mm, spacing)
 
         print(f"[TotalSegmentator Loader] Loaded {len(loaded_bones)} anatomical structures from {subject_dir}.")
         print(f"  Volume Shape: {ct_data.shape} | Spacing: {spacing} mm | Bone points: {len(bone_points)}")
@@ -279,10 +287,61 @@ class PatientAssetGenerator:
             "spacing": spacing,
             "origin_mm": origin_mm,
             "origin": origin_mm,
-            "skin_y_mm": skin_y_mm,
+            **skin_info,
             "subject_dir": subject_dir,
             "loaded_structures": loaded_bones,
             "acoustic_maps": PatientAssetGenerator.ct_to_acoustic_properties(ct_data),
+        }
+
+    @staticmethod
+    def compute_skin_height_map(
+        ct_zyx: np.ndarray,
+        origin_mm: Tuple[float, float, float],
+        spacing_mm: Tuple[float, float, float],
+        hu_threshold: float = -200.0,
+        median_size: int = 3,
+    ) -> Dict[str, Any]:
+        """
+        Dorsal skin height map y_skin(x, z) from the CT body mask.
+
+        Frame P convention (contract C7): the volume is indexed [z, y, x] with physical
+        coordinate = origin + index * spacing, and +Y points toward the DORSAL skin (P is not true
+        RAS).  For every (x, z) column the skin is the centre of the outermost body voxel
+        (HU > `hu_threshold`) along +Y.  The voxel centre (not its outer face) is used so that a probe
+        placed on the skin samples tissue, not the partial-volume air boundary.
+
+        Columns without any body voxel are filled from the nearest valid column; columns where the
+        body touches the top of the field of view are flagged in `skin_truncated_mask` (the true
+        skin lies outside the CT there and the map is clamped to the FOV).
+
+        Returns dict with: skin_height_map (nz, nx) mm, skin_map_origin_xz, skin_map_spacing_xz,
+        skin_valid_mask, skin_truncated_mask, skin_y_mm (median over valid columns, back-compat).
+        """
+        from scipy.ndimage import distance_transform_edt, median_filter
+
+        ox, oy, oz = (float(v) for v in origin_mm)
+        sx, sy, sz = (float(v) for v in spacing_mm)
+        body = np.asarray(ct_zyx) > hu_threshold  # (nz, ny, nx)
+        ny = body.shape[1]
+        valid = body.any(axis=1)  # (nz, nx)
+        top_idx = ny - 1 - np.argmax(body[:, ::-1, :], axis=1)
+        height = oy + top_idx.astype(np.float64) * sy
+        truncated = valid & (top_idx == ny - 1)
+        if not valid.any():
+            height[:] = oy + (ny - 1) * sy
+        elif not valid.all():
+            _, (iz, ix) = distance_transform_edt(~valid, return_indices=True)
+            height = height[iz, ix]
+        if median_size and median_size > 1:
+            height = median_filter(height, size=median_size, mode="nearest")
+        skin_y = float(np.median(height[valid])) if valid.any() else float(height.mean())
+        return {
+            "skin_height_map": height.astype(np.float32),
+            "skin_map_origin_xz": (ox, oz),
+            "skin_map_spacing_xz": (sx, sz),
+            "skin_valid_mask": valid,
+            "skin_truncated_mask": truncated,
+            "skin_y_mm": skin_y,
         }
 
     @staticmethod
@@ -332,8 +391,6 @@ class PatientAssetGenerator:
             np.random.seed(100 + idx)
             # Bone density variation (young vs osteoporotic)
             bone_hu = float(np.random.uniform(900.0, 1400.0))
-            # Subcutaneous fat thickness (BMI variation)
-            skin_elevation = float(np.random.uniform(50.0, 62.0))
             # Vertebral dimension scaling
             scale_vertebra = float(np.random.uniform(0.85, 1.15))
 
@@ -344,7 +401,6 @@ class PatientAssetGenerator:
             # Modulate bone HU and skin elevation for this patient
             bone_mask = patient_data["label_volume"] == 1
             patient_data["ct_volume"][bone_mask] = bone_hu + np.random.normal(0, 20.0, np.sum(bone_mask))
-            patient_data["skin_y_mm"] = skin_elevation
             patient_data["patient_id"] = f"PATIENT_{idx+1:03d}"
             patient_data["bone_hu_nominal"] = bone_hu
 

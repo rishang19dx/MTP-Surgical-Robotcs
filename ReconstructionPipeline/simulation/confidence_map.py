@@ -1,31 +1,61 @@
 """
-Ultrasound Confidence Mapping and Acoustic Reliability Estimator.
-Quantifies signal reliability based on wave attenuation, bone acoustic shadowing,
-and angle of incidence to guide Next-Best-View (NBV) planning and filter 3D point cloud back-projection.
+Image-only Ultrasound Confidence Map.
+
+Fast approximation of Karamalis et al., "Ultrasound confidence maps using random walks"
+(MedIA 16(6), 2012): confidence along a scanline decays with the acoustic energy already
+reflected/absorbed above a pixel. Instead of solving the random-walk linear system, the
+transmitted fraction is approximated from the B-mode image alone:
+
+    C(y, x) = exp(-k * sum_{y' < y - g} e(y', x) * dy_mm) * exp(-depth_mm / L)
+
+where e = clip((I - t) / (1 - t), 0, 1) is the "excess" echo intensity above a speckle level t
+(strong specular reflectors such as bone remove most of the energy, so pixels distal to them lie
+in an acoustic shadow), g is a guard of ~1.5 mm so the reflecting ridge itself keeps its confidence
+(the shadow starts BELOW the peak, not at it), and L is a mild depth-decay length. The result is
+smoothed laterally (mimicking the lateral coupling of the random walk).
+
+Only the B-mode image is used. The simulator's privileged `energy` / `effective_energy` /
+`bone_mask` outputs must not be passed in; `energy_map` is accepted for backward compatibility
+and ignored.
 """
 
-from typing import Tuple, Optional
+from typing import Optional
 import torch
 import torch.nn.functional as F
-import numpy as np
 
 
 class UltrasoundConfidenceEstimator:
-    """
-    Estimates a per-pixel confidence map C(x, y) in [0, 1] representing the geometric reliability
-    of detected ultrasound reflections.
-    """
+    """Per-pixel confidence C(x, y) in [0, 1] computed purely from the B-mode image."""
+
     def __init__(
         self,
-        min_incidence_cos: float = 0.85, # cos(31 deg) ~ 0.85 threshold for specular bone
-        attenuation_decay_rate: float = 2.5,
-        shadow_threshold: float = 0.15,
+        min_incidence_cos: float = 0.85,
+        attenuation_decay_rate: float = 1.6,
+        shadow_threshold: float = 0.70,
+        axial_resolution_mm: float = 0.375,
+        guard_mm: float = 1.5,
+        depth_decay_mm: float = 150.0,
+        lateral_smoothing_px: int = 5,
         device: Optional[torch.device] = None,
     ):
+        """
+        Args:
+            min_incidence_cos: Threshold on |n_y| for the optional incidence term.
+            attenuation_decay_rate: k, per (mm * unit excess intensity).
+            shadow_threshold: t, intensity above which echoes count as strong reflectors.
+            axial_resolution_mm: Pixel spacing along the beam (rows) [mm].
+            guard_mm: Distance below a reflector before its shadow starts.
+            depth_decay_mm: L, mild depth decay length (generic attenuation proxy).
+            lateral_smoothing_px: Width of the lateral box filter (odd, 1 disables).
+        """
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.min_incidence_cos = min_incidence_cos
         self.attenuation_decay_rate = attenuation_decay_rate
         self.shadow_threshold = shadow_threshold
+        self.axial_resolution_mm = axial_resolution_mm
+        self.guard_mm = guard_mm
+        self.depth_decay_mm = depth_decay_mm
+        self.lateral_smoothing_px = max(1, int(lateral_smoothing_px) | 1)
 
     def compute_confidence_map(
         self,
@@ -34,63 +64,53 @@ class UltrasoundConfidenceEstimator:
         estimated_normals: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Computes the 2D confidence map.
-
         Args:
-            bmode_image: (H, W) or (B, H, W) B-mode ultrasound intensity in [0, 1].
-            energy_map: (H, W) or (B, H, W) acoustic energy map E(u).
-            estimated_normals: Optional (H, W, 2) or (B, H, W, 2) normalized surface gradients [nx, ny].
+            bmode_image: (H, W) or (B, H, W) B-mode intensity in [0, 1] (rows = depth).
+            energy_map: Ignored (kept for backward compatibility; confidence is image-only).
+            estimated_normals: Optional (H, W, 2) / (B, H, W, 2) surface normals [nx, ny].
 
         Returns:
-            confidence_map: Tensor of same shape as bmode_image with values in [0, 1].
+            Confidence map with the same shape as bmode_image, values in [0, 1].
         """
-        img = bmode_image.to(self.device)
+        img = torch.as_tensor(bmode_image, dtype=torch.float32).to(self.device)
         is_single = img.ndim == 2
         if is_single:
             img = img.unsqueeze(0)
+        _, h, _ = img.shape
+        dy = self.axial_resolution_mm
 
-        batch_size, h, w = img.shape
+        # 1. Excess echo intensity above the speckle level (strong reflectors)
+        t = self.shadow_threshold
+        excess = torch.clamp((img - t) / (1.0 - t), 0.0, 1.0)
 
-        # 1. Depth transmission factor: signal decay with axial depth y
-        depth_coords = torch.linspace(0.0, 1.0, h, device=self.device).view(1, h, 1).expand(batch_size, -1, w)
-        depth_penalty = torch.exp(-self.attenuation_decay_rate * depth_coords)
+        # 2. Integrated reflected energy above each pixel, shifted by a guard so the ridge keeps confidence
+        cum = torch.cumsum(excess, dim=1) * dy
+        g = max(1, int(round(self.guard_mm / dy)))
+        cum_shift = torch.zeros_like(cum)
+        if g < h:
+            cum_shift[:, g:, :] = cum[:, :-g, :]
+        transmitted = torch.exp(-self.attenuation_decay_rate * cum_shift)
 
-        # 2. Cumulative shadow detection along axial beam (y axis):
-        # Only hyperechoic specular bone reflections (intensity >= 0.60) cause distal acoustic shadowing
-        bone_peaks = torch.clamp((img - 0.60) / 0.40, min=0.0)
-        cumulative_attenuator = torch.cumsum(bone_peaks * 0.25, dim=1)
-        shadow_factor = torch.clamp(1.0 - cumulative_attenuator, min=0.0, max=1.0)
+        # 3. Mild generic depth decay
+        depth_mm = torch.arange(h, device=self.device, dtype=torch.float32).view(1, -1, 1) * dy
+        conf = transmitted * torch.exp(-depth_mm / self.depth_decay_mm)
 
-        # 3. Energy factor
-        if energy_map is not None:
-            e_map = energy_map.to(self.device)
-            if e_map.ndim == 2:
-                e_map = e_map.unsqueeze(0)
-            energy_factor = torch.clamp(e_map, 0.0, 1.0)
-        else:
-            energy_factor = depth_penalty
+        # 4. Lateral smoothing (random-walk-like lateral coupling)
+        k = self.lateral_smoothing_px
+        if k > 1:
+            conf = F.avg_pool2d(conf.unsqueeze(1), kernel_size=(1, k), stride=1,
+                                padding=(0, k // 2), count_include_pad=False).squeeze(1)
 
-        # 4. Incidence angle factor
+        # 5. Optional incidence-angle term
         if estimated_normals is not None:
-            # Beam direction is [0, 1] (downwards +y)
-            # ny is component along acoustic ray
             ny = estimated_normals[..., 1].to(self.device)
             if ny.ndim == 2:
                 ny = ny.unsqueeze(0)
             cos_theta = torch.clamp(torch.abs(ny), 0.0, 1.0)
-            incidence_factor = torch.where(
-                cos_theta >= self.min_incidence_cos,
-                cos_theta,
-                cos_theta * 0.3 # Heavy penalty for non-orthogonal surfaces
-            )
-        else:
-            incidence_factor = torch.ones_like(img)
+            conf = conf * torch.where(cos_theta >= self.min_incidence_cos, cos_theta, cos_theta * 0.3)
 
-        # Total Confidence = Energy * Shadow * Incidence * (Intensity presence)
-        confidence = energy_factor * shadow_factor * incidence_factor
-        confidence = torch.clamp(confidence, 0.0, 1.0)
-
-        return confidence.squeeze(0) if is_single else confidence
+        conf = torch.clamp(conf, 0.0, 1.0)
+        return conf.squeeze(0) if is_single else conf
 
     def extract_reliable_bone_points(
         self,
@@ -99,16 +119,9 @@ class UltrasoundConfidenceEstimator:
         intensity_threshold: float = 0.55,
         confidence_threshold: float = 0.40,
     ) -> torch.Tensor:
-        """
-        Filters the 2D ultrasound frame to return only high-confidence bone boundary coordinates.
-
-        Returns:
-            points_2d: (N, 2) tensor of pixel coordinates (x, y) satisfying bone criteria.
-        """
+        """Returns (N, 2) float [x, y] pixel coordinates that are bright and high-confidence."""
         mask = (bmode_image >= intensity_threshold) & (confidence_map >= confidence_threshold)
-        # Find indices: y is dim 0, x is dim 1
-        indices = torch.nonzero(mask, as_tuple=False) # (N, 2) where col 0 is y, col 1 is x
-        # Return as (x, y)
+        indices = torch.nonzero(mask, as_tuple=False)
         if len(indices) == 0:
             return torch.empty((0, 2), device=self.device)
         return torch.stack([indices[:, 1], indices[:, 0]], dim=-1).float()

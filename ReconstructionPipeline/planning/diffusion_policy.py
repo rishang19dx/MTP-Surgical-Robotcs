@@ -185,6 +185,9 @@ class SOTADiffusionPolicy(nn.Module):
 
         # 1. 3D Point Cloud Visual Encoder (PointNet)
         self.pointnet = PointNetEncoder(latent_dim=pointnet_latent_dim)
+        # Probe-pose normalisation (mm / rad -> O(1)); set by the trainer, saved in the state dict.
+        self.register_buffer("pose_center", torch.zeros(pose_dim))
+        self.register_buffer("pose_scale", torch.ones(pose_dim))
 
         # 2. Condition Projector (PointNet latent + current probe pose)
         total_cond_dim = pointnet_latent_dim + pose_dim
@@ -277,7 +280,7 @@ class SOTADiffusionPolicy(nn.Module):
 
         # Extract 3D geometric invariant features via PointNet
         pc_feat = self.pointnet(point_cloud) # (B, latent_dim)
-        raw_cond = torch.cat([pc_feat, probe_pose], dim=-1)
+        raw_cond = torch.cat([pc_feat, (probe_pose - self.pose_center) / self.pose_scale], dim=-1)
         return self.cond_proj(raw_cond)
 
     # -------------------------------------------------------------------------

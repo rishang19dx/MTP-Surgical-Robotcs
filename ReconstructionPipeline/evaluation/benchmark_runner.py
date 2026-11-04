@@ -2,8 +2,11 @@
 Benchmark suite for 3D robotic ultrasound bone-surface reconstruction.
 
 Policies: heuristic elevational raster, heuristic orbital, greedy NBV, Submodular PPO, Flow Matching,
-Diffusion Policy.  Every trial uses its own seed (initial pose, speckle, segmentation RNG); results are
-reported as mean +- std over trials.
+Diffusion Policy.  Every policy gets the same step budget (the raster length, 72 frames) and trial k of every
+policy uses the same seed and the same start pose, drawn from the wide start-pose distribution of
+`planning.start_pose` (whole scan window, +-15 deg yaw, +-10 deg pitch), so trials differ in start pose as well
+as speckle / segmentation RNG; results are reported as mean +- std over trials. Learned policies require their
+checkpoint (missing checkpoint = error, never a randomly initialised network).
 
 Metrics (contract C6, `reconstruction.metrics.compute_reconstruction_metrics`): coverage on the US-visible
 dorsal target ROI; precision against the bone SURFACE of the whole volume (env.all_bone_points = boundary
@@ -42,6 +45,8 @@ import torch
 
 from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
 from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner
+from ReconstructionPipeline.planning.pointnet_encoder import prepare_points
+from ReconstructionPipeline.planning.start_pose import WIDE_START, reset_wide
 from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
 from ReconstructionPipeline.simulation.tissue_model import KelvinletTissueModel
 
@@ -204,6 +209,11 @@ class ReconstructionBenchmarkSuite:
             patient_data=self.patient_data(), target_vertebra=self.target_vertebra,
             max_steps=max_steps, device=self.device, seed=seed, **kwargs)
 
+    @property
+    def step_budget(self) -> int:
+        """Frames per episode for every policy = length of the heuristic raster."""
+        return len(self.heuristic_trajectory("raster"))
+
     def trial_seed(self, trial: int, offset: int = 0) -> int:
         return self.base_seed + 1000 * offset + trial
 
@@ -307,12 +317,13 @@ class ReconstructionBenchmarkSuite:
         res["num_trials"] = len(trial_dicts)
         return res
 
-    def _run_trials(self, max_steps: int, policy_loop: Callable, seed_offset: int, **env_kwargs) -> Dict[str, float]:
+    def _run_trials(self, max_steps: int, policy_loop: Callable, **env_kwargs) -> Dict[str, float]:
+        """Trial k: seed trial_seed(k), start pose from the wide distribution (same for every policy)."""
         trials = []
         for trial in range(self.num_trials):
-            seed = self.trial_seed(trial, seed_offset)
+            seed = self.trial_seed(trial)
             env = self.make_env(max_steps, seed, **env_kwargs)
-            obs = env.reset(seed=seed)
+            obs = reset_wide(env, seed)
             hist: Dict[str, List[float]] = {}
             policy_loop(env, obs, hist)
             trials.append(self._evaluate_trial_metrics(env, hist.get("normal_force", []),
@@ -322,14 +333,15 @@ class ReconstructionBenchmarkSuite:
     # ------------------------------------------------------------- policies
     def run_heuristic_benchmark(self, scan_type: str = "raster") -> Dict[str, float]:
         traj = self.heuristic_trajectory(scan_type)
-        return self._run_trials(len(traj), lambda env, obs, hist: self.follow(env, traj, hist),
-                                seed_offset=1 if scan_type == "raster" else 2)
+        return self._run_trials(self.step_budget, lambda env, obs, hist: self.follow(env, traj[:self.step_budget], hist))
 
-    def run_greedy_nbv_benchmark(self, max_steps: int = 60) -> Dict[str, float]:
+    def run_greedy_nbv_benchmark(self, max_steps: Optional[int] = None) -> Dict[str, float]:
         """Greedy NBV: picks the move maximising predicted coupling and novelty (visitation penalty)."""
         deltas = [(5.0, 0.0, 0.0, 0.0), (-5.0, 0.0, 0.0, 0.0), (0.0, 5.0, 0.0, 0.0), (0.0, -5.0, 0.0, 0.0),
                   (0.0, 3.0, 0.0, np.radians(8.0)), (0.0, -3.0, 0.0, -np.radians(8.0)),
                   (3.5, 3.5, np.radians(6.0), 0.0), (-3.5, -3.5, -np.radians(6.0), 0.0)]
+
+        max_steps = max_steps or self.step_budget
 
         def loop(env, obs, hist):
             visited = []
@@ -352,78 +364,90 @@ class ReconstructionBenchmarkSuite:
                 if term or trunc:
                     break
 
-        return self._run_trials(max_steps, loop, seed_offset=3)
+        return self._run_trials(max_steps, loop)
 
-    def run_submodular_ppo_benchmark(self, checkpoint_path: Optional[str] = None, max_steps: int = 60) -> Dict[str, float]:
+    def _load_ckpt(self, path: Optional[str], name: str) -> Dict[str, Any]:
+        if not path or not os.path.exists(path):
+            raise FileNotFoundError(f"{name}: checkpoint {path!r} not found; train it first (no random-init evaluation).")
+        return torch.load(path, map_location=self.device, weights_only=False)
+
+    def _obs_tensors(self, obs, rng: np.random.Generator, max_points: int = 256):
+        """Cloud subsampled to the training size (prepare_points) + pose, both batched (1, ...)."""
+        pts = prepare_points(obs["reconstructed_points"], max_points, rng)
+        return (torch.as_tensor(pts, dtype=torch.float32, device=self.device).unsqueeze(0),
+                torch.as_tensor(obs["probe_pose"], dtype=torch.float32, device=self.device).unsqueeze(0))
+
+    def run_submodular_ppo_benchmark(self, checkpoint_path: Optional[str] = None, max_steps: Optional[int] = None,
+                                     deterministic: bool = False) -> Dict[str, float]:
+        """PPO acts by sampling its Gaussian policy (the policy that was trained; torch is seeded per trial by
+        env.reset) or, with `deterministic`, by its mean action."""
         from ReconstructionPipeline.planning.train_submodular_ppo import SubmodularActorCritic
+        max_steps = max_steps or self.step_budget
         ac = SubmodularActorCritic(action_dim=4, latent_dim=192).to(self.device)
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
-            ac.load_state_dict(ckpt.get("state_dict", ckpt))
+        ac.load_state_dict(self._load_ckpt(checkpoint_path, "Submodular PPO")["state_dict"])
         ac.eval()
 
         def loop(env, obs, hist):
+            rng = np.random.default_rng(0)
             for _ in range(max_steps):
                 with torch.no_grad():
-                    pts_t = torch.tensor(obs["reconstructed_points"], dtype=torch.float32, device=self.device).unsqueeze(0)
-                    pose_t = torch.tensor(obs["probe_pose"], dtype=torch.float32, device=self.device).unsqueeze(0)
-                    action, _, _, _ = ac.get_action_and_value(pts_t, pose_t)
+                    action, _, _, _ = ac.get_action_and_value(*self._obs_tensors(obs, rng), deterministic=deterministic)
                 obs, _, term, trunc, info = env.step(action.squeeze(0).cpu().numpy())
                 self._record(hist, info)
                 if term or trunc:
                     break
 
-        return self._run_trials(max_steps, loop, seed_offset=4)
+        return self._run_trials(max_steps, loop)
 
-    def _run_chunked(self, max_steps: int, chunk_fn: Callable, seed_offset: int) -> Dict[str, float]:
+    def _run_chunked(self, max_steps: int, chunk_fn: Callable) -> Dict[str, float]:
         def loop(env, obs, hist):
             steps = 0
+            rng = np.random.default_rng(0)
             while steps < max_steps:
-                chunk = chunk_fn(obs)
+                chunk = chunk_fn(obs, rng)
                 for act in chunk[:2]:  # receding horizon K = 2
                     obs, _, term, trunc, info = env.step(act)
                     self._record(hist, info)
                     steps += 1
                     if term or trunc or steps >= max_steps:
                         return
-        return self._run_trials(max_steps, loop, seed_offset)
+        return self._run_trials(max_steps, loop)
 
-    def run_flow_matching_benchmark(self, checkpoint_path: Optional[str] = None, max_steps: int = 60) -> Dict[str, float]:
+    def run_flow_matching_benchmark(self, checkpoint_path: Optional[str] = None,
+                                    max_steps: Optional[int] = None) -> Dict[str, float]:
         from ReconstructionPipeline.planning.pointnet_encoder import PointNetEncoder
         from ReconstructionPipeline.planning.flow_matching_policy import FlowMatchingPolicy
+        ckpt = self._load_ckpt(checkpoint_path, "Flow Matching")
         pointnet = PointNetEncoder(latent_dim=128).to(self.device)
-        cfm = FlowMatchingPolicy(action_dim=4, chunk_horizon=8, condition_dim=132, device=self.device).to(self.device)
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
-            pointnet.load_state_dict(ckpt.get("pointnet_state_dict", ckpt.get("pointnet")))
-            cfm.load_state_dict(ckpt.get("policy_state_dict", ckpt.get("state_dict")))
+        cfm = FlowMatchingPolicy(action_dim=4, chunk_horizon=ckpt.get("horizon", 8), condition_dim=132,
+                                 device=self.device).to(self.device)
+        pointnet.load_state_dict(ckpt["pointnet_state_dict"])
+        cfm.load_state_dict(ckpt["policy_state_dict"])
         cfm.eval()
         pointnet.eval()
 
-        def chunk_fn(obs):
+        def chunk_fn(obs, rng):
             with torch.no_grad():
-                pts_t = torch.tensor(obs["reconstructed_points"], dtype=torch.float32, device=self.device).unsqueeze(0)
-                pose_t = torch.tensor(obs["probe_pose"], dtype=torch.float32, device=self.device).unsqueeze(0)
+                pts_t, pose_t = self._obs_tensors(obs, rng)
                 cond = torch.cat([pointnet(pts_t), pose_t], dim=-1)
                 return cfm.generate_action_chunk(cond, num_steps=5).squeeze(0).cpu().numpy()
 
-        return self._run_chunked(max_steps, chunk_fn, seed_offset=5)
+        return self._run_chunked(max_steps or self.step_budget, chunk_fn)
 
-    def run_diffusion_benchmark(self, checkpoint_path: Optional[str] = None, max_steps: int = 60) -> Dict[str, float]:
+    def run_diffusion_benchmark(self, checkpoint_path: Optional[str] = None,
+                                max_steps: Optional[int] = None) -> Dict[str, float]:
         from ReconstructionPipeline.planning.diffusion_policy import SOTADiffusionPolicy
-        policy = SOTADiffusionPolicy(action_dim=4, horizon=8, device=self.device)
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
-            policy.load_state_dict(ckpt.get("state_dict", ckpt))
+        ckpt = self._load_ckpt(checkpoint_path, "Diffusion Policy")
+        policy = SOTADiffusionPolicy(action_dim=4, horizon=ckpt.get("horizon", 8), device=self.device)
+        policy.load_state_dict(ckpt["state_dict"])
         policy.eval()
 
-        def chunk_fn(obs):
+        def chunk_fn(obs, rng):
             with torch.no_grad():
-                pts_t = torch.tensor(obs["reconstructed_points"], dtype=torch.float32, device=self.device)
-                pose_t = torch.tensor(obs["probe_pose"], dtype=torch.float32, device=self.device)
+                pts_t, pose_t = self._obs_tensors(obs, rng)
                 return policy.sample_actions(pts_t, pose_t, num_steps=5, method="heun").squeeze(0).cpu().numpy()
 
-        return self._run_chunked(max_steps, chunk_fn, seed_offset=6)
+        return self._run_chunked(max_steps or self.step_budget, chunk_fn)
 
     # ------------------------------------------------------------ soft body
     def run_force_sweep(self, forces=(1.0, 2.0, 4.0, 6.0, 8.0, 10.0), seed: int = 0,
@@ -517,22 +541,6 @@ class ReconstructionBenchmarkSuite:
             }
         return out
 
-    def run_full_comparison(self, ppo_ckpt=None, cfm_ckpt=None, diffusion_ckpt=None) -> Dict[str, Dict[str, float]]:
-        results = {}
-        print("1/6 Heuristic elevational raster...")
-        results["Heuristic_Raster"] = self.run_heuristic_benchmark("raster")
-        print("2/6 Heuristic orbital...")
-        results["Heuristic_Orbital"] = self.run_heuristic_benchmark("orbital")
-        print("3/6 Greedy NBV...")
-        results["Greedy_NBV"] = self.run_greedy_nbv_benchmark()
-        print("4/6 Submodular PPO...")
-        results["Submodular_PPO"] = self.run_submodular_ppo_benchmark(checkpoint_path=ppo_ckpt)
-        print("5/6 Flow Matching...")
-        results["Flow_Matching_CFM"] = self.run_flow_matching_benchmark(checkpoint_path=cfm_ckpt)
-        print("6/6 Diffusion Policy...")
-        results["Diffusion_Policy"] = self.run_diffusion_benchmark(checkpoint_path=diffusion_ckpt)
-        return results
-
 
 def _pm(m: Dict[str, float], key: str, fmt: str = "{:.1f}") -> str:
     return (fmt + " ± " + fmt).format(m.get(f"mean_{key}", float("nan")), m.get(f"std_{key}", float("nan")))
@@ -624,7 +632,12 @@ def write_results(results: Dict[str, Any], meta: Dict[str, Any], out_dir: str = 
           f"wall time {meta.get('wall_time_s', float('nan')):.0f} s | raw: `{os.path.basename(jpath)}`", "",
           "Mean ± std over trials. Cov = coverage of the US-visible dorsal L4 surface; Prec = fraction of reconstructed "
           "points within tol of the bone surface of the whole volume; Prec vis = same against the dorsal-visible bone "
-          "surface only (stricter). Force = tissue-model reaction force under the admittance controller.", ""]
+          "surface only (stricter). Force = tissue-model reaction force under the admittance controller.", "",
+          f"Policies: every method gets the same budget of {meta.get('step_budget', '?')} frames; trial k of every "
+          f"method starts from the same pose drawn uniformly over the scan window (inset {WIDE_START['margin_mm']:g} mm), "
+          f"yaw +-{WIDE_START['max_yaw_deg']:g} deg, pitch +-{WIDE_START['max_pitch_deg']:g} deg. "
+          "PPO samples its stochastic policy (`--ppo-deterministic`: mean action, reported as Submodular_PPO_mean); "
+          "CFM / Diffusion execute 2 actions of each 8-step chunk.", ""]
     if results.get("policies"):
         md += ["## Policies", "", markdown_table(results["policies"]), ""]
     if results.get("soft_body"):
@@ -656,6 +669,8 @@ if __name__ == "__main__":
     parser.add_argument("--policies", type=str, default=None,
                         help="Comma-separated subset of raster,orbital,nbv,ppo,cfm,diffusion")
     parser.add_argument("--out-dir", type=str, default="results")
+    parser.add_argument("--ppo-deterministic", action="store_true",
+                        help="Evaluate PPO with its mean action instead of sampling the trained stochastic policy")
     args = parser.parse_args()
 
     suite = ReconstructionBenchmarkSuite(num_trials=args.num_trials, patient_dir=args.patient_dir,
@@ -678,8 +693,10 @@ if __name__ == "__main__":
             "raster": ("Heuristic_Raster", lambda: suite.run_heuristic_benchmark("raster")),
             "orbital": ("Heuristic_Orbital", lambda: suite.run_heuristic_benchmark("orbital")),
             "nbv": ("Greedy_NBV", suite.run_greedy_nbv_benchmark),
-            "ppo": ("Submodular_PPO", lambda: suite.run_submodular_ppo_benchmark(
-                checkpoint_path=_ckpt(args.ppo_ckpt, "checkpoints/submodular_ppo.pt"))),
+            "ppo": ("Submodular_PPO" + ("_mean" if args.ppo_deterministic else ""),
+                    lambda: suite.run_submodular_ppo_benchmark(
+                        checkpoint_path=_ckpt(args.ppo_ckpt, "checkpoints/submodular_ppo.pt"),
+                        deterministic=args.ppo_deterministic)),
             "cfm": ("Flow_Matching_CFM", lambda: suite.run_flow_matching_benchmark(
                 checkpoint_path=_ckpt(args.cfm_ckpt, "checkpoints/flow_matching.pt"))),
             "diffusion": ("Diffusion_Policy", lambda: suite.run_diffusion_benchmark(
@@ -700,6 +717,7 @@ if __name__ == "__main__":
     meta = {"command": "./.venv/bin/python " + " ".join(sys.argv), "patient_dir": args.patient_dir,
             "target_vertebra": args.target_vertebra, "num_trials": args.num_trials, "seed": args.seed,
             "tissue_backend": args.tissue_backend, "target_force_n": args.target_force, "device": args.device,
+            "step_budget": suite.step_budget, "start_pose_distribution": WIDE_START,
             "wall_time_s": time.time() - t_start}
     paths = write_results(results, meta, args.out_dir)
     print(f"[benchmark] wrote {paths['json']} and {paths['markdown']}")

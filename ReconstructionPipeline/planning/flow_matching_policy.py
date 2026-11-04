@@ -100,6 +100,10 @@ class FlowMatchingPolicy(nn.Module):
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.action_dim = action_dim
         self.chunk_horizon = chunk_horizon
+        # Condition normalisation (the probe-pose part of [PointNet feature, pose] is in mm / rad);
+        # set by the trainer, saved in the state dict, applied inside the policy so callers pass raw condition.
+        self.register_buffer("cond_center", torch.zeros(condition_dim, device=self.device))
+        self.register_buffer("cond_scale", torch.ones(condition_dim, device=self.device))
         self.model = FlowMatchingVectorFieldNet(
             action_dim=action_dim,
             chunk_horizon=chunk_horizon,
@@ -112,6 +116,16 @@ class FlowMatchingPolicy(nn.Module):
         if parsed[0] is not None:
             self.device = parsed[0]
         return super().to(*args, **kwargs)
+
+    def _norm_cond(self, condition: torch.Tensor) -> torch.Tensor:
+        return (condition.to(self.device) - self.cond_center) / self.cond_scale
+
+    @torch.no_grad()
+    def set_pose_normalization(self, center, scale) -> None:
+        """Normalise the trailing len(center) condition entries (the probe pose)."""
+        k = len(center)
+        self.cond_center[-k:] = torch.as_tensor(center, dtype=torch.float32)
+        self.cond_scale[-k:] = torch.as_tensor(scale, dtype=torch.float32)
 
     def compute_loss(
         self,
@@ -141,7 +155,7 @@ class FlowMatchingPolicy(nn.Module):
         target_velocity = x1 - x0 # u_t = d(x_t)/dt
 
         # Predict vector field
-        pred_velocity = self.model(x_t, t, condition.to(self.device))
+        pred_velocity = self.model(x_t, t, self._norm_cond(condition))
 
         # Mean squared error loss
         loss = F.mse_loss(pred_velocity, target_velocity)
@@ -167,6 +181,7 @@ class FlowMatchingPolicy(nn.Module):
         cond = condition.to(self.device)
         if cond.ndim == 1:
             cond = cond.unsqueeze(0)
+        cond = self._norm_cond(cond)
         batch_size = cond.shape[0]
 
         # Initial sample from standard Gaussian prior x(0) ~ N(0, I)

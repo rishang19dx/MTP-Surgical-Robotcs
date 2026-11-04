@@ -416,8 +416,11 @@ class UltrasoundReconstructionEnv:
         return f, kappa, status
 
     # --------------------------------------------------------------- episode
-    def reset(self, seed: Optional[int] = None, clear_accumulator: bool = True) -> Dict[str, Any]:
-        """Resets the episode. `seed` re-seeds the env RNG (initial pose, segmentation) and torch (speckle)."""
+    def reset(self, seed: Optional[int] = None, clear_accumulator: bool = True,
+              options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Resets the episode. `seed` re-seeds the env RNG (initial pose, segmentation) and torch (speckle).
+        `options={"init_pose": [c1, c2, yaw, pitch]}` overrides the default random start pose (clipped to the
+        scan window / angle limits); used by the benchmark and training for wider start-pose randomisation."""
         if seed is not None:
             self.rng = np.random.default_rng(seed)
             if hasattr(self.segmenter, "rng"):
@@ -441,6 +444,10 @@ class UltrasoundReconstructionEnv:
             init_c2 = self.rng.uniform(-10.0, 10.0)
         init_yaw = self.rng.uniform(-np.radians(5.0), np.radians(5.0))
         init_pitch = self.rng.uniform(-np.radians(5.0), np.radians(5.0))
+        if options and options.get("init_pose") is not None:
+            c1, c2, yaw, pitch = (float(v) for v in options["init_pose"])
+            init_c1, init_c2 = np.clip(c1, *self.c1_bounds), np.clip(c2, *self.c2_bounds)
+            init_yaw, init_pitch = np.clip(yaw, -self.max_yaw, self.max_yaw), np.clip(pitch, -self.max_pitch, self.max_pitch)
         self.current_pose_params = np.array([init_c1, init_c2, init_yaw, init_pitch], dtype=np.float32)
 
         # Approach phase: let the controller converge from first touch.

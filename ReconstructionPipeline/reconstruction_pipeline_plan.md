@@ -1,3 +1,5 @@
+> **Historical planning document (Oct 2026).** It predates DEC-037/DEC-038: the Kinova arm, lateral flank mode, `server.py` and the C++ Slicer module it mentions were removed. See README.md and FLOW.md for the current system.
+
 # Implementation Plan: 3D Ultrasound Reconstruction & Active View Planning Pipeline
 
 ## 1. Executive Summary & Objective

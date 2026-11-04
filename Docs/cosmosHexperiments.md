@@ -1,3 +1,5 @@
+> **Note:** this is a literature note on Cosmos-H-Dreams (a generative surgical world model). It does not describe this repository. The MTP simulator models soft tissue explicitly with a precomputed GPU FEM, not with a learned video model.
+
 Here is a breakdown of how the model handles those two incredibly difficult simulation problems, followed by some open research experiments that could push the system further.
 
 ### 1. How does it solve Soft Tissue Deformation?

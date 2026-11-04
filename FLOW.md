@@ -1,251 +1,245 @@
-# FLOW.md - Codebase Execution Flow & Architecture Guide
+# FLOW.md: Execution Flows, Data Routes & Frames
 
-A comprehensive architectural map detailing all entry points, execution flows, communication protocols, and runtime dependencies for the **Surgical Physics Bridge & Autonomous Robotic Ultrasound (MTP)** codebase.
+This file maps the entry points, runtime flows, data routes and coordinate frames of the MTP codebase. Read it
+before you change an entry point or a data route. All paths are relative to the repository root. Use
+`./.venv/bin/python` for every command.
 
 ---
 
-## 1. Directory of Primary Entry Points
+## 1. Entry points
 
-| Purpose / Task | Entry Point Script | Standard Invocation Command |
+| Purpose | Entry point | Typical command |
 | :--- | :--- | :--- |
-| **Unified Server (Physics + US + Slicer)** | [`surgical_physics_bridge/src/unified_server.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/surgical_physics_bridge/src/unified_server.py) | `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --mode orbital --fps 30.0` |
-| **Standalone Physics Server (PyBullet)** | [`surgical_physics_bridge/src/server.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/surgical_physics_bridge/src/server.py) | `./.venv/bin/python surgical_physics_bridge/src/server.py --port 18944 --gui` |
-| **6-Policy Benchmark Runner** | [`ReconstructionPipeline/evaluation/benchmark_runner.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/evaluation/benchmark_runner.py) | `./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --num-trials 3 --soft-body` |
-| **SonoGym-SoftBody Test Suite** | [`ReconstructionPipeline/tests/test_sonogym_benchmark.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/tests/test_sonogym_benchmark.py) | `./.venv/bin/python -m pytest ReconstructionPipeline/tests/test_sonogym_benchmark.py -v` |
-| **Patient Asset Generation (CT/Spine/Meshes)** | [`ReconstructionPipeline/data/prepare_patient_assets.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/data/prepare_patient_assets.py) | `./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets` |
-| **Train Submodular PPO (Active DRL)** | [`ReconstructionPipeline/planning/train_submodular_ppo.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/planning/train_submodular_ppo.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --num-updates 20` |
-| **Train 3D Diffusion Policy (DP3/EDM)** | [`ReconstructionPipeline/planning/train_diffusion_policy.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/planning/train_diffusion_policy.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --epochs 50 --batch-size 32` |
-| **Run Unit & Integration Test Suite** | [`ReconstructionPipeline/tests/`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/tests) | `./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -v` |
-| **Remote TotalSegmentator Automation (SSH)** | [`scripts/run_remote_totalsegmentator.sh`](file:///home/rishang/Desktop/Insti_Stuff/MTP/scripts/run_remote_totalsegmentator.sh) | `bash scripts/run_remote_totalsegmentator.sh --dataset-dir /data/s0010 --mode all` |
-| **3D Slicer Loadable C++ Module** | [`SlicerSurgicalBridge/`](file:///home/rishang/Desktop/Insti_Stuff/MTP/SlicerSurgicalBridge) | Built via CMake against Slicer SDK; loaded as Qt extension |
+| Unified server: 1 kHz physics + 30 Hz US/streaming + Slicer | [`surgical_physics_bridge/src/unified_server.py`](surgical_physics_bridge/src/unified_server.py) | `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 [--gui]` |
+| Physics-rate measurement (headless) | same | `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20` |
+| 3D Slicer bridge | [`Slicer/slicer_surgical_physics_bridge.py`](Slicer/slicer_surgical_physics_bridge.py) | `Slicer --python-script Slicer/slicer_surgical_physics_bridge.py` |
+| Server + Slicer launcher | [`scripts/launch_dual_pybullet_slicer.sh`](scripts/launch_dual_pybullet_slicer.sh) | `bash scripts/launch_dual_pybullet_slicer.sh --mode raster_l4` |
+| 6-policy + soft-body benchmark | [`ReconstructionPipeline/evaluation/benchmark_runner.py`](ReconstructionPipeline/evaluation/benchmark_runner.py) | `./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --num-trials 3 --policies raster,orbital,nbv,ppo,cfm,diffusion --soft-body` |
+| Train Submodular PPO | [`ReconstructionPipeline/planning/train_submodular_ppo.py`](ReconstructionPipeline/planning/train_submodular_ppo.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py [--max-minutes 30] [--dry-run]` |
+| Train CFM + EDM diffusion (BC) | [`ReconstructionPipeline/planning/train_diffusion_policy.py`](ReconstructionPipeline/planning/train_diffusion_policy.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --num-demo-episodes 200` |
+| Patient assets (download + resample + meshes) | [`ReconstructionPipeline/data/prepare_patient_assets.py`](ReconstructionPipeline/data/prepare_patient_assets.py) | `./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets --export-totalseg data/sample_totalsegmentator_patient` |
+| FEM soft-body demo video / dataset | [`ReconstructionPipeline/scripts/record_soft_body_demonstrations.py`](ReconstructionPipeline/scripts/record_soft_body_demonstrations.py) | `./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video` |
+| Tests | [`ReconstructionPipeline/tests/`](ReconstructionPipeline/tests) | `./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q` |
+| Remote GPU automation | [`scripts/run_remote_totalsegmentator.sh`](scripts/run_remote_totalsegmentator.sh) | `bash scripts/run_remote_totalsegmentator.sh --mode all --dataset-dir <subject>` (only inside `*/workspace/rishang/*`) |
+
+Server `--mode` choices are `orbital_l4` (default), `raster_l4`, `orbital`, `raster`, `nbv`, `diffusion`, `cfm` and
+`interactive` (hold pose). Other server flags: `--port` (18944), `--urdf` (default Franka Panda), `--patient-dir`,
+`--gui`, `--fps`, `--physics-mode {process,thread}`, `--physics-hz`, `--tissue-backend {fem,kelvinlet}`,
+`--benchmark-seconds` and `--no-benchmark-client`.
 
 ---
 
-## 2. End-to-End System Execution Flows
-
-### Flow A: Clinical Patient Asset Preparation
-Ingests and prepares authentic TotalSegmentator clinical CT volumes, expert lumbar vertebra segmentations (L1-L5 + sacrum), authentic torso skin meshes, and ground-truth bone point clouds.
+## 2. Flow A: patient asset preparation
 
 ```mermaid
 flowchart LR
-    CTGen["PatientAssetGenerator\n(prepare_patient_assets.py)"] --> RealCT["Clinical Human CT (141x116x176)\nHounsfield Units (-1024 to +1478)"]
-    CTGen --> Labels["Expert Radiologist Segmentations\nL1-L5, Sacrum, Muscles, Skin"]
-    CTGen --> SpineMesh["High-Res Bone Mesh (OBJ)\n19.8k verts, 40k faces (L1-L5)"]
-    CTGen --> SkinMesh["Authentic Torso Skin (OBJ)\nRealistic Patient Dorsal Envelope"]
-    CTGen --> GTPoints["GT Vertebra Point Cloud\n378k Bone Surface Coordinates"]
-    RealCT --> OutDir["data/sample_totalsegmentator_patient/"]
-    Labels --> OutDir
-    SpineMesh --> OutDir
-    SkinMesh --> OutDir
-    GTPoints --> OutDir
+    HF["HF dataset SHPDRG/lumbar-ct-segmentation-human-sample-1\ncase-0004 (LPS source CT + labels)"] --> Export["PatientAssetGenerator.export_totalsegmentator_dataset"]
+    Export --> CT["ct.nii.gz (1 mm, frame P; header says RAS, data is LPS)"]
+    Export --> Seg["segmentations/vertebrae_L1..L5, sacrum, skin .nii.gz"]
+    Export --> Meshes["meshes/*.obj (P coords) via export_patient_meshes\n+ PyBullet copies via the P->PB mapping"]
+    CT --> Load["load_totalsegmentator_subject(target_vertebrae=['vertebrae_L4'])"]
+    Seg --> Load
+    Load --> PD["patient dict: ct_volume [z,y,x], origin_mm, spacing_mm,\nbone_points, skin_height_map (CT body mask)"]
 ```
+
+`ct.nii.gz` and the segmentations are gitignored. The OBJ meshes are tracked. The server writes
+`meshes/patient_fem_skin.obj` at startup.
 
 ---
 
-### Flow B: Live Physics Simulation & OpenIGTLink Streaming
-The primary runtime service loop executed by [`unified_server.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/surgical_physics_bridge/src/unified_server.py). Decouples 1000 Hz PyBullet contact dynamics from 30–60 Hz Slicer OpenIGTLink publishing.
+## 3. Flow B: unified server runtime
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant PB as PyBullet Backend (1 kHz)
-    participant Server as Unified Server Loop
-    participant Env as US Reconstruction Env
-    participant IGTL as OpenIGTLink Server (Port 18944)
-    participant Slicer as 3D Slicer Client
+    participant Phys as Physics process (1 kHz, PyBullet DIRECT)
+    participant Srv as Streaming loop (unified_server, --fps)
+    participant Env as UltrasoundReconstructionEnv + FEM
+    participant View as Viewer process (--gui only)
+    participant Sl as 3D Slicer bridge
 
-    loop Every 1 ms (1000 Hz)
-        Server->>PB: Step simulation (dt = 0.001s)
-        PB->>Server: Contact forces & link poses
+    loop every 1 ms
+        Phys->>Phys: drain commands (latest target wins), IK + motors
+        Phys->>Phys: δ = probe-face indentation along beam; F = F0 + K_c(δ − δ0), clip [0, TISSUE_FORCE_MAX_N]
+        Phys->>Phys: stepSimulation; write contact snapshot, view snapshot, rate ring buffers
     end
 
-    loop Every 33.3 ms (30 Hz)
-        Server->>Env: Step active probe action [dy, dz, dyaw, dpitch]
-        Env->>Server: B-mode image, point cloud, normal force Fn
-        Server->>IGTL: Send TransformMessage ("UltrasoundProbe", links)
-        Server->>IGTL: Send ImageMessage ("US_Image", 240x160 grayscale)
-        Server->>IGTL: Send PointMessage / PolyDataMessage ("ReconstructedBone")
-        Server->>IGTL: Send NDArrayMessage ("ContactForces", Nx7)
-        IGTL->>Slicer: TCP Binary Stream
-        Slicer->>Slicer: In-place vtkPolyData mutation & 2D slice update
+    loop every 1/fps s (30 Hz)
+        Srv->>Env: step(action from trajectory / NBV / CFM / diffusion)
+        Env-->>Srv: B-mode, recon points, force, tissue state (F0, K_c, δ0, in_contact)
+        Srv->>Phys: ("target", {contact_pb, beam_pb, lateral_pb, tissue, force_n, hud})
+        Srv->>View: ("target", ...), ("skin", deformed skin in PB)
+        Srv->>Sl: UltrasoundProbe, US_Image, ReconstructedBone, DeformedSkin, Telemetry
     end
 
-    opt Clinician Interaction
-        Slicer->>IGTL: StringMessage ("CMD", {"roi_target": [x,y,z]})
-        IGTL->>Server: Receive Slicer ROI markups
-        Server->>Server: Convert RAS to PB world frame
-        Server->>Server: Kinova 7-DoF DLS Inverse Kinematics
+    opt incoming (StringMessage JSON)
+        Sl-->>Srv: CMD {"reset"} / {"mode"} / {"roi_target": [R,A,S]}
+        Sl-->>Srv: VirtualFixture {"vertices", "indices", "policy": "keep_out"}
+        Srv->>Phys: ("fixture", data)
     end
 ```
 
+- **Process model.** `--physics-mode process` is the default. The physics loop is spawned in its own process and
+  shares `PhysicsChannels` with the streaming side: a `commands` queue, a lock-protected `contact` snapshot, a
+  `view` snapshot, a `viewer` queue and `RawArray` ring buffers for `PhysicsRateMonitor`. `thread` mode exists
+  for comparison. `inline` is used by the tests.
+- **Streaming side.** It never imports or calls PyBullet. `test_server.py::test_streaming_side_never_imports_pybullet`
+  checks this.
+- **Probe–torso contact.** The torso is visual-only, so there is no rigid probe–torso collision. The probe force
+  comes from the tissue model. PyBullet still provides robot dynamics, the table and virtual keep-out fixtures.
+- **ROI targets.** `roi_target` is converted RAS → P with `ras_to_patient_points` and clipped to the env scan
+  window. The current Slicer bridge does not send `CMD` or `VirtualFixture`; another OpenIGTLink client must send
+  them.
+
+### OpenIGTLink messages (server → Slicer; all patient data in frame P, mm)
+
+| Device | Type | Payload |
+| :--- | :--- | :--- |
+| `UltrasoundProbe` | TransformMessage | 4×4 T_P←probe of the indented probe face / image plane, +Y = beam |
+| `US_Image` | ImageMessage | uint8 (H, W, 1) B-mode, row 0 = probe face |
+| `ReconstructedBone` | ImageMessage | float32 (1, N, 3) accumulated bone points (array transport; pyigtl 0.3.4 has no NDARRAY) |
+| `DeformedSkin` | ImageMessage | float32 (1, N, 3): all N skin-patch vertices in `patient_fem_skin.obj` order. The bridge also accepts (1, K, 4) `[index, dx, dy, dz]` rows. |
+| `Telemetry` | StringMessage | JSON: normal force, indentation, in_contact, contact stiffness, coupling, physics-rate stats, rigid contacts |
+
 ---
 
-### Flow C: Ultrasound Simulation & Pure B-Mode Surface Extraction
-Extracts 3D bone point clouds **strictly from 2D ultrasound signals** (zero ground-truth CT label leakage), featuring real-time **GPU soft-tissue deformation** via Regularized Kelvinlets.
+## 4. Flow C: one environment step (simulation and perception)
 
 ```mermaid
 flowchart TD
-    ProbePose["Tracked Ultrasound Probe Pose\nT_{W <- U} (Lateral Flank / Dorsal)"] --> WarpGrid["True Backward Eulerian Coordinate Warping\nX_ref = x_query - u(x_query) with Bone Anchoring"]
-    Force["Probe Contact Normal Force Fn\n& Inward Incidence Angle"] --> Kelvinlet["Regularized Kelvinlet Elasticity\n(kelvinlet_deformation.py)\nmu=12 kPa, nu=0.48, epsilon=15 mm"]
-    Kelvinlet --> WarpGrid
-    WarpGrid --> GridSample["GPU Volume Reslicer\ntorch.nn.functional.grid_sample (< 1.8 ms)"]
-    CTVol["CT Hounsfield Unit Volume\nDensity rho and Speed c"] --> GridSample
-    GridSample --> HU_Slice["Deformed 2D Hounsfield Unit Slice (200x150)"]
-
-    HU_Slice --> AcousticShader["Model-Based Acoustic Shader\n(ultrasound_model_based.py)"]
-    Force --> Coupling["Force-Acoustic Coupling\nkappa in [0.05, 1.0]"]
-    Coupling --> AcousticShader
-
-    AcousticShader -->|"Attenuation + Reflection + Speckle"| BMode["2D B-Mode Ultrasound Image\n(Normalized [0, 1])"]
-    AcousticShader --> ConfMap["Acoustic Confidence Map C(u, v)\nShadow Factor & Beam Incidence"]
-
-    BMode --> Seg["BoneSurfaceSegmenter\n(bone_segmentation.py)"]
-    ConfMap --> Seg
-
-    subgraph Direct_US_Segmentation["Direct B-Mode Signal Extraction"]
-        Seg --> S1["1. Specular Peak Detection:\nI(u, v) >= 0.22 and I > I(u, v +- 1)"]
-        S1 --> S2["2. Acoustic Shadow Verification:\nI_peak >= 1.25 * I_shadow"]
-        S2 --> S3["3. Confidence Gating:\nC(u, v) >= 0.35"]
-        S3 --> Contours["2D Extracted Bone Pixels (u, v)"]
-    end
-
-    Contours --> Accum["PointCloudAccumulator\n(point_cloud_accumulator.py)"]
-    ProbePose --> Accum
-    Accum -->|"p_world = T_{W <- U} * [u*sx, v*sy, 0, 1]"| VoxelGrid["Incremental 3D Point Cloud\n(Voxel Downsampled at 1.5 mm)"]
+    A["action [dc1, dc2, dyaw, dpitch] in [-1,1]\n(×5 mm, ×10° yaw, ×15° pitch)"] --> Pose["probe origin on the undeformed skin\n(skin_height_map, frame P)"]
+    Pose --> FC["first_contact_indentation (FEM; can be < 0)"]
+    FC --> Adm["admittance loop: δ in [first contact, max indentation]\nso that F_tissue(δ) ≈ target_force_n (4 N)"]
+    Adm --> Solve["TissueModel.solve(pose, δ)\nFEM: active-set contact on precomputed skin compliance\n→ F, K_c, displacement field, skin mesh"]
+    Solve --> Warp["backward Eulerian warp X = x − u(X) (fixed-point, GPU)\n+ grid_sample of CT and labels at the indented face pose"]
+    Warp --> US["ModelBasedUltrasoundSimulator.simulate_bmode\n200×150 px over 75×50 mm"]
+    US --> Conf["UltrasoundConfidenceEstimator (B-mode only)"]
+    US --> Seg["segment_from_bmode (ridge + distal shadow + run-length filter)"]
+    Conf --> Seg
+    Seg --> BP["back-projection with the tracked (indented) face pose"]
+    BP --> Acc["PointCloudAccumulator (1.5 mm voxels)"]
+    Acc --> Met["metrics: coverage of the US-visible dorsal L4 ROI @2/3 mm,\nprecision vs all bone / dorsal-visible bone, F, Chamfer"]
 ```
+
+**Deformation modes** (ablation only):
+
+- `aware` (default): deformed images, back-projected with the tracked face pose.
+- `unaware`: deformed images, back-projected with the nominal undeformed-skin pose.
+- `rigid`: no deformation; the probe sits on the skin.
+
+`segment_from_label_map` is an evaluation oracle only. It must never feed the reconstruction. The simulator
+outputs `energy`, `effective_energy` and `bone_mask` are privileged and must not reach perception.
 
 ---
 
-### Flow D: Active View Planning & Closed-Loop Control Loop
-Reinforcement Learning (Submodular PPO) and Generative Policies (Continuous Flow Matching, 3D Diffusion Policy).
+## 5. Flow D: planning, training and benchmark
 
 ```mermaid
 flowchart LR
-    AccumPoints["Accumulated 3D Point Cloud\n(PointCloudAccumulator)"] --> PointNet["PointNet State Encoder\n(pointnet_encoder.py)"]
-    ProbePose["Current Probe Pose\n[c1, c2, yaw, pitch]"] --> PointNet
-    PointNet --> State["Fused 192-dim Latent State s_t"]
-
-    State --> PolicyPool{"Active Policy"}
-    PolicyPool -->|"Submodular PPO"| PPO["PPO Actor-Critic Network\nGaussian Policy pi(a|s)"]
-    PolicyPool -->|"Diffusion Policy"| DP["AdaLN DiT Denoising\nKarras EDM (8-step chunk)"]
-    PolicyPool -->|"Flow Matching"| CFM["Vector Field Integration\nEuler ODE (8-step chunk)"]
-
-    PPO --> Action["Delta Action a_t = [dy, dz, dyaw, dpitch]"]
-    DP --> Action
-    CFM --> Action
-
-    Action --> DLS_IK["Kinova 7-DoF DLS Inverse Kinematics\n(kinova_kinematics.py)"]
-    DLS_IK --> JointCmd["Joint Velocity / Position Target dq"]
-    JointCmd --> PyBullet["PyBullet Physics Core (1 kHz)\nContact Mechanics & Deformation"]
-    PyBullet --> AccumPoints
+    Start["planning.start_pose: uniform over scan window (inset 4 mm),\nyaw ±15°, pitch ±10°"] --> Env["UltrasoundReconstructionEnv (FEM)"]
+    Env --> Obs["obs: reconstructed points (P mm) + probe pose"]
+    Obs --> PN["PointNetEncoder (per-point LayerNorm,\npoint_center / point_scale buffers in checkpoint)"]
+    PN --> PPO["Submodular PPO (Gaussian; sampled at eval)"]
+    PN --> CFM["Flow Matching (8-step chunk, execute 2)"]
+    PN --> DP["EDM Diffusion (8-step chunk, execute 2)"]
+    H["raster / orbital (heuristic_planner)"] --> Env
+    NBV["Greedy NBV"] --> Env
+    PPO --> Env
+    CFM --> Env
+    DP --> Env
+    Env --> Bench["benchmark_runner: 72 frames per method,\nsame start pose per trial index → results/"]
 ```
+
+**PPO training** (`train_submodular_ppo.py`):
+
+- **Reward.** The default (`--reward coverage`) is 100 × the gain in Cov@3 plus the env's path, rotation and force
+  penalties.
+- **Point cloud.** The cloud is subsampled once per step and stored, so the rollout and the update see the same cloud.
+- **Truncation.** Time-limit truncation bootstraps with γV(s_{T+1}).
+- **Episodes.** 72 steps each. `--max-minutes` time-boxes training.
+
+**BC training** (`train_diffusion_policy.py`):
+
+- **Expert.** A randomised elevational raster: random start pose, raster width, line count, frames per line and extent.
+- **Validation.** Episodes are split train/val (`--val-frac 0.15`) before chunking. The checkpoint with the best
+  validation loss (fixed noise seed) is kept.
+- **Datasets.** `--save-demos` / `--demo-dataset` datasets must contain the logged clouds.
+- **Outputs.** It trains both CFM (`checkpoints/flow_matching.pt`) and EDM (`checkpoints/diffusion_policy.pt`).
+
+**Benchmark** (`benchmark_runner.py`):
+
+- **Missing checkpoints.** A missing checkpoint for a requested learned policy is an error. Use
+  `--heuristics-only` or `--policies raster,orbital,nbv` without checkpoints.
+- **Default patient.** Without `--patient-dir` the runner uses the synthetic phantom.
+- **Outputs.** It writes `results/benchmark_<ts>.json` and `results/benchmark_latest.md`.
 
 ---
 
-### Flow E: Clinician-in-the-Loop Slicer Fiducial Target Workflow
-Enables interactive point-and-click target selection in 3D Slicer.
+## 6. Flow E: Slicer bridge
 
-```mermaid
-flowchart TD
-    Clinician["Clinician in 3D Slicer"] -->|"Clicks Vertebra Facet"| FiducialNode["vtkMRMLMarkupsFiducialNode"]
-    FiducialNode --> Widget["qSlicerSurgicalBridgeModuleWidget"]
-    Widget -->|"Click 'Send ROI Target'"| Logic["vtkSlicerSurgicalBridgeLogic::SendROITarget(x, y, z)"]
-    Logic --> NetText["vtkMRMLTextNode ('CMD')\n{'roi_target': [x_ras, y_ras, z_ras]}"]
-    NetText --> Connector["vtkMRMLIGTLConnectorNode"]
-    Connector -->|"OpenIGTLink TCP Socket"| PyServer["unified_server.py: handle_incoming_messages()"]
+1. The bridge connects with `pyigtl` to `localhost:18944` and retries until the server is up.
+2. It creates one `vtkMRMLLinearTransformNode` named `PatientToRAS` that holds `P_TO_RAS = diag(−1, −1, 1)`, and
+   parents every patient node under it.
+3. It loads the meshes with `obj_io.read_obj`, which preserves vertex order. It does not use
+   `slicer.util.loadModel`, which would treat the OBJ as LPS and flip it a second time.
+4. `DeformedSkin` handling: one float32 array is bound to the skin-patch `vtkPoints` once
+   (`numpy_to_vtk(deep=False)`). Each frame does `arr[:] = base; arr[idx] += disp` followed by `Modified()`. No
+   per-frame VTK allocation takes place.
+5. `US_Image` is shown in the Red view, and `Telemetry` is logged every 5 s.
 
-    subgraph Server_Target_Resolution["Server Kinematic Target Resolution"]
-        PyServer --> CoordConv["convert_pose_pb_to_slicer Inverse\np_PB = R_conv^T * (p_RAS / 1000 - t_conv)"]
-        CoordConv --> LateralProj["Project to Flank Skin Surface Normal\nX_skin(y, z) pointing along -X"]
-        LateralProj --> IK["KinovaGen3Kinematics.inverse_kinematics()"]
-        IK --> RobotPose["Robot Probe Dispatched to Lateral Target"]
-    end
-```
+This flow is not covered by automated tests inside Slicer.
 
 ---
 
-## 3. Coordinate System Conversions & Invariants
+## 7. Coordinate frames
 
-| Space / Frame | Origin & Axis Convention | Units | Conversion to/from |
+| Frame | Convention | Units | Conversion |
 | :--- | :--- | :--- | :--- |
-| **PyBullet World** | Origin at surgical table base. **X-forward, Y-left, Z-up**. | **Meters** | Base reference frame for all rigid/soft dynamics. |
-| **3D Slicer RAS** | Origin at CT scan center. **Right (+X), Anterior (+Y), Superior (+Z)**. | **Millimeters** | $\mathbf{p}_{\text{RAS}} = \mathbf{T}_{\text{conv}} \cdot (\mathbf{p}_{\text{PB}} \times 1000)$ |
-| **Ultrasound Probe $\{U\}$** | Origin at center of transducer face. **Beam along $+Y_{\text{probe}}$**. | **Millimeters** | Transformed into PyBullet world via $\mathbf{T}_{W \leftarrow U}$. |
-| **Lateral Flank Geometry** | Patient lying horizontally along Z. Flank skin at $X \approx +48\text{ mm}$, beam directed along **$-X$** toward spine. | **Millimeters** | Orthonormal matrix $\mathbf{R}_{W \leftarrow U}$ with columns $[[0,0,1]^\top, [-1,0,0]^\top, [0,-1,0]^\top]$. |
+| **P** (patient / simulation) | CT array frame, **LPS**: +X left, +Y posterior (toward dorsal skin), +Z superior. Volumes indexed [z, y, x], point = origin + index · spacing. | mm | – |
+| **RAS** (3D Slicer world) | Right, Anterior, Superior | mm | `p_RAS = P_TO_RAS · p_P`, `P_TO_RAS = diag(−1, −1, +1)` (det +1), applied once by the `PatientToRAS` transform node |
+| **PB** (PyBullet world) | Z-up | m | `pb = (0.55 + x, z, 0.42 + (y − 55)) · 1e-3`, i.e. `P_TO_PB_ROT` (permutation, det −1) and `P_TO_PB_OFFSET_M = (0.55, 0, 0.365)`. Orientations go through `probe_axes_to_pybullet_quaternion` (always a proper rotation). |
+| **U** (probe) | origin at the undeformed skin contact under the probe centre; columns e_x = lateral array axis, b = +Y_probe = beam (into the body), e_z = elevation | mm | `T_P←U`. The face/image plane is at origin + δ·b. |
+
+Use the helpers in `surgical_physics_bridge/src/coordinates.py`: `patient_to_ras_points`, `ras_to_patient_points`,
+`patient_pose_to_ras`, `patient_to_pybullet_points`, `pybullet_to_patient_points`, `ras_to_pybullet_points`, `probe_axes_to_pybullet_quaternion`. `ReconstructionPipeline/tests/test_coordinates.py`
+tests them, including the check that the P→PB mapping matches the exported PyBullet meshes.
 
 ---
 
-## 4. Standard Developer Verification Recipes
+## 8. Verification recipes
 
-### 1. Full Unit Test Suite (31 Tests)
 ```bash
-./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -v
-```
+# 1. Full test suite (97 tests)
+./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 
-### 2. Run SonoGym 6-Policy & Soft-Body Benchmark (Clinical Patient CT targeting L4)
-```bash
-./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --target-vertebra vertebrae_L4 --num-trials 3 --soft-body
-```
+# 2. FEM timings and calibration printout
+./.venv/bin/python -m pytest ReconstructionPipeline/tests/test_fem_tissue.py -q -s
 
-### 3. Train Submodular PPO Active Policy on L4 Anatomy
-```bash
-./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --patient-dir data/sample_totalsegmentator_patient --target-vertebra vertebrae_L4 --total-timesteps 8000
-```
+# 3. Physics rate with streaming active (compare with results/physics_rate_20261104_idle.json)
+./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20
 
-### 4. Train 3D Diffusion Policy & Continuous Flow Matching (CFM) on L4 Anatomy
-```bash
-./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --patient-dir data/sample_totalsegmentator_patient --target-vertebra vertebrae_L4 --num-demo-episodes 16 --epochs 30
-```
+# 4. Heuristic benchmark (no checkpoints)
+./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py \
+  --patient-dir data/sample_totalsegmentator_patient --num-trials 3 --heuristics-only
 
-### 5. Launch Unified Server (Streaming to 3D Slicer with Deformable Mesh & L4 Scan)
-```bash
-./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --scan-mode raster_l4 --fps 30.0
-```
+# 5. Full benchmark (regenerates results/benchmark_latest.md)
+./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py \
+  --patient-dir data/sample_totalsegmentator_patient --num-trials 3 \
+  --policies raster,orbital,nbv,ppo,cfm,diffusion --soft-body
 
-### 4. Train 3D Diffusion Policy
-```bash
-./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --epochs 50 --batch-size 32
-```
+# 6. PPO smoke test / training
+./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --dry-run
+./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --max-minutes 30 --log-csv ppo.csv
 
-### 5. Train Submodular PPO
-```bash
-./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py --num-updates 20 --num-steps 128
-```
+# 7. CFM + diffusion behaviour cloning
+./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --num-demo-episodes 200 --report-json bc_report.json
 
-### 6. Remote GPU Deployment & Ingestion (Isolated strictly to `workspace/rishang/`)
-```bash
-# 1. Sync repository to remote host isolated workspace
-rsync -avz --progress --exclude '.venv' --exclude '__pycache__' --exclude '.pytest_cache' --exclude '*.log' --exclude 'demonstrations/*.mp4' --exclude 'demonstrations/*.gif' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/
+# 8. Live server + Slicer
+./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui
+Slicer --python-script Slicer/slicer_surgical_physics_bridge.py
+#    or: bash scripts/launch_dual_pybullet_slicer.sh --mode raster_l4
 
-# 2. On remote host (strictly inside /home/user/workspace/rishang/MTP)
-cd /home/user/workspace/rishang/MTP
-bash scripts/run_remote_totalsegmentator.sh --mode all --dataset-dir <path_to_totalsegmentator_subject>
-```
-
-### 7. Interactive Soft-Tissue & Ultrasound GUI (Local Desktop)
-```bash
-./.venv/bin/python ReconstructionPipeline/scripts/interactive_soft_tissue_gui.py
-```
-
-### 8. FEM vs Kelvinlet Benchmark (Local or Remote)
-```bash
-./.venv/bin/python ReconstructionPipeline/evaluation/compare_sofa_fem_vs_kelvinlet.py
-```
-
-### 9. Interactive 3D Slicer Streaming (Slicer 5.12+)
-```bash
-# Terminal 1: Launch Unified Surgical Physics Server
-./.venv/bin/python surgical_physics_bridge/src/unified_server.py --port 18944 --mode orbital --fps 30.0
-
-# Terminal 2: Launch 3D Slicer with pre-connected bridge
-~/Downloads/Slicer-5.12.4-linux-amd64/Slicer --python-script Slicer/slicer_surgical_physics_bridge.py
-```
-
-### 10. Dual-Window PyBullet Native GUI & 3D Slicer Clinical Suite (Franka Panda + TotalSegmentator)
-```bash
-# Single command launches both windows side-by-side with full robot arm, patient soft-tissue, and 3D Slicer:
-bash scripts/launch_dual_pybullet_slicer.sh --mode orbital --fps 30.0
-
-# With custom TotalSegmentator subject:
-bash scripts/launch_dual_pybullet_slicer.sh --patient-dir /path/to/totalsegmentator/subject --mode raster
+# 9. Remote GPU host (must be inside */workspace/rishang/*)
+rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/
+ssh user@172.18.17.35 'cd /home/user/workspace/rishang/MTP && bash scripts/run_remote_totalsegmentator.sh --mode all'
 ```

@@ -9,6 +9,7 @@
 # 1. Transfer codebase to remote server (excluding large binaries & local venv):
 #    rsync -avz --progress \
 #      --exclude '.venv' \
+#      --exclude '.agents' \
 #      --exclude '__pycache__' \
 #      --exclude '.pytest_cache' \
 #      --exclude '*.log' \
@@ -26,7 +27,6 @@ set -euo pipefail
 # Default configuration parameters
 MODE="all"
 DATASET_DIR=""
-TARGET_VERTEBRAE="vertebrae_L1,vertebrae_L2,vertebrae_L3,vertebrae_L4,vertebrae_L5,sacrum"
 NUM_TRIALS=3
 TRAIN_TIMESTEPS=15000
 DIFFUSION_EPOCHS=30
@@ -66,7 +66,6 @@ print_help() {
     echo "  --trials <n>             Number of Monte Carlo trials per policy (default: 3)"
     echo "  --timesteps <n>          PPO environment steps (default: 15000)"
     echo "  --epochs <n>             Diffusion Policy epochs (default: 30)"
-    echo "  --vertebrae <list>       Comma-separated vertebrae list (default: L1-L5,sacrum)"
     echo "  --device <cpu|cuda>      Compute device (auto-detected if omitted)"
     echo "  --help                   Display this help message and exit"
     echo ""
@@ -100,10 +99,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --epochs)
             DIFFUSION_EPOCHS="$2"
-            shift 2
-            ;;
-        --vertebrae)
-            TARGET_VERTEBRAE="$2"
             shift 2
             ;;
         --device)

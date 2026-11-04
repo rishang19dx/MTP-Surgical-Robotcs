@@ -33,53 +33,60 @@ flowchart TD
 
 ## 2. Category Question Banks
 
+> These questions must rest on premises that are true of the current code. If a premise below stops being true,
+> fix the question in the same change. Numbers quoted here come from `results/` or tests (see AGENTS invariant 6).
+
 ### Category A: Physics Core & Multi-Rate Decoupling
-*Questions to ask if modifying `PyBulletBackend`, contact mechanics, or physics solvers:*
-1. **Clock Decoupling**: *"PyBullet runs at 1000 Hz while Slicer renders at 30–60 FPS. How does your proposed change ensure the 1 ms physics integration timestep ($dt = 0.001\text{ s}$) is never blocked by Slicer UI rendering latency or network socket stalls?"*
-2. **Force-Coupling Window**: *"Our clinical safety acoustic window requires normal contact force $F_N \in [2.0, 8.0]\text{ N}$. If your new controller commands an abrupt penetration velocity, how will you prevent numerical force spikes or penetration instability in PyBullet's penalty solver?"*
-3. **Collision Geometry**: *"Are you using convex collision hulls or raw triangle meshes? How will PyBullet's GJK/EPA solver handle potential concave mesh self-intersections during deformation?"*
+*Ask these if the change touches `pybullet_backend.py`, `unified_server.py`, `physics_rate.py` or the force coupling.*
+1. **Clock Decoupling**: *"The physics loop runs in its own process at 1 kHz and is the only code that calls PyBullet. Does your change add any PyBullet call, lock or blocking queue read on the streaming side, or any wait on the FEM inside the physics tick? How will you show with `--benchmark-seconds` that p99 period stays near the measured 1.137 ms (`results/physics_rate_20261104_idle.json`)?"*
+2. **Force Extrapolation Validity**: *"Between 30 Hz tissue solutions, the 1 kHz loop applies `F = F0 + K_c(δ − δ0)`. How far can δ drift from δ0 in 33 ms under your change, and when does the first-order extrapolation stop being valid (contact loss, new active set, strain stiffening)?"*
+3. **Rigid vs Tissue Contact**: *"The torso is visual-only; probe–tissue force comes from the tissue model, and PyBullet only handles rigid contacts (table, keep-out fixtures). Does your change reintroduce rigid probe–torso collision, and if so, how do you avoid counting the force twice?"*
 
 ---
 
 ### Category B: Coordinate Transformations & Spatial Consistency
-*Questions to ask if modifying kinematics, probe poses, or Slicer coordinate bridges:*
-1. **Frame Conventions**: *"PyBullet operates in metric Z-up (meters); 3D Slicer operates in millimeter RAS (Right-Anterior-Superior). Does your proposed vector live in PyBullet world, probe frame $\{U\}$, or Slicer RAS? What is the explicit transformation matrix?"*
-2. **Orthonormal Basis**: *"In the lateral flank approach, the probe face points along $-X$ into the patient flank. What are the column vectors of your rotation matrix $\mathbf{R}_{W \leftarrow U} \in SO(3)$, and does $\det(\mathbf{R}) = +1.0$ (right-handed)?"*
-3. **Point Cloud Registration**: *"When back-projecting 2D pixels $(u, v)$ to 3D world coordinates $\mathbf{p}_{\text{world}}$, are you accounting for pixel spacing ($0.5\text{ mm/px}$) and probe center offset before applying $\mathbf{T}_{W \leftarrow U}$?"*
+*Ask these if the change touches probe poses, kinematics, meshes or the Slicer transform.*
+1. **Frame Conventions**: *"Which frame does each new vector live in: P (LPS, mm), RAS (Slicer, mm), PB (PyBullet, m, Z-up) or the probe frame U? Which helper in `coordinates.py` converts it? Remember `P_TO_RAS = diag(−1, −1, 1)`, and that the P→PB permutation has det −1."*
+2. **Proper Rotations**: *"The P→PB point map is a mirror. How are you building the probe orientation in PyBullet (`probe_axes_to_pybullet_quaternion`), and does your rotation still have det +1? Which test in `test_coordinates.py` covers it?"*
+3. **Back-Projection Geometry**: *"Pixel spacing is derived from the physical image size: 200 × 150 px over 75 × 50 mm, so axial = 75/199 mm and lateral = 50/149 mm. Is your back-projection using these spacings, the image row 0 = probe face convention, and the tracked (indented) face pose rather than the undeformed skin pose?"*
+4. **Double Flips in Slicer**: *"Will any new mesh be loaded with `slicer.util.loadModel` (which assumes LPS and flips) instead of `obj_io.read_obj` under the `PatientToRAS` node?"*
 
 ---
 
 ### Category C: Ultrasound Acoustics & Perception Pipeline
-*Questions to ask if modifying ultrasound shaders, segmentation, or CT reslicing:*
-1. **Decoupling from Ground Truth**: *"Does your new feature rely on ground-truth CT segmentation label maps (`segment_from_label_map`) or pure B-mode ultrasound signal processing (`segment_from_bmode`)? How are you preventing ground-truth label leakage?"*
-2. **Acoustic Shadow Verification**: *"A bright echo can come from muscular fascia or bone cortex. How does your segmentation logic confirm the presence of a distal acoustic shadow ($I_{\text{peak}} \ge 1.25 \cdot \bar{I}_{\text{shadow}}$) to reject false fascia reflections?"*
-3. **GPU Slicing Throughput**: *"Our GPU trilinear reslicer (`torch.nn.functional.grid_sample`) executes in $< 1.8\text{ ms}$. Does your proposed volume resampling maintain sub-2ms latency on GPU without allocating new memory buffers?"*
+*Ask these if the change touches the B-mode simulator, confidence map, segmentation or reslicing.*
+1. **Privileged Data**: *"Does your feature read `segment_from_label_map`, the simulator's `energy` / `effective_energy` / `bone_mask`, or CT labels anywhere on the perception path? How will a test prove it does not?"*
+2. **Shadow Verification**: *"A bright echo can come from fascia or bone. How does your change keep the 'ridge followed by a sustained distal shadow' criterion of `segment_from_bmode`, and what happens to visible-surface precision (`Prec@2 vis`) in the benchmark?"*
+3. **Realism vs Easiness**: *"Precision is already 92–97 % on the visible surface (`results/benchmark_latest.md`), above the 0.8–0.9 reported for real spine US. Does your change make the simulator more realistic (clutter, reverberation, soft-tissue echoes), or easier still?"*
+4. **Latency**: *"The B-mode budget is < 2 ms per frame on GPU (a design target, not asserted by a test). How did you measure your change against it?"*
 
 ---
 
 ### Category D: Active Planning & Reinforcement Learning
-*Questions to ask if modifying PPO, Diffusion Policy, Flow Matching, or reward functions:*
-1. **The Imitation Learning Ceiling**: *"If training a Diffusion Policy or Continuous Flow Matching model, what is the bone coverage percentage of your demonstration dataset? If the expert only achieves $10\%$, how will the cloned policy ever achieve $75\%$?"*
-2. **Submodular Diminishing Returns**: *"Why is active ultrasound scanning formulated as a monotone submodular set function rather than standard Markovian reward? How does your reward function penalize redundant re-scanning of already observed bone voxels?"*
-3. **Action Chunking vs. 1-Step Lookahead**: *"Why does Greedy Next-Best-View get trapped in flat dorsal plateaus while Continuous Flow Matching achieves $11.2\%$ coverage? How does multi-step action chunking ($H = 8$) resolve local minima?"*
-4. **Episode Horizon**: *"A 60-step episode limits probe travel to $\le 300\text{ mm}$. If the goal is full L4-L5 vertebra coverage, why must the horizon be extended to 180–250 steps?"*
+*Ask these if the change touches PPO, CFM, Diffusion, rewards, the env or the benchmark protocol.*
+1. **Imitation Ceiling**: *"CFM and Diffusion clone a randomised raster expert, and the raster itself reaches 88.1 % Cov@3. How can a cloned policy exceed its expert, and what is your expert's coverage on held-out start poses?"*
+2. **Submodular Reward**: *"The PPO reward is the gain in Cov@3 (monotone submodular in the frames taken). How does your change avoid paying for re-scanning, or for echoes from neighbouring vertebrae (the old `--reward env` issue)?"*
+3. **Stochastic vs Deterministic**: *"Sampled PPO reaches 85.2 % Cov@3, but its mean action only 52.7 % (`results/ppo_deterministic/benchmark_latest.md`). Is the policy relying on noise to explore? How will you evaluate it, and is the comparison with the other methods fair?"*
+4. **Benchmark Fairness**: *"Does every method still get the same 72-frame budget and the same paired start pose per trial? Does a missing checkpoint still raise an error instead of evaluating a random network?"*
+5. **Generalisation**: *"All training and testing use one patient (L4 of case-0004). What is your held-out evaluation for the claim you want to make?"*
 
 ---
 
 ### Category E: 3D Slicer & OpenIGTLink Integration
-*Questions to ask if modifying C++ module code or network message formats:*
-1. **In-Place VTK Mutation**: *"Why do we mutate `vtkPolyData` in-place using `SetComponent()` instead of creating a new `vtkMRMLModelNode` on each received frame? What happens to Slicer's VTK rendering pipeline and memory heap if you re-instantiate nodes at 30 FPS?"*
-2. **Device Name Routing**: *"Slicer's `OpenIGTLinkIF` dispatches packets strictly by `device_name`. Does your new message use an existing registered device name (`US_Image`, `ReconstructedBone`, `ContactForces`, `CMD`, `VirtualFixture`) or require modifying the C++ listener?"*
-3. **Coordinate Unit Mismatch**: *"Contact force vectors are sent as an $N \times 7$ array. If positions are in meters and Slicer displays in millimeters, what scaling factor is applied in C++ to make the `vtkLine` arrow glyphs visible?"*
+*Ask these if the change touches `Slicer/slicer_surgical_physics_bridge.py` or message formats.*
+1. **In-Place VTK Mutation**: *"The skin patch is updated by writing into one numpy array bound once to `vtkPoints` (`numpy_to_vtk(deep=False)`) and then calling `Modified()`. Does your change allocate VTK arrays or nodes per frame, or break the binding (for example by reassigning the array instead of writing into it)?"*
+2. **Device Names and Payloads**: *"The server sends `UltrasoundProbe`, `US_Image`, `ReconstructedBone`, `DeformedSkin` and `Telemetry`, and accepts `CMD` and `VirtualFixture`. Arrays travel as float32 `ImageMessage`s because pyigtl 0.3.4 has no NDARRAY. Which device name does your message use, and did you update both the server and the bridge?"*
+3. **Vertex Order Contract**: *"`DeformedSkin` carries all N vertices in the order of `meshes/patient_fem_skin.obj`. If you change the skin mesh, how do the server and Slicer stay in agreement (`obj_io`, `test_deformed_skin_message_matches_exported_base_mesh`)?"*
+4. **Testing**: *"The bridge is not tested inside Slicer. How will you verify your change end to end?"*
 
 ---
 
 ### Category F: Soft Body & Deformable Mechanics
-*Questions to ask if modifying tissue deformation, Kelvinlets, Warp FEM, or SOFA:*
-1. **Eulerian vs. Lagrangian Reslicing**: *"When tissue deforms under probe pressure, do you plan to re-mesh the tetrahedral volume on every timestep ($> 50\text{ ms}$), or use backward Eulerian coordinate warping $\mathbf{X}_{\text{ref}} = \mathbf{x} - \mathbf{u}(\mathbf{x})$ via GPU `grid_sample` ($< 1.5\text{ ms}$)?"*
-2. **Deformation Engine Trade-off**: *"Why choose Regularized Kelvinlets for fast RL training ($< 0.3\text{ ms}$, differentiable) over heavy FEM solvers like SOFA ($15-35\text{ ms}$, CPU-bound)? When is full hyperelastic Neo-Hookean FEM actually needed?"*
-3. **Acoustic Wave Changes**: *"As probe pressure increases from 2 N to 6 N, subcutaneous fat compresses. How does your acoustic shader reflect this physical layer thinning in the resulting B-mode ultrasound image?"*
-4. **SonoGym Soft-Body Gap**: *"SonoGym assumes a completely rigid static patient model. How does our framework quantify the sim-to-real gap under Kelvinlet soft-tissue indentation ($F_N \in [0.5, 10]\text{ N}$), and why does uncompensated back-projection degrade Chamfer distance by several millimeters compared to deformation-aware backward Eulerian warping?"*
+*Ask these if the change touches `fem_tissue.py`, `tet_mesh.py`, `tissue_model.py`, `kelvinlet_deformation.py` or the admittance controller.*
+1. **Eulerian Reslicing**: *"Deformed B-mode uses backward warping, solving X = x − u(X) by fixed-point iteration and then calling grid_sample. Does your change keep the displacement field on the regular lattice, and how is the inverse-warp round-trip error tested?"*
+2. **Engine Trade-off**: *"The default is the precomputed linear FEM; the Kelvinlet model is the alternative. The FEM is linear and frictionless, and strain stiffening is applied to the force only. What does your change need that this model cannot give (large strain, friction, sliding), and what does that cost in precompute, VRAM and per-solve time against the tested 1.31 ms solve and 177 MB peak VRAM (`test_fem_tissue.py -s`)?"*
+3. **First-Contact Indentation**: *"Indentation is measured from the undeformed skin under the probe centre and may be negative (first contact at −9.0 mm on the midline). Does your controller or metric assume δ ≥ 0?"*
+4. **Deformation-Aware Claim**: *"With the FEM at 4 N, ignoring deformation drops visible precision from 97.2 % to 81.5 % but barely changes Cov@3, whereas with Kelvinlet Cov@3 collapses to 23.1 % (`results/benchmark_latest.md`). Which result does your argument rely on, and does it hold across stiffness and tissue thickness?"*
 
 ---
 
@@ -87,8 +94,9 @@ flowchart TD
 
 Before writing a single line of implementation code, the agent and user must agree on:
 
-- [x] **Core Invariants Preserved**: Python `./.venv/bin/python`, 1000 Hz physics decoupled from 30 FPS display, in-place VTK memory mutation.
-- [x] **Frame Math Validated**: Spatial transformations between PyBullet world (meters) and Slicer RAS (mm) are mathematically proven.
-- [x] **Acoustic Physics Grounded**: Ultrasound extraction remains purely signal-based without ground-truth label leakage.
-- [x] **Performance Budget Met**: Ultrasound generation $< 2\text{ ms}$, physics step $< 1\text{ ms}$, RL inference $< 5\text{ ms}$.
-- [x] **DECISIONS.md Updated**: The decision, context, alternatives, and rationale are documented in `DECISIONS.md`.
+- [ ] **Core Invariants Preserved**: `./.venv/bin/python` is used; 1 kHz physics stays decoupled from 30 Hz streaming and is measured with `--benchmark-seconds`; VTK buffers are mutated in place.
+- [ ] **Frame Math Checked**: every new quantity names its frame (P = LPS, RAS, PB, U) and goes through `coordinates.py`, with `test_coordinates.py` green.
+- [ ] **Perception Has No Leakage**: reconstruction uses the B-mode image only.
+- [ ] **Metrics Can Fail**: no metric is true by construction, and new numbers come from `results/` or a test.
+- [ ] **Performance Budget Checked**: B-mode < 2 ms (target), physics tick within 1 ms, FEM solve measured.
+- [ ] **DECISIONS.md Updated**: decision, context, alternatives and rationale are recorded; superseded entries are marked.

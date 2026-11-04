@@ -651,7 +651,11 @@ def write_results(results: Dict[str, Any], meta: Dict[str, Any], out_dir: str = 
 if __name__ == "__main__":
     import sys
     parser = argparse.ArgumentParser(description="3D ultrasound reconstruction benchmark suite")
-    parser.add_argument("--patient-dir", type=str, default=None)
+    _default_patient = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "sample_totalsegmentator_patient")
+    _default_patient = os.path.normpath(_default_patient) if os.path.isfile(os.path.join(_default_patient, "ct.nii.gz")) else None
+    parser.add_argument("--patient-dir", type=str, default=_default_patient,
+                        help="TotalSegmentator patient directory (default: data/sample_totalsegmentator_patient if present; "
+                             "pass 'phantom' to use the synthetic phantom)")
     parser.add_argument("--num-trials", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--target-force", type=float, default=4.0)
@@ -673,6 +677,8 @@ if __name__ == "__main__":
                         help="Evaluate PPO with its mean action instead of sampling the trained stochastic policy")
     args = parser.parse_args()
 
+    if args.patient_dir == "phantom":
+        args.patient_dir = None
     suite = ReconstructionBenchmarkSuite(num_trials=args.num_trials, patient_dir=args.patient_dir,
                                          target_vertebra=args.target_vertebra, device=torch.device(args.device),
                                          base_seed=args.seed, target_force_n=args.target_force,

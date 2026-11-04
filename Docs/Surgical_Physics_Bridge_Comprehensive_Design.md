@@ -1,5 +1,25 @@
 # MTP - Surgical Physics Bridge: Comprehensive Architecture & Design Document
 
+> **Historical document (status as of 2026-11-04).** This document describes the original 2025 design: the C++
+> `SlicerSurgicalBridge` module, the `server.py` loop, PyBullet soft bodies, and `NDArrayMessage`/`ContactForces`
+> streaming. **None of these exist in the current code.** The sections below are kept for their motivation and
+> literature discussion. For the current system, see [`README.md`](../README.md) and [`FLOW.md`](../FLOW.md). The main
+> differences are:
+> - **Server.** `server.py` and the C++ module were deleted (DEC-037). The server is
+>   `surgical_physics_bridge/src/unified_server.py`. Its 1 kHz PyBullet loop runs in its own process, and its
+>   streaming loop runs at 30 Hz, not 50 Hz.
+> - **Slicer client.** The client is the Python script `Slicer/slicer_surgical_physics_bridge.py`. It mutates a
+>   numpy array bound to `vtkPoints` in place, not through `SetComponent`.
+> - **Soft tissue.** Soft tissue is not a PyBullet soft body (`loadSoftBody`). It is a precomputed GPU linear FEM
+>   (`ReconstructionPipeline/simulation/fem_tissue.py`). The physics loop applies `F = F0 + K_c(δ − δ0)` to the
+>   probe, and the torso is visual-only.
+> - **Messages.** pyigtl 0.3.4 has no NDARRAY support. Arrays are sent as float32 `ImageMessage`s (`ReconstructedBone`,
+>   `DeformedSkin`). There is no `DeformedAnatomy` or `ContactForces` message, and no force-arrow rendering in Slicer.
+> - **Frames.** Frames are no longer a hardcoded `convert_pose_pb_to_slicer` layer. Frame P is LPS,
+>   `P_TO_RAS = diag(−1, −1, 1)`, and P→PyBullet is defined in `surgical_physics_bridge/src/coordinates.py` (DEC-038).
+> - **Robot control.** There is no `q_des` text box. The robot follows probe targets from the env through PyBullet IK.
+>   ROI targets can be sent as `CMD {"roi_target": [R, A, S]}`, but the Slicer bridge has no UI for this.
+
 ## 1. Introduction
 
 ### 1.1 Context of Image-Guided Robotic Interventions
@@ -46,17 +66,23 @@ OpenIGTLink is an open-source, lightweight network protocol explicitly designed 
 Crucially, OpenIGTLink supports the `NDArrayMessage` type. This allows our backend to pack multidimensional arrays of high-precision floating-point data (such as deformed mesh vertices or raw force vectors) into a contiguous binary block and blast it across the network with zero serialization overhead. On the 3D Slicer client side, the `SlicerOpenIGTLinkIF` module natively intercepts these binary arrays and makes them immediately available to the MRML scene graph.
 
 ### 2.4 Selection of PyBullet as the Physics Engine
+> *Historical: PyBullet soft bodies are not used; soft tissue is the GPU FEM tissue model (DEC-037/038).*
+
 We utilized **PyBullet** as the standalone physics server. PyBullet was chosen over alternatives like Gazebo or pure rigid-body engines for several reasons:
 1. **Python Native**: It offers incredibly stable, performant Python bindings, allowing us to build the backend server in Python, vastly accelerating development speed compared to a pure C++ physics backend.
 2. **Soft-Body Support**: PyBullet features experimental but highly functional support for soft-body dynamics using Neo-Hookean material models via `p.loadSoftBody()`. This is an absolute necessity for simulating surgical tasks where organs and tissues deform dynamically upon interaction.
 3. **Collision Detection Engine**: Its collision detection engine is fast enough to compute real-time contacts and normal forces even in complex multi-body environments.
 
 ### 2.5 Selection of 3D Slicer as the Visualization and Navigation Client
+> *Historical: the C++ loadable module was never built and was deleted; the client is a Python script run inside Slicer.*
+
 3D Slicer was chosen as the client due to its dominance in the medical research sphere. Developing the client interface as a C++ Loadable Module (`SlicerSurgicalBridge`) rather than a Python Scripted Module was a deliberate choice to ensure maximum performance. Handling high-frequency network sockets and dynamically updating `vtkPolyData` for dense meshes requires the speed of compiled C++, preventing the UI from freezing.
 
 ---
 
 ## 3. Detailed Component Implementation: The Physics Backend (Server)
+> *Historical: describes the deleted `server.py`. See FLOW.md section 3 for the current `unified_server.py` runtime.*
+
 
 The physics server is entirely contained within the `surgical_physics_bridge/src/` directory.
 
@@ -100,6 +126,8 @@ At the 50 Hz publish interval, the server extracts three core pieces of data:
 ---
 
 ## 4. Detailed Component Implementation: The 3D Slicer Plugin (Client)
+> *Historical: describes the deleted C++ module. See FLOW.md section 6 for the current Python bridge.*
+
 
 The client is an advanced C++ Loadable Module located in `SlicerSurgicalBridge/`.
 
@@ -213,6 +241,8 @@ Visualizing forces is a crucial first step for situational awareness, but it doe
 - **Admittance vs. Impedance Control**: When the simulated robot hits the Virtual Fixture boundary (the keep-out zone), the collision engine will generate massive normal forces. These forces must be scaled and fed into the control loop of the haptic device using either an impedance control paradigm (where user motion dictates position, and the simulator dictates force) or an admittance control paradigm (where the user exerts force, and the simulator calculates allowed motion). This ensures that when the virtual robot hits a bone, the physical joystick in the surgeon's hand rigidly locks in place.
 
 ### 7.3 Automated Coordinate System Registration
+> *Partly outdated: the static `convert_pose_pb_to_slicer` layer was replaced by the explicit P (LPS) -> RAS / PyBullet transforms in `coordinates.py`; registration to a physical patient remains future work.*
+
 The true utility of image-guided surgery lies in perfectly aligning the virtual world with the physical patient.
 - **Current State**: The Slicer MRML scene (which operates in the Right-Anterior-Superior or RAS coordinate space) and the PyBullet world frame (typically standard XYZ) are currently aligned using a static, hardcoded translation layer (`convert_pose_pb_to_slicer`). This is fragile and assumes the models are spawned exactly at the origin.
 - **Point-Based Rigid Registration**: The system requires an automated fiducial registration module. A user must be able to select corresponding fiducial markers on both the simulated anatomy in Slicer and the physical anatomy (or tracking reference frame). The bridge must then dynamically compute the transformation matrix—typically using Horn's quaternion-based method or Singular Value Decomposition (SVD) to minimize Fiducial Registration Error (FRE).

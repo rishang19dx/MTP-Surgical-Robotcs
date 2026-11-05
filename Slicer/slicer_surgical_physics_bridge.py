@@ -72,6 +72,7 @@ LAYOUT_ID = 501
 # ReconstructionPipeline/simulation/slice_extractor.py. Not imported: that module pulls in torch.
 US_IMAGE_HW = (200, 150)
 US_DEPTH_MM, US_WIDTH_MM = 75.0, 50.0
+L4_CAMERA_DISTANCE_MM = 380.0
 US_SPACING_MM = (US_WIDTH_MM / (US_IMAGE_HW[1] - 1), US_DEPTH_MM / (US_IMAGE_HW[0] - 1))  # (lateral, axial)
 
 
@@ -92,6 +93,7 @@ class SlicerSurgicalPhysicsBridge:
         self.last_connect_attempt = 0.0
         self.frames_received = 0
         self.camera_initialized = False
+        self.l4_center_ras = None
         self.last_telemetry_log = 0.0
         self._warned = set()
 
@@ -260,8 +262,10 @@ class SlicerSurgicalPhysicsBridge:
             if not os.path.exists(path):
                 print(f"[!] Missing {path}; run ./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets")
                 continue
-            poly, _ = self._polydata_from_obj(path)
+            poly, verts = self._polydata_from_obj(path)
             self._model_node(name, poly, color, opacity)
+            if name == "GroundTruthL4" and len(verts):
+                self.l4_center_ras = P_TO_RAS[:3, :3] @ np.asarray(verts, dtype=np.float64).mean(axis=0)
         self._load_skin_patch()
 
     def _load_skin_patch(self):
@@ -375,10 +379,26 @@ class SlicerSurgicalPhysicsBridge:
         self.bone_points.Modified()
         self.bone_polydata.Modified()
         if not self.camera_initialized and n >= 30:
-            lm = slicer.app.layoutManager()
-            if lm and lm.threeDWidget(0):
-                lm.threeDWidget(0).threeDView().resetFocalPoint()
-                self.camera_initialized = True
+            self._focus_camera_on_l4()
+            self.camera_initialized = True
+
+    def _focus_camera_on_l4(self):
+        """Fixed posterior-oblique 3D camera on L4, where the probe works (RAS, mm).
+
+        resetFocalPoint() is not used: it recentres on every visible model, including the whole torso."""
+        if self.l4_center_ras is None:
+            return
+        view_node = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLViewNode")
+        cam = slicer.modules.cameras.logic().GetViewActiveCameraNode(view_node) if view_node else None
+        if cam is None:
+            return
+        c = self.l4_center_ras
+        direction = np.array([-1.0, -0.45, 0.30])  # from the patient left (-R), slightly posterior and superior
+        direction /= np.linalg.norm(direction)
+        cam.SetFocalPoint(*c)
+        cam.SetPosition(*(c + L4_CAMERA_DISTANCE_MM * direction))
+        cam.SetViewUp(0.0, 0.0, 1.0)
+        cam.ResetClippingRange()
 
     def _update_skin(self, msg):
         arr = np.asarray(msg.image, dtype=np.float32)

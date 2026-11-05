@@ -63,6 +63,10 @@ VIEW_FIELDS = 14
 TISSUE_FORCE_MAX_N = 40.0
 SKIN_VIEW_HZ = 10.0
 SKIN_RGBA = [0.93, 0.62, 0.52, 0.95]
+# Viewer close-up on the FEM skin patch (set once when the patch mesh arrives).
+VIEW_CLOSEUP_DISTANCE_M = 0.24
+VIEW_CLOSEUP_YAW_DEG = 20.0
+VIEW_CLOSEUP_PITCH_DEG = -32.0
 
 
 class LatestSnapshot:
@@ -329,6 +333,14 @@ class PyBulletBackend:
         # P -> PB is a reflection (det -1): reverse the winding so the outward faces stay front-facing.
         self._skin_indices = tris[:, ::-1].ravel().tolist()
 
+    def focus_camera(self, target_pb, distance_m: float = VIEW_CLOSEUP_DISTANCE_M) -> None:
+        """Close-up of the scan site, so the skin indentation under the probe is visible.
+
+        Only the initial view: the user can still orbit and zoom with the mouse."""
+        if self.gui:
+            p.resetDebugVisualizerCamera(distance_m, VIEW_CLOSEUP_YAW_DEG, VIEW_CLOSEUP_PITCH_DEG,
+                                         np.asarray(target_pb, dtype=np.float64).tolist(), physicsClientId=self.cid)
+
     def update_skin(self, vertices_pb: np.ndarray) -> None:
         """Rebuild the visual-only skin body (PyBullet cannot update rigid visual mesh vertices in place:
         ``resetMeshData`` only supports soft bodies)."""
@@ -553,6 +565,7 @@ def run_viewer(backend: PyBulletBackend, channels: PhysicsChannels, fps: float =
             elif kind == "skin_mesh":
                 backend.set_skin_mesh(payload["indices"])
                 pending_skin = np.asarray(payload["vertices_pb"])
+                backend.focus_camera(pending_skin.mean(axis=0))
             elif kind == "skin":
                 pending_skin = payload
         snap = channels.view.read()

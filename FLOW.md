@@ -19,6 +19,11 @@ before you change an entry point or a data route. All paths are relative to the 
 | Train CFM + EDM diffusion (BC) | [`ReconstructionPipeline/planning/train_diffusion_policy.py`](ReconstructionPipeline/planning/train_diffusion_policy.py) | `./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py --num-demo-episodes 200` |
 | Patient assets (download + resample + meshes) | [`ReconstructionPipeline/data/prepare_patient_assets.py`](ReconstructionPipeline/data/prepare_patient_assets.py) | `./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets --export-totalseg data/sample_totalsegmentator_patient` |
 | FEM soft-body demo video / dataset | [`ReconstructionPipeline/scripts/record_soft_body_demonstrations.py`](ReconstructionPipeline/scripts/record_soft_body_demonstrations.py) | `./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video` |
+| Batched vector env (GPU, N envs, no PyBullet; training path) | [`mtp_gym/core.py`](mtp_gym/core.py) | `gym.make_vec("MTP/FreeScan-v0", num_envs=64, vectorization_mode="vector_entry_point", patients=["data/sample_totalsegmentator_patient"])` |
+| Vector-env throughput (writes `results/throughput_*.json/.md`) | [`ReconstructionPipeline/evaluation/throughput_benchmark.py`](ReconstructionPipeline/evaluation/throughput_benchmark.py) | `./.venv/bin/python ReconstructionPipeline/evaluation/throughput_benchmark.py --num-envs 1,8,32,128 --modes rigid,aware` |
+| Import the 12 SonoGym TotalSegmentator subjects into frame P | [`ReconstructionPipeline/data/import_sonogym_subjects.py`](ReconstructionPipeline/data/import_sonogym_subjects.py) | `./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients` |
+| Build / QA the FEM of every patient (writes `results/patients_fem_*.json`) | [`ReconstructionPipeline/data/build_patient_fem.py`](ReconstructionPipeline/data/build_patient_fem.py) | `./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample` |
+| Reconstruction task, vector env | [`mtp_gym/tasks/reconstruction.py`](mtp_gym/tasks/reconstruction.py) | `gym.make_vec("MTP/Recon-v0", num_envs=64, vectorization_mode="vector_entry_point", patients=[...])` |
 | Tests | [`ReconstructionPipeline/tests/`](ReconstructionPipeline/tests) | `./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q` |
 | Remote GPU automation | [`scripts/run_remote_totalsegmentator.sh`](scripts/run_remote_totalsegmentator.sh) | `bash scripts/run_remote_totalsegmentator.sh --mode all --dataset-dir <subject>` (only inside `*/workspace/rishang/*`) |
 
@@ -132,6 +137,36 @@ outputs `energy`, `effective_energy` and `bone_mask` are privileged and must not
 
 ---
 
+## 4b. Flow C2: one batched vector-env step (`mtp_gym`, DEC-041)
+
+The training path. It reproduces Flow C for N envs at once. A test (`test_gym_api.py::test_parity_with_single_env`)
+checks that force, indentation, coupling and pose match `env_reconstruction` for the same start pose and action.
+PyBullet is never imported (a test checks this).
+
+1. `task.map_action(a)` gives pose deltas, and optionally a target force. The pose is clipped to the per-patient scan
+   window, which is fitted to the FEM ROI.
+2. `PatientSim.skin_pose`: the (N,4,4) pose on the undeformed skin, in frame P.
+3. Admittance control (`UltrasoundVectorEnv._regulate`, using `BatchedFEMSolver.first_contact / max_indentation /
+   force`). It is warm-started per env relative to first contact.
+4. `BatchedFEMSolver.solve(field=True)` produces the force and the (N,3,NZ,NY,NX) displacement field. Then
+   `probe_face_poses` and `VolumeSliceExtractor.extract_slices(batched_warp_fn=state.warp_to_reference)` produce the
+   deformed CT slice. In `rigid` mode the undeformed CT is sliced at the skin pose.
+5. B-mode (`ModelBasedUltrasoundSimulator`, batched), then coupling κ(force, tilt) as a dB shift, then the
+   image-only confidence map.
+6. `task.evaluate(frame)` returns the reward, termination and extra observations. Rules for tasks are in
+   `mtp_gym/tasks/base.py`: labels and ground truth may feed rewards and metrics only.
+7. Autoreset happens in the same step. The final observation goes in `info["final_obs"]`.
+
+Patients come from `data/patients/<name>/` (SonoGym subjects imported into frame P, anchored at L4) and
+the sample patient. The fixed train/held-out split is in `data/splits.json`. Tissue moduli are shared by all
+patients by default (`PatientSim(stiffness="shared")`, `SHARED_E_SCALE`), so force depends on anatomy;
+`stiffness="calibrated"` is the per-patient ablation.
+
+Envs are grouped by patient: each `PatientSim` holds one FEM model, its compliance and field, and its CT. The Python
+loop runs over patients, not envs. A per-env `e_scale` gives stiffness randomisation (`e_scale_range`).
+
+---
+
 ## 5. Flow D: planning, training and benchmark
 
 ```mermaid
@@ -214,7 +249,7 @@ tests them, including the check that the P→PB mapping matches the exported PyB
 ## 8. Verification recipes
 
 ```bash
-# 1. Full test suite (103 tests)
+# 1. Full test suite (see the latest count in the commit message / CI log)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 
 # 2. FEM timings and calibration printout
@@ -254,6 +289,9 @@ MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
 ./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video
 cp demonstrations/demo_fem_soft_body.mp4 demonstrations/report/
 ./.venv/bin/python -m ReconstructionPipeline.scripts.make_soft_body_report   # --only deformation,tilt,bmode,echo,recon_video,recon_3d,results
+
+# 12. Vector-env throughput (results/throughput_<stamp>.json/.md)
+./.venv/bin/python ReconstructionPipeline/evaluation/throughput_benchmark.py --num-envs 1,8,32,128 --modes rigid,aware
 
 # 9. Remote GPU host (must be inside */workspace/rishang/*)
 rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/

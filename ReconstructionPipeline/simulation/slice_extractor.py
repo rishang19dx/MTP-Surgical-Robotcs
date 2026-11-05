@@ -88,6 +88,7 @@ class VolumeSliceExtractor:
         interpolation: str = "bilinear",
         tissue_state: Optional[Any] = None,
         warp_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        batched_warp_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
     ) -> torch.Tensor:
         """
         Extracts 2D slices for one or more probe poses with backward Eulerian warping:
@@ -100,6 +101,8 @@ class VolumeSliceExtractor:
             interpolation: 'bilinear' (CT) or 'nearest' (labels).
             tissue_state: `TissueState` (contract C1); its `warp_to_reference` is applied.
             warp_fn: alternative callable (N,3) deformed -> (N,3) reference points (mm, frame P).
+            batched_warp_fn: callable (B,N,3) -> (B,N,3) with one deformation per pose, e.g.
+                `BatchedFEMState.warp_to_reference` (fem_batched.py).  Exclusive with the two above.
 
         Returns:
             (H, W) for a single pose, else (B, H, W).
@@ -126,7 +129,11 @@ class VolumeSliceExtractor:
         pts_world = torch.bmm(poses, pts_local.unsqueeze(0).expand(batch_size, -1, -1))
         pts_xyz = pts_world[:, :3, :].transpose(1, 2)
 
-        if any(w is not None for w in warps):
+        if batched_warp_fn is not None:
+            if tissue_state is not None or warp_fn is not None:
+                raise ValueError("batched_warp_fn is exclusive with tissue_state / warp_fn")
+            pts_xyz = batched_warp_fn(pts_xyz).float()
+        elif any(w is not None for w in warps):
             pts_xyz = torch.stack(
                 [w(pts_xyz[bi]) if w is not None else pts_xyz[bi] for bi, w in enumerate(warps)], dim=0
             )

@@ -1,0 +1,382 @@
+{
+  "gpu": "NVIDIA GeForce RTX 2050",
+  "rows": [
+    {
+      "patient": "data/sample_totalsegmentator_patient",
+      "build_s": 1.304156439997314,
+      "from_cache": true,
+      "mesh": "h=4.0 mm lattice (32, 20, 27): 11872 soft cells, 71232 tets, 15259 nodes (5943 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 233.28,
+      "compliance_asymmetry": 2.3982149370034733e-06,
+      "pcg_worst_rel_residual": 9.77240597421769e-06,
+      "e_scale": 1.0958367977799586,
+      "moduli_kpa": [
+        10.958367977799586,
+        21.916735955599172
+      ],
+      "calib_rms_log_err_max": 0.959735751564079,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        12.0,
+        36.0,
+        44.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0004",
+      "build_s": 42.234695162002026,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15048 soft cells, 90288 tets, 18288 nodes (5469 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.3403348281717933e-06,
+      "pcg_worst_rel_residual": 9.929345651471522e-06,
+      "e_scale": 1.2254851459996154,
+      "moduli_kpa": [
+        12.254851459996154,
+        24.509702919992307
+      ],
+      "calib_rms_log_err_max": 0.43809883133926575,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        55.0,
+        58.0,
+        63.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0006",
+      "build_s": 44.98861184999987,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16673 soft cells, 100038 tets, 20253 nodes (6221 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.842628666646138e-06,
+      "pcg_worst_rel_residual": 9.810751180339139e-06,
+      "e_scale": 2.6094943645846187,
+      "moduli_kpa": [
+        26.094943645846186,
+        52.18988729169237
+      ],
+      "calib_rms_log_err_max": 0.6759406016326063,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        27.0,
+        55.0,
+        63.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0010",
+      "build_s": 38.970029996999074,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14600 soft cells, 87600 tets, 18237 nodes (6386 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.3165521908395483e-06,
+      "pcg_worst_rel_residual": 8.590522156737279e-06,
+      "e_scale": 2.85746037133363,
+      "moduli_kpa": [
+        28.574603713336302,
+        57.149207426672604
+      ],
+      "calib_rms_log_err_max": 0.641461738591621,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        14.0,
+        48.0,
+        57.5
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0012",
+      "build_s": 49.61910576900118,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15482 soft cells, 92892 tets, 18776 nodes (5798 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.24781556519351e-06,
+      "pcg_worst_rel_residual": 8.999834790301975e-06,
+      "e_scale": 0.8180896350000765,
+      "moduli_kpa": [
+        8.180896350000765,
+        16.36179270000153
+      ],
+      "calib_rms_log_err_max": 0.15284384000459333,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        29.0,
+        56.0,
+        79.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0014",
+      "build_s": 72.1302716479986,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20600 soft cells, 123600 tets, 24637 nodes (7110 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.145456533221383e-06,
+      "pcg_worst_rel_residual": 9.61371733865235e-06,
+      "e_scale": 2.08706672079635,
+      "moduli_kpa": [
+        20.8706672079635,
+        41.741334415927
+      ],
+      "calib_rms_log_err_max": 0.8932680587577886,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        46.25,
+        76.0,
+        84.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0015",
+      "build_s": 37.0891791460017,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13573 soft cells, 81438 tets, 16854 nodes (5742 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.6447171913491485e-06,
+      "pcg_worst_rel_residual": 8.57534359965939e-06,
+      "e_scale": 0.6185359919495635,
+      "moduli_kpa": [
+        6.185359919495635,
+        12.37071983899127
+      ],
+      "calib_rms_log_err_max": 0.5409900365865936,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        14.0,
+        46.0,
+        50.5
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0024",
+      "build_s": 47.40063623199967,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20113 soft cells, 120678 tets, 24217 nodes (7324 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.2632139727894094e-06,
+      "pcg_worst_rel_residual": 9.899871656671166e-06,
+      "e_scale": 1.2582207967889092,
+      "moduli_kpa": [
+        12.582207967889092,
+        25.164415935778184
+      ],
+      "calib_rms_log_err_max": 0.4474347190519125,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        47.0,
+        77.5,
+        95.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0028",
+      "build_s": 30.26141012500011,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16467 soft cells, 98802 tets, 20089 nodes (6682 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 7.408900935999659e-06,
+      "pcg_worst_rel_residual": 9.72612906480208e-06,
+      "e_scale": 1.4650430704634414,
+      "moduli_kpa": [
+        14.650430704634413,
+        29.300861409268826
+      ],
+      "calib_rms_log_err_max": 0.3893523244914784,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        58.75,
+        65.0,
+        100.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0029",
+      "build_s": 27.87643592299719,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16333 soft cells, 97998 tets, 19924 nodes (6423 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.602185577715883e-06,
+      "pcg_worst_rel_residual": 9.325377504865173e-06,
+      "e_scale": 1.4126349500468391,
+      "moduli_kpa": [
+        14.126349500468391,
+        28.252699000936783
+      ],
+      "calib_rms_log_err_max": 0.5883701339202997,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        23.0,
+        52.0,
+        62.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0030",
+      "build_s": 47.40066726900113,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 21363 soft cells, 128178 tets, 25440 nodes (7517 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.476160828513365e-06,
+      "pcg_worst_rel_residual": 9.51193487708224e-06,
+      "e_scale": 1.0233874777848968,
+      "moduli_kpa": [
+        10.233874777848968,
+        20.467749555697935
+      ],
+      "calib_rms_log_err_max": 0.3525539033564646,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        61.0,
+        85.0,
+        90.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0034",
+      "build_s": 41.283593190997635,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18748 soft cells, 112488 tets, 21813 nodes (5418 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.894511232867505e-06,
+      "pcg_worst_rel_residual": 9.807744390855078e-06,
+      "e_scale": 1.6150510262719422,
+      "moduli_kpa": [
+        16.150510262719422,
+        32.301020525438844
+      ],
+      "calib_rms_log_err_max": 0.6208644594531587,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        44.5,
+        73.0,
+        93.0
+      ]
+    },
+    {
+      "patient": "data/patients/sonogym_s0038",
+      "build_s": 33.090778333000344,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16212 soft cells, 97272 tets, 19565 nodes (5810 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.629240265343497e-06,
+      "pcg_worst_rel_residual": 9.781671906239353e-06,
+      "e_scale": 1.901706398494429,
+      "moduli_kpa": [
+        19.01706398494429,
+        38.03412796988858
+      ],
+      "calib_rms_log_err_max": 0.5919487953039416,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        24.0,
+        55.0,
+        67.5
+      ]
+    }
+  ]
+}

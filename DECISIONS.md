@@ -686,3 +686,120 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - The learned checkpoints predate this change.
   - VRAM grew by about 90 MB.
 
+### `DEC-041`: RSS 2027 Direction: GPU-Batched Gymnasium Env on the PyTorch FEM, Hypothesis-Led Paper, Three Tasks
+* **Date**: November 5, 2026 (branch `audit-fixes`; planning only, no code changed)
+* **Context**: The user is targeting RSS 2027. The CFP was checked on 2026-11-05:
+  - Stage 1 is a 6-page extended abstract, due 4 Dec 2026, judged on hypothesis and methodology.
+  - The final paper is due 16 Apr 2027.
+
+  The goal is SonoGym parity (arXiv 2507.01152; rigid anatomy, no contact force) plus soft-tissue deformation, as a
+  framework that other researchers can train and test policies on. The literature review flagged a close competitor:
+  CRESSim-Neo (arXiv 2608.25192) already has a batched GPU XPBD UltrasoundScan env, with no CT anatomy, no fidelity
+  check and no policy results. So "first parallel soft-body US gym" cannot be claimed.
+
+  Constraints: simulation only (no robot or phantom); one RTX 5000 Blackwell Pro.
+* **Grilling outcome** — user decisions on 2026-11-05:
+  1. **Simulation stack:** keep the PyTorch FEM and batch it on the GPU behind a Gymnasium `VectorEnv`; do not port to
+     Isaac Lab before Stage 1.
+     - Alternatives considered: Isaac Lab/PhysX deformables (they do not report contact forces), Newton (experimental in
+       Isaac Lab 3.0), SOFA (CPU-only), Genesis (fast-moving and unpublished), XPBD (uncalibrated forces).
+     - An Isaac Lab wrapper stays optional for Stage 2.
+  2. **Framing:** a hypothesis-led paper with the gym as the instrument (H1–H4 in `tasks/plan.md`), rather than a pure
+     benchmark paper. This fits the Stage 1 review criteria.
+  3. **Tasks:** bone reconstruction, navigation to a standard plane, and a new force-regulated scan. Pedicle drilling
+     is out of scope.
+* **Decision**:
+  - A batched, PyBullet-free training path shares `fem_tissue` and the B-mode code with the existing 1 kHz PyBullet +
+    Slicer path. A parity test will tie the two together.
+  - Invariant 2 still holds for the 1 kHz path.
+  - The plan and task list are in `tasks/plan.md` and `tasks/todo.md`.
+* **Consequences**:
+  - FLOW.md must gain the new training entry point once T3 lands.
+  - Throughput numbers must be regenerated into `results/` (T8) before anyone cites them.
+  - Claims must not include "first deformable US simulator" (Goksel & Salcudean TMI 2009, Bürger et al. TMI 2013) or
+    "first parallel soft-body US gym" (CRESSim-Neo).
+* **Progress, T1 (2026-11-05)**: `ReconstructionPipeline/simulation/fem_batched.py` (`BatchedFEMSolver`). It wraps one
+  patient's `FEMTissueModel` and solves B (pose, indentation) queries at once on the GPU:
+  - padded per-env candidate skin nodes;
+  - batched active-set `torch.linalg.solve`;
+  - one dense GEMM for the field;
+  - optional per-env `e_scale` for stiffness randomisation.
+
+  The single-env path is unchanged. `tests/test_fem_batched.py` checks parity in fp64 against `FEMTissueModel._solve`
+  for force, force vector, torque, contact stiffness, active-node count and field, including out-of-contact and
+  tilted envs.
+
+  **Default contact dtype is float32.** Reasons:
+  - GPUs run fp64 at a small fraction of the fp32 rate. On the RTX 2050 the 128-env step was about 3× faster in fp32
+    (89 → 27 ms without the field, scratch profiling).
+  - The test bounds the fp32 error against fp64 at < 1e-5 relative force and < 0.05 mm field.
+
+  Timings printed by `test_batch_sizes_run` on the RTX 2050 (informational, not asserted; T8 will put
+  throughput into `results/`): 6.0 / 8.3 / 13.0 / 33.3 ms per batched step for B = 1 / 8 / 32 / 128; peak VRAM
+  305–450 MB.
+* **Progress, T2/T3/T8 (2026-11-05)**:
+  - **T2.** `BatchedFEMState.warp_to_reference` and `probe_face_poses`, plus
+    `VolumeSliceExtractor.extract_slices(batched_warp_fn=...)`. `test_batched_render.py` compares against the
+    single-env slices. It also checks that tissue under a face indented 2–8 mm maps back to within 0.5 mm of the
+    undeformed skin.
+  - **T3.** New package `mtp_gym`:
+    - `UltrasoundVectorEnv` is a Gymnasium 1.0 `VectorEnv` with torch tensors on the device and same-step autoreset.
+      It is registered as `MTP/FreeScan-v0`.
+    - Tasks plug in through `mtp_gym/tasks/base.py`.
+    - Envs are grouped per patient.
+    - The batched admittance control uses `BatchedFEMSolver.first_contact / max_indentation / force`, which match
+      the single-env methods in a test.
+    - `test_gym_api.py` checks parity with `env_reconstruction`, autoreset, rigid mode, stiffness randomisation, and
+      that PyBullet is never imported.
+  - **T8.** `ReconstructionPipeline/evaluation/throughput_benchmark.py`. `results/throughput_20261105_223122.md`
+    (RTX 2050, FreeScan task, 20 steps) gives:
+    - `aware` (FEM-deformed): 41.4 / 259.4 / 526.8 / 711.5 env-steps/s for N = 1 / 8 / 32 / 128.
+    - `rigid` (undeformed image, FEM force control kept): 47.0 / 291.5 / 641.4 / 910.5.
+
+    The run was made from an uncommitted tree (commit field `-dirty`), so re-run it after committing before
+    citing it.
+  - The Kelvinlet backend is not batched. The vector env is FEM-only.
+* **Progress, T4/T5 (2026-11-05)**:
+  - **T4, patients.** `ReconstructionPipeline/data/import_sonogym_subjects.py` imports the 12 SonoGym subjects
+    (HF `yunkao/SonoGym_assets_models`, CC BY 4.0) into `data/patients/sonogym_<id>/`. Checks made before
+    writing it:
+    - The CTs are true RAS: posterior is −Y in all 12. Frame P needs the proper rotation diag(−1, −1, 1).
+    - L4 = TotalSegmentator label 28, checked against SonoGym's `vertebrae_L4.stl` for all 12.
+    - Two scans (s0004, s0012) are slightly oblique (≤ 3°). The full inverse affine is used.
+    - The CT table touches the dorsal skin. It is removed by keeping the largest connected body component.
+
+    Each subject is resampled onto the sample patient's 1 mm canonical grid, with y extended to 120 mm, and
+    placed so that its L4 centroid lands on the sample's L4 centroid. Skin depth stays patient-specific.
+    Midline soft tissue at L4 spans 15–78 mm (`meta.json` `qa`). Axial QA images were inspected (scratch, not
+    committed).
+
+    `data/splits.json`: subjects are sorted by thickness and every third is held out (s0029, s0006, s0034,
+    s0030).
+  - **Loader caveat found.** `load_totalsegmentator_subject` chooses the axis order with a shape heuristic
+    (`shape[0] < shape[2]`). The imported grids satisfy it (141 < 176), but the heuristic would mis-order a raw
+    scan such as SonoGym s0034 (308, 308, 283). Raw scans must go through the importer.
+  - **T5.** `MTP/Recon-v0` (`mtp_gym/tasks/reconstruction.py`):
+    - `mtp_gym/perception.py::segment_bmode_batch` is a torch port of `segment_from_bmode`. It equals the numpy
+      version pixel for pixel (test).
+    - A GPU occupancy grid (1.5 mm) gives the area reward, as in the single env. GPU coverage uses raw
+      back-projected points.
+    - The observations are the 32³ reconstruction grid and the coverage.
+    - The benchmark raster (72 frames) reaches coverage 0.890 in the single env and 0.897 in the vector env
+      (`test_raster_coverage_matches_single_env`, printed).
+    - Invariant 5 is tested: shifting the ground-truth target changes the coverage but no observation.
+* **Decision (user, 2026-11-05): shared tissue moduli across patients.**
+  - **Before.** Each patient's FEM modulus scale was calibrated so that its scan window follows the same
+    literature curve (k0 = 0.5 N/mm).
+  - **Problem.** Over the 13 patients this spread `e_scale` from 0.62 to 2.86
+    (`results/patients_fem_20261105_225601.json`). That equalised the force response and largely removed the
+    anatomy-driven force differences H2 tests.
+  - **Now.** `PatientSim(stiffness="shared")` is the default. All patients use E_fat / E_muscle = 10.96 / 21.92
+    kPa: `SHARED_E_SCALE` = 1.0958, the sample patient's calibrated value, first row of that file.
+  - **Ablation.** `stiffness="calibrated"` keeps per-patient calibration.
+  - **Effect.** `test_multi_patient.py::test_anatomy_changes_force_under_shared_moduli`: at first contact
+    + 6 mm on the midline, the thin back s0015 gives 9.43 N and the thick back s0014 gives 3.48 N (printed).
+  - **Alternatives considered.** Per-patient calibration (rejected as the default: it hides anatomy). Moduli fitted
+    per tissue from population data (not available without real force data; possible Stage 2 work).
+  - **Limitation.** One sample's calibration sets the absolute stiffness level. T14 (comparison with a nonlinear
+    FEM and published values) is where it gets checked.
+

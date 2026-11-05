@@ -14,12 +14,12 @@ Every task also obeys the AGENTS.md invariants:
 | T1 batched FEM | 5 Nov | done 5 Nov |
 | T2 batched deformed B-mode | 6 Nov | done 5 Nov |
 | T3 VectorEnv core | 7–9 Nov | done 5 Nov |
-| T8 throughput into `results/` | 9 Nov | done 5 Nov (RTX 2050; re-run on the server GPU) |
+| T8 throughput into `results/` | 9 Nov | done 5 Nov (`results/throughput_20261105_235332.md`, RTX 2050, clean commit; re-run on the server GPU) |
 | T4 multi-patient assets (SonoGym cases + varied BMI) | 6–12 Nov | done 5 Nov: 12 SonoGym subjects + sample, split in `data/splits.json`, shared moduli; own varied-BMI picks still to add |
 | T5 reconstruction task on VectorEnv | 10–12 Nov | done 5 Nov (`MTP/Recon-v0`) |
 | **Checkpoint A** | 13 Nov | |
 | T6 navigation task | 12–15 Nov | |
-| T9 compression-changes-image gate | 13–14 Nov | |
+| T9 compression-changes-image gate | 13–14 Nov | done 5 Nov: passes on all 13 patients (`compression_sweep.py`) |
 | T14 fidelity vs nonlinear FEM | 14–19 Nov | |
 | **Checkpoint B** | 20 Nov | |
 | T7 force-scan task | 19–21 Nov | |
@@ -129,7 +129,7 @@ per patient from TotalSegmentator vertebra labels. Labels are used only for the 
 **Depends on:** T3, T4.
 **Files:** `mtp_gym/tasks/navigation.py`, a test.
 
-### T9: Gate: does compression change the simulated image? (S)
+### T9: Gate: does compression change the simulated image? (S) — DONE 2026-11-05 (passes on all 13 patients)
 **Description:** Before investing in the force task, sweep the force from 1 to 15 N at fixed poses on all patients and
 measure image change. Measures: echo depth of bone, image-only confidence, and SSIM to the 1 N image. This replaces the
 DEC-040 single-patient check (22.2 → 16.6 mm). Write the result to `results/`.

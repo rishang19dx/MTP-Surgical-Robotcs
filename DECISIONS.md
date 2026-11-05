@@ -802,4 +802,19 @@ A chronological record of all architectural, research, algorithmic, and engineer
     per tissue from population data (not available without real force data; possible Stage 2 work).
   - **Limitation.** One sample's calibration sets the absolute stiffness level. T14 (comparison with a nonlinear
     FEM and published values) is where it gets checked.
+* **Progress, T9 gate (2026-11-05): force changes the simulated image, for every patient.**
+  `ReconstructionPipeline/evaluation/compression_sweep.py`: 13 patients, shared moduli, 3×3 untilted poses over the
+  L4 window, F = 1…15 N by bisection on the batched FEM, fixed speckle seed, all measured from the B-mode only.
+  The results file is named in the commit that adds it.
+  - **Statistic choices made while developing the script** (each was replaced before any result was used):
+    1. Averaging echo depth over whichever poses had an echo at each force mixed poses. The thick s0014 shows
+       no echo at 1 N anywhere.
+    2. The per-image median depth was confounded: in s0034 the laminae (about 66 mm) enter the field of view
+       under compression and outvote the spinous-process tip (about 44 mm), even though both move toward the
+       probe. Inspected visually (scratch figure).
+
+    Final statistic: per scanline, paired between the lowest and the highest force.
+  - **Limitation.** Speckle is generated in image coordinates, so it does not move with the tissue. The fixed
+    seed removes it from this comparison, but speckle decorrelation under compression is not modelled. That is a
+    realism item (T19).
 

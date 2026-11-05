@@ -1,45 +1,68 @@
 """
 Unified Surgical Physics & Autonomous 3D Ultrasound Reconstruction Server.
-Bridges 1 kHz PyBullet physical contact dynamics and GPU model-based acoustic ray tracing
-directly to 3D Slicer via OpenIGTLink binary sockets.
 
-Features:
-1. Real Franka Emika Panda 7-DoF manipulator with attached ultrasound transducer probe.
-2. Clinical operating room suite: examination table, patient lumbar torso, and soft-tissue contact dynamics.
-3. Closed-loop physical contact force (F_N) and ultrasound acoustic coupling.
-4. TotalSegmentator multi-vertebra NIfTI patient anatomy loading.
-5. High-fidelity dual-window visualization:
-   - PyBullet 3D Window: Robot arm scanning patient, contact force arrows, acoustic beam cone, and real-time HUD.
-   - 3D Slicer Window: Synchronized 2D live ultrasound feed, 3D moving probe model, and reconstructed bone point cloud.
+Runs two decoupled loops (AGENTS invariant 2):
+
+* **Physics loop (1 kHz)** -- ``pybullet_backend.run_physics_loop``. Owns *every* PyBullet call
+  (IK, motor commands, stepSimulation, contact queries, GUI overlays, virtual fixtures). By default
+  it runs in its own process (``--physics-mode process``) so the Python-heavy ultrasound /
+  OpenIGTLink work cannot steal its GIL. ``thread`` mode runs it in a thread of this process
+  (kept for comparison), ``inline`` is used by ``step_simulation_and_stream`` in tests.
+* **Streaming loop (``--fps``, default 30 Hz)** -- steps ``UltrasoundReconstructionEnv`` (tissue
+  model, B-mode simulation, reconstruction), sends the resulting end-effector target to the
+  physics loop, and publishes to 3D Slicer. It never touches PyBullet; it only reads the physics
+  loop's contact snapshot and rate statistics through ``PhysicsChannels``.
+
+OpenIGTLink messages published (all patient-frame data is in frame P, mm; the Slicer side applies
+the documented P->RAS matrix, see ``coordinates.P_TO_RAS``):
+
+    UltrasoundProbe    TransformMessage  4x4 T_P<-probe of the (indented) probe face / image plane, +Y = beam
+    US_Image           ImageMessage      uint8 (H, W, 1) B-mode frame
+    ReconstructedBone  ImageMessage      float32 (1, N, 3) accumulated bone points in P (array transport;
+                                         pyigtl 0.3.4 has no NDARRAY and its PointMessage packer is O(N^2))
+    DeformedSkin       ImageMessage      float32 (1, N, 3) all N deformed skin-patch vertices (mm, P), in the
+                                         vertex order of ``meshes/patient_fem_skin.obj``, which this server
+                                         writes at startup from the tissue model's skin surface
+                                         (``FEMTissueModel.skin_surface_mesh``). Sent when the deformation
+                                         changes (and once undeformed after contact is lost).
+    Telemetry          StringMessage     JSON: force, indentation, coupling, physics-rate stats, rigid contacts
+
+Incoming (StringMessage):
+    CMD             JSON {"reset": true} | {"mode": "<scan mode>"} | {"roi_target": [R, A, S]}
+    VirtualFixture  JSON {"vertices": [[R,A,S],...], "indices": [...], "policy": "keep_out"}
+
+Physics coupling (DEC-037): every streaming step sends the env's latest tissue solution (FEM force F0,
+contact stiffness K_c, indentation delta0, undeformed contact point and beam) with the end-effector
+target; the 1 kHz loop applies F = F0 + K_c (delta - delta0) to the probe without waiting on the FEM.
+With ``--gui`` a separate viewer process renders the scene and the deformed skin patch.
+
+Usage:
+    ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode orbital_l4 --fps 30 [--gui]
+    ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20
 """
 
-import sys
-import os
-import time
-import threading
 import argparse
 import json
-from typing import Optional, Dict, Any, List
+import multiprocessing as mp
+import os
+import socket
+import sys
+import threading
+import time
+from typing import Any, Dict, Optional
+
 import numpy as np
-import torch
 import pyigtl
 import pyigtl.comm
-import socket
-import pybullet as p
-import pybullet_data
+import torch
 
-# Hardened RequestHandler for OpenIGTLinkServer
+
 class RobustTCPRequestHandler(pyigtl.comm.TCPRequestHandler):
-    """
-    Hardened RequestHandler for OpenIGTLinkServer:
-    - 5 ms timeout for non-blocking command reception.
-    - 2.0 s timeout for binary message transmission (US B-mode slices and point clouds).
-    - Ignores momentary buffer timeouts without dropping client connection.
-    """
+    """pyigtl request handler that tolerates momentary send-buffer saturation by a busy Slicer UI."""
+
     def handle(self):
         self.server._connected = True
         while not self.server.communication_thread_stop_requested:
-            # 1. Non-blocking command reception
             self.request.settimeout(0.005)
             try:
                 while self.server._receive_message_from_socket(self.request):
@@ -47,44 +70,58 @@ class RobustTCPRequestHandler(pyigtl.comm.TCPRequestHandler):
                         break
             except Exception:
                 pass
-
-            # 2. Generous send timeout for large binary images and point clouds
             self.request.settimeout(2.0)
             try:
                 while self.server._send_queued_message_from_socket(self.request):
                     pass
             except (socket.timeout, TimeoutError):
-                # Socket buffer momentarily saturated by Slicer UI rendering; keep client alive
                 continue
-            except (BrokenPipeError, ConnectionResetError):
-                self.server._communication_error_occurred()
-                break
             except Exception:
                 self.server._communication_error_occurred()
                 break
 
+
 pyigtl.comm.TCPRequestHandler = RobustTCPRequestHandler
 
-# Add project root to sys.path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from surgical_physics_bridge.src.pybullet_backend import PyBulletBackend
-from surgical_physics_bridge.src.coordinates import convert_pose_pb_to_slicer, pybullet_to_slicer_ras_matrix
-from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
-from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner
-from ReconstructionPipeline.kinematics.kinova_kinematics import KinovaGen3Kinematics
-from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
+from surgical_physics_bridge.src.coordinates import (  # noqa: E402
+    P_TO_PB_ROT,
+    patient_to_pybullet_points,
+    probe_axes_to_pybullet_quaternion,
+    ras_to_patient_points,
+)
+from surgical_physics_bridge.src.obj_io import write_obj  # noqa: E402
+from surgical_physics_bridge.src.physics_rate import PhysicsRateMonitor  # noqa: E402
+from surgical_physics_bridge.src.pybullet_backend import (  # noqa: E402
+    PhysicsChannels,
+    PyBulletBackend,
+    dedicated_physics_cpu,
+    exclude_dedicated_cpu,
+    physics_process_main,
+    run_physics_loop,
+    viewer_process_main,
+)
+from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv  # noqa: E402
+from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner  # noqa: E402
+from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator  # noqa: E402
+
+BENCH_CLIENT_SRC = (
+    "import sys, time, pyigtl\n"
+    "c = pyigtl.OpenIGTLinkClient(host='127.0.0.1', port=int(sys.argv[1]))\n"
+    "while True:\n"
+    "    c.get_latest_messages(); time.sleep(0.01)\n"
+)
+SCAN_MODES = ["orbital_l4", "raster_l4", "orbital", "raster", "nbv", "diffusion", "cfm", "interactive"]
+FEM_SKIN_OBJ = "patient_fem_skin.obj"
+SKIN_CHANGE_MIN_MM = 0.01
+MAX_OUTGOING_QUEUE = 64
 
 
 class UnifiedSurgicalBridgeServer:
-    """
-    Unified Runtime Bridge synchronizing PyBullet physics, GPU acoustic slicing,
-    and 3D Slicer OpenIGTLink communications.
-    """
-
     def __init__(
         self,
         port: int = 18944,
@@ -92,518 +129,556 @@ class UnifiedSurgicalBridgeServer:
         patient_dir: Optional[str] = None,
         gui: bool = False,
         publish_fps: float = 30.0,
-        scan_mode: str = "orbital",
+        scan_mode: str = "orbital_l4",
         device: Optional[torch.device] = None,
+        physics_mode: str = "process",
+        physics_hz: float = 1000.0,
+        rate_log_interval_s: float = 5.0,
+        rate_window: int = 60000,
+        tissue_backend: str = "fem",
     ):
+        if physics_mode not in ("process", "thread", "inline"):
+            raise ValueError(f"physics_mode must be process|thread|inline, got {physics_mode}")
         self.port = port
         self.gui = gui
         self.publish_fps = publish_fps
         self.publish_interval = 1.0 / publish_fps
         self.scan_mode = scan_mode
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.physics_mode = physics_mode
+        self.physics_hz = physics_hz
+        self.dt_physics = 1.0 / physics_hz
+        self.rate_log_interval_s = rate_log_interval_s
 
-        # 1. OpenIGTLink Server
         print(f"[*] Initializing OpenIGTLink Server on port {self.port}...")
         self.server = pyigtl.OpenIGTLinkServer(port=self.port)
 
-        # 2. PyBullet Physics Backend
-        print(f"[*] Initializing PyBullet Physics Suite (1 kHz, GUI={gui})...")
-        self.backend = PyBulletBackend(gui=gui)
-        self.robot_id = None
-        self.ee_idx = 11  # Default Franka Panda grasptarget link
-        self.arm_joints = list(range(7))
-        self.probe_body_id = None
-        self.hud_text_id = -1
-
-        # 2. TotalSegmentator Patient Asset Resolution
         self.patient_dir = self._resolve_patient_data(patient_dir)
+        self._ensure_meshes()
 
-        # Build operating room scene in PyBullet with patient anatomical assets
-        self._build_pybullet_scene(urdf_path)
+        # Physics: never constructed in this process unless thread/inline mode.
+        self.channels = PhysicsChannels(ctx=mp.get_context("spawn") if physics_mode == "process" else None,
+                                        rate_window=rate_window)
+        self._cached_stats = self.channels.rate_reader().snapshot()
+        self._last_stats_refresh = 0.0
+        self.backend: Optional[PyBulletBackend] = None
+        self.physics_proc = None
+        self.physics_thread = None
+        self.viewer_proc = None
+        # The physics client is always DIRECT; the GUI is a separate viewer process (process mode only).
+        self._physics_config = dict(gui=False, patient_dir=self.patient_dir, urdf_path=urdf_path, dt=self.dt_physics)
+        self._start_physics()
+        if gui:
+            self._start_viewer()
 
-        # 3. Kinematics Controller
-        self.kinematics = KinovaGen3Kinematics()
-
-        # 4. Ultrasound Simulation & Reconstruction Environment
-        print("[*] Initializing Ultrasound Reconstruction Engine (Dorsal Spine Scanning)...")
+        print(f"[*] Initializing Ultrasound Reconstruction Environment (dorsal, {tissue_backend} tissue)...")
         self.env = UltrasoundReconstructionEnv(
             patient_data=self.patient_dir,
+            target_vertebra="vertebrae_L4",
             max_steps=10000,
-            scan_approach="dorsal",
-            pybullet_backend=self.backend,
             device=self.device,
+            tissue_backend=tissue_backend,
         )
+        self.skin_vertices, self.skin_tris = self._skin_patch()
+        self.skin_obj_path = self._export_skin_obj()
+        self._last_skin_sent: Optional[np.ndarray] = None
+        if self.viewer_proc is not None:
+            self.channels.viewer.put(("skin_mesh", {"vertices_pb": patient_to_pybullet_points(self.skin_vertices),
+                                                    "indices": self.skin_tris.ravel().tolist()}))
         self.obs = self.env.reset()
-        self.update_robot_ik_and_visuals(teleport=True)
 
-        # 6. Trajectory Planner
         self.planner = HeuristicScanPlanner()
         self.trajectory = self._build_trajectory(self.scan_mode)
         self.traj_idx = 0
+        self.candidate_deltas = [
+            (5.0, 0.0, 0.0, 0.0), (-5.0, 0.0, 0.0, 0.0),
+            (0.0, 5.0, 0.0, 0.0), (0.0, -5.0, 0.0, 0.0),
+            (3.5, 3.5, np.radians(6.0), 0.0), (-3.5, 3.5, -np.radians(6.0), 0.0),
+            (3.5, -3.5, np.radians(6.0), 0.0), (-3.5, -3.5, -np.radians(6.0), 0.0),
+        ]
+        self.visited_positions = []
+        self.action_queue = []
+        self.diffusion_policy = None
+        self.cfm_policy = None
+        self.pointnet = None
+        self._load_policies()
 
-        # State tracking
         self.is_running = True
-        self.dt_physics = 0.001  # 1 kHz
-        self.last_publish_time = time.time()
+        self.last_publish_time = 0.0
         self.total_frames_published = 0
         self.last_points_sent = 0
         self.last_points_publish_time = 0.0
-        self.physics_lock = threading.Lock()
+        self.last_rate_log = time.perf_counter()
+        self.last_target: Optional[Dict[str, Any]] = None
+        self._send_target(teleport=True)
 
-    def _safe_send(self, msg):
-        """Dispatches an OpenIGTLink message non-blockingly, suppressing socket disconnect errors."""
-        try:
-            self.server.send_message(msg, wait=False)
-        except Exception:
-            pass
-
-    def _resolve_patient_data(self, patient_dir: Optional[str]) -> Any:
-        """Locates or synthesizes TotalSegmentator clinical patient data."""
-        if patient_dir and os.path.isdir(patient_dir):
-            print(f"[+] Using specified TotalSegmentator subject directory: {patient_dir}")
-            return patient_dir
-
-        default_totalseg = os.path.join(PROJECT_ROOT, "data", "sample_totalsegmentator_patient")
-        if os.path.isdir(default_totalseg):
-            print(f"[+] Using default TotalSegmentator patient dataset: {default_totalseg}")
-            return default_totalseg
-
-        print("[*] Sample patient dataset not found. Synthesizing TotalSegmentator patient assets...")
-        PatientAssetGenerator.export_totalsegmentator_dataset(default_totalseg)
-        return default_totalseg
-
-    def _build_pybullet_scene(self, custom_urdf: Optional[str] = None):
-        """Constructs clinical operating suite: robot, patient table, soft torso, and probe."""
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.81)
-
-        if self.gui:
-            # Clean presentation view
-            p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-            p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 1)
-            p.resetDebugVisualizerCamera(
-                cameraDistance=1.10,
-                cameraYaw=45,
-                cameraPitch=-22,
-                cameraTargetPosition=[0.55, 0.0, 0.38]
+    # ----------------------------------------------------------------- setup
+    def _start_physics(self) -> None:
+        if self.physics_mode == "process":
+            self._dedicated_cpu = dedicated_physics_cpu()
+            ctx = mp.get_context("spawn")
+            self.physics_proc = ctx.Process(
+                target=physics_process_main,
+                args=(self._physics_config, self.channels, self.physics_hz),
+                name="PyBulletPhysicsProcess",
+                daemon=True,
             )
+            self.physics_proc.start()
+            if not self.channels.ready.wait(timeout=60.0) or not self.physics_proc.is_alive():
+                raise RuntimeError("Physics process failed to start")
+            # The child pinned itself to the dedicated CPU; keep torch/open3d worker threads of this process off it.
+            exclude_dedicated_cpu(self._dedicated_cpu)
+            print(f"[+] Physics process started (pid {self.physics_proc.pid}, {self.physics_hz:.0f} Hz target)")
+        else:
+            self.backend = PyBulletBackend(**self._physics_config)
+            if self.physics_mode == "thread":
+                # Default GIL switch interval is 5 ms, which alone caps a GIL-sharing 1 kHz loop near 200 Hz.
+                sys.setswitchinterval(2e-4)
+                self.physics_thread = threading.Thread(
+                    target=run_physics_loop, args=(self.backend, self.channels, self.physics_hz),
+                    daemon=True, name="PyBulletPhysicsThread")
 
-        # 1. Floor
-        p.loadURDF("plane.urdf", [0, 0, 0])
+    def _start_viewer(self) -> None:
+        if self.physics_mode != "process":
+            print("[!] --gui needs --physics-mode process (separate viewer process); running headless.")
+            return
+        ctx = mp.get_context("spawn")
+        cfg = dict(self._physics_config, gui=True)
+        self.viewer_proc = ctx.Process(target=viewer_process_main, args=(cfg, self.channels),
+                                       name="PyBulletViewerProcess", daemon=True)
+        self.viewer_proc.start()
+        print(f"[+] PyBullet GUI viewer process started (pid {self.viewer_proc.pid})")
 
-        # 2. Patient Examination Bed
-        table_col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.42, 0.30, 0.15])
-        table_vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.42, 0.30, 0.15], rgbaColor=[0.68, 0.72, 0.75, 1.0])
-        self.table_id = p.createMultiBody(
-            baseMass=0,
-            baseCollisionShapeIndex=table_col,
-            baseVisualShapeIndex=table_vis,
-            basePosition=[0.55, 0.0, 0.15]
-        )
+    def _resolve_patient_data(self, patient_dir: Optional[str]) -> str:
+        if patient_dir and os.path.isdir(patient_dir):
+            return patient_dir
+        default = os.path.join(PROJECT_ROOT, "data", "sample_totalsegmentator_patient")
+        if not os.path.isdir(default):
+            print("[*] Sample patient dataset not found. Exporting it...")
+            PatientAssetGenerator.export_totalsegmentator_dataset(default)
+        return default
 
-        # 3. Patient Anatomy: Real Lumbar Spine (L1-L5) & Translucent Torso Skin
+    def _ensure_meshes(self) -> None:
         mesh_dir = os.path.join(self.patient_dir, "meshes")
-        spine_mesh_path = os.path.join(mesh_dir, "patient_lumbar_spine.obj")
-        torso_mesh_path = os.path.join(mesh_dir, "patient_torso_skin.obj")
-
-        if not os.path.exists(spine_mesh_path) or not os.path.exists(torso_mesh_path):
+        needed = ["patient_lumbar_spine.obj", "patient_torso_skin.obj", "patient_torso_skin_ras.obj"]
+        if not all(os.path.exists(os.path.join(mesh_dir, n)) for n in needed):
             PatientAssetGenerator.export_patient_meshes(self.patient_dir)
 
-        # 3A. Internal Ivory Lumbar Spine (L1-L5 + Sacrum)
-        if os.path.exists(spine_mesh_path):
-            spine_vis = p.createVisualShape(p.GEOM_MESH, fileName=spine_mesh_path, rgbaColor=[0.92, 0.89, 0.78, 1.0])
-            spine_col = p.createCollisionShape(p.GEOM_MESH, fileName=spine_mesh_path)
-            self.spine_id = p.createMultiBody(
-                baseMass=0,
-                baseCollisionShapeIndex=spine_col,
-                baseVisualShapeIndex=spine_vis,
-                basePosition=[0, 0, 0]
-            )
-            print(f"[+] Loaded anatomical lumbar spine (L1-L5) from {spine_mesh_path} (ID: {self.spine_id})")
-        else:
-            self.spine_id = -1
+    def _skin_patch(self):
+        """Undeformed skin patch (vertices (S,3) P mm, triangles (T,3)) whose deformation is streamed:
+        the FEM skin surface (`FEMTissueModel.skin_surface_mesh`, deformed = state.displace(vertices))."""
+        model = self.env.tissue_model
+        if hasattr(model, "skin_surface_mesh"):
+            v, f = model.skin_surface_mesh(None)
+        else:  # Kelvinlet backend: 4 mm grid on the CT skin height map over the scan window +- 30 mm
+            xs = np.arange(self.env.c1_bounds[0] - 30.0, self.env.c1_bounds[1] + 30.01, 4.0)
+            zs = np.arange(self.env.c2_bounds[0] - 30.0, self.env.c2_bounds[1] + 30.01, 4.0)
+            X, Z = np.meshgrid(xs, zs, indexing="ij")
+            v = np.stack([X.ravel(), self.env.skin.height(X.ravel(), Z.ravel()), Z.ravel()], 1)
+            nx, nz = len(xs), len(zs)
+            a = (np.arange(nx - 1)[:, None] * nz + np.arange(nz - 1)[None, :]).ravel()
+            f = np.concatenate([np.stack([a, a + nz, a + 1], 1), np.stack([a + 1, a + nz, a + nz + 1], 1)])
+        return np.ascontiguousarray(v, dtype=np.float32), np.asarray(f, dtype=np.int64)
 
-        # 3B. Translucent Patient Torso Soft-Tissue Envelope
-        if os.path.exists(torso_mesh_path):
-            torso_vis = p.createVisualShape(p.GEOM_MESH, fileName=torso_mesh_path, rgbaColor=[0.86, 0.68, 0.58, 0.55])
-            torso_col = p.createCollisionShape(p.GEOM_MESH, fileName=torso_mesh_path)
-            self.torso_id = p.createMultiBody(
-                baseMass=0,
-                baseCollisionShapeIndex=torso_col,
-                baseVisualShapeIndex=torso_vis,
-                basePosition=[0, 0, 0]
-            )
-            print(f"[+] Loaded patient torso skin envelope from {torso_mesh_path} (ID: {self.torso_id})")
-        else:
-            torso_col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.16, 0.24, 0.06])
-            torso_vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.16, 0.24, 0.06], rgbaColor=[0.88, 0.73, 0.61, 1.0])
-            self.torso_id = p.createMultiBody(
-                baseMass=0,
-                baseCollisionShapeIndex=torso_col,
-                baseVisualShapeIndex=torso_vis,
-                basePosition=[0.55, 0.0, 0.36]
-            )
+    def _export_skin_obj(self) -> str:
+        """Write the undeformed skin patch (frame P mm, streamed vertex order) for the Slicer bridge."""
+        path = os.path.join(self.patient_dir, "meshes", FEM_SKIN_OBJ)
+        write_obj(path, self.skin_vertices, self.skin_tris)
+        return path
 
-        self.backend.anatomy_body_id = self.torso_id
-
-        # 4. Robot Manipulator
-        robot_urdf = custom_urdf if (custom_urdf and os.path.exists(custom_urdf)) else "franka_panda/panda.urdf"
-        try:
-            self.robot_id = p.loadURDF(robot_urdf, [0.0, 0.0, 0.10], useFixedBase=True)
-            self.backend.robot_id = self.robot_id
-            self.backend._map_links()
-            self.has_robot = True
-            print(f"[+] Loaded robot manipulator from {robot_urdf} (ID: {self.robot_id})")
-        except Exception as e:
-            print(f"[!] Warning: Could not load robot URDF: {e}")
-            self.has_robot = False
-
-        # 5. Ultrasound Probe Tool rigidly attached to End-Effector
-        if self.has_robot:
-            probe_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.014, length=0.09, rgbaColor=[0.2, 0.5, 0.85, 1.0])
-            probe_col = p.createCollisionShape(p.GEOM_CYLINDER, radius=0.014, height=0.09)
-            self.probe_body_id = p.createMultiBody(
-                baseMass=0.2,
-                baseCollisionShapeIndex=probe_col,
-                baseVisualShapeIndex=probe_vis,
-                basePosition=[0.55, 0.0, 0.45]
-            )
-            self.backend.probe_body_id = self.probe_body_id
-            # Constrain probe tool firmly to Franka Panda hand
-            p.createConstraint(
-                self.robot_id, self.ee_idx,
-                self.probe_body_id, -1,
-                p.JOINT_FIXED,
-                [0, 0, 0], [0, 0, 0], [0, 0, 0.045]
-            )
+    def _load_policies(self) -> None:
+        if self.scan_mode == "diffusion" and os.path.exists("checkpoints/diffusion_policy.pt"):
+            try:
+                from ReconstructionPipeline.planning.diffusion_policy import SOTADiffusionPolicy
+                self.diffusion_policy = SOTADiffusionPolicy(action_dim=4, horizon=8, device=self.device)
+                ckpt = torch.load("checkpoints/diffusion_policy.pt", map_location=self.device, weights_only=False)
+                self.diffusion_policy.load_state_dict(ckpt.get("state_dict", ckpt))
+                self.diffusion_policy.eval()
+            except Exception as e:
+                print(f"[!] Failed to load diffusion policy: {e}")
+        elif self.scan_mode == "cfm" and os.path.exists("checkpoints/flow_matching.pt"):
+            try:
+                from ReconstructionPipeline.planning.flow_matching_policy import FlowMatchingPolicy
+                from ReconstructionPipeline.planning.pointnet_encoder import PointNetEncoder
+                self.pointnet = PointNetEncoder(latent_dim=128).to(self.device)
+                self.cfm_policy = FlowMatchingPolicy(action_dim=4, chunk_horizon=8, condition_dim=132,
+                                                     device=self.device).to(self.device)
+                ckpt = torch.load("checkpoints/flow_matching.pt", map_location=self.device, weights_only=False)
+                if "pointnet_state_dict" in ckpt:
+                    self.pointnet.load_state_dict(ckpt["pointnet_state_dict"])
+                if "policy_state_dict" in ckpt:
+                    self.cfm_policy.load_state_dict(ckpt["policy_state_dict"])
+                self.pointnet.eval()
+                self.cfm_policy.eval()
+            except Exception as e:
+                print(f"[!] Failed to load CFM policy: {e}")
 
     def _build_trajectory(self, mode: str) -> Optional[np.ndarray]:
+        if mode == "raster_l4":
+            return self.planner.generate_spine_raster_trajectory(
+                x_range=(-20.0, 20.0), z_range=(-52.0, -10.0), step_distance_mm=0.33, num_sweep_lines=6)
+        if mode == "orbital_l4":
+            return self.planner.generate_orbital_trajectory(center=(0.0, -31.0), radii=[16.0, 26.0], step_distance_mm=0.33)
         if mode == "raster":
             return self.planner.generate_spine_raster_trajectory(
-                x_range=(-16.0, 16.0),
-                z_range=(-50.0, 50.0),
-                step_distance_mm=0.33,
-                num_sweep_lines=5
-            )
-        elif mode == "orbital":
-            return self.planner.generate_orbital_trajectory(
-                radii=[16.0, 26.0, 34.0],
-                step_distance_mm=0.33
-            )
+                x_range=(-18.0, 18.0), z_range=(-55.0, 55.0), step_distance_mm=0.33, num_sweep_lines=5)
+        if mode == "orbital":
+            return self.planner.generate_orbital_trajectory(center=(0.0, -31.0), radii=[16.0, 26.0, 34.0],
+                                                            step_distance_mm=0.33)
         return None
 
-    def handle_incoming_messages(self):
-        """Processes control signals, virtual fixtures, and ROI delineations from 3D Slicer."""
-        messages = self.server.get_latest_messages() if hasattr(self.server, "get_latest_messages") else []
-        for message in messages:
-            if isinstance(message, pyigtl.StringMessage) and message.device_name == "CMD":
-                try:
-                    cmd_data = json.loads(message.string)
-                    if cmd_data.get("reset"):
-                        self.obs = self.env.reset()
-                        self.update_robot_ik_and_visuals(teleport=True)
-                        self.traj_idx = 0
-                        print("[+] Reset command received from Slicer.")
-
-                    if "mode" in cmd_data:
-                        self.scan_mode = cmd_data["mode"].lower()
-                        self.trajectory = self._build_trajectory(self.scan_mode)
-                        self.traj_idx = 0
-                        print(f"[+] Scan mode set to: {self.scan_mode.upper()}")
-
-                    if "roi_target" in cmd_data:
-                        roi_ras = np.array(cmd_data["roi_target"], dtype=np.float64)
-                        t_conv_inv = np.linalg.inv(pybullet_to_slicer_ras_matrix())
-                        target_pb = (t_conv_inv[:3, :3] @ roi_ras + t_conv_inv[:3, 3])
-                        self.env.current_pose_params[0] = np.clip(target_pb[0], self.env.x_bounds[0], self.env.x_bounds[1])
-                        self.env.current_pose_params[1] = np.clip(target_pb[2], self.env.z_bounds[0], self.env.z_bounds[1])
-                        self.obs = self.env._observe_current_state()
-
-                except json.JSONDecodeError as err:
-                    print(f"[!] Malformed CMD JSON: {err}")
-
-            elif isinstance(message, pyigtl.StringMessage) and message.device_name == "VirtualFixture":
-                try:
-                    vf_data = json.loads(message.string)
-                    if "vertices" in vf_data and "indices" in vf_data:
-                        self.backend.set_virtual_fixture(vf_data, vf_data.get("policy", "keep_out"))
-                except json.JSONDecodeError as err:
-                    print(f"[!] Malformed VirtualFixture JSON: {err}")
-
-    def update_robot_ik_and_visuals(self, teleport: bool = False):
-        """Solves 7-DoF IK and draws real-time contact force vectors & ultrasound beam cone in PyBullet."""
-        if not self.has_robot or self.robot_id is None:
+    # ------------------------------------------------------------ networking
+    def _safe_send(self, msg) -> None:
+        """Queue a message only while a client is connected; drop the oldest frames if Slicer lags."""
+        srv = self.server
+        if not srv.is_connected():
             return
+        with srv.lock_outgoing_messages:
+            while len(srv.outgoing_messages) >= MAX_OUTGOING_QUEUE:
+                srv.outgoing_messages.popleft()
+        try:
+            srv.send_message(msg, wait=False)
+        except Exception as e:
+            print(f"[!] OpenIGTLink send failed: {e}")
 
-        c1 = float(self.env.current_pose_params[0])
-        c2 = float(self.env.current_pose_params[1])
-        yaw = float(self.env.current_pose_params[2])
-        pitch = float(self.env.current_pose_params[3])
+    def handle_incoming_messages(self) -> None:
+        for message in self.server.get_latest_messages():
+            if not isinstance(message, pyigtl.StringMessage):
+                continue
+            try:
+                data = json.loads(message.string)
+            except json.JSONDecodeError as err:
+                print(f"[!] Malformed {message.device_name} JSON: {err}")
+                continue
+            if message.device_name == "CMD":
+                if data.get("reset"):
+                    self.obs = self.env.reset()
+                    self.traj_idx = 0
+                    self._send_target(teleport=True)
+                if "mode" in data:
+                    self.scan_mode = str(data["mode"]).lower()
+                    self.trajectory = self._build_trajectory(self.scan_mode)
+                    self.traj_idx = 0
+                if "roi_target" in data:
+                    target_p = ras_to_patient_points(np.asarray(data["roi_target"], dtype=np.float64))
+                    self.env.current_pose_params[0] = np.clip(target_p[0], *self.env.c1_bounds)
+                    self.env.current_pose_params[1] = np.clip(target_p[2], *self.env.c2_bounds)
+                    self.obs = self.env._acquire(self.env.current_pose_params)[0]
+                    self._send_target()
+            elif message.device_name == "VirtualFixture":
+                if "vertices" in data and "indices" in data:
+                    self.channels.commands.put(("fixture", data))
+
+    # -------------------------------------------------------- env -> physics
+    def _tissue_state(self):
+        return self.env.tissue_state
+
+    def _indentation_mm(self) -> float:
+        ts = self._tissue_state()
+        if ts is not None and hasattr(ts, "indentation_mm"):
+            return float(ts.indentation_mm)
+        return float(getattr(self.env, "current_indentation_mm", 0.0))
+
+    def _skin_pose(self) -> np.ndarray:
+        """T_P<-probe with origin on the UNDEFORMED skin (``env.skin_pose``, contract C1)."""
+        return np.asarray(self.env.skin_pose(*self.env.current_pose_params), dtype=np.float64)
+
+    def _send_target(self, teleport: bool = False) -> None:
+        """Probe pose from the env (frame P) -> end-effector target in PyBullet, sent to the physics loop."""
+        t_p = self._skin_pose()
+        beam_p, lateral_p = t_p[:3, 1], t_p[:3, 0]
+        indent = self._indentation_mm()
+        face_p = t_p[:3, 3] + indent * beam_p
+        contact_pb = patient_to_pybullet_points(face_p)
+        beam_pb = P_TO_PB_ROT @ beam_p
+        beam_pb /= np.linalg.norm(beam_pb)
+        ee_pos = contact_pb - beam_pb * PyBulletBackend.PROBE_LENGTH_M
         fn = float(self.env.current_normal_force)
         coupling = float(self.env.current_coupling)
-
-        # Indentation depth from Kelvinlet elasticity
-        delta_m = (fn / 2500.0)
-
-        # PyBullet world frame coordinates:
-        # Patient torso center is at (X=0.55, Y=0.0, Z=0.36), dorsal surface at Z=0.42
-        x_pb = 0.55 + c1 * 1e-3
-        y_pb = 0.0 + c2 * 1e-3
-        z_contact = 0.42 - delta_m
-        z_ee = z_contact + 0.09  # End-effector mount elevation
-
-        target_pos = [x_pb, y_pb, z_ee]
-        target_orn = p.getQuaternionFromEuler([np.pi + pitch, 0.0, yaw])
-
-        # Inverse Kinematics solution
-        joint_targets = p.calculateInverseKinematics(
-            self.robot_id,
-            self.ee_idx,
-            target_pos,
-            target_orn,
-            maxNumIterations=40,
-            residualThreshold=1e-4,
+        stats = self._cached_stats
+        hud = (
+            f"ROBOTIC ULTRASOUND | mode {self.scan_mode}\n"
+            f"Normal force {fn:.2f} N | indentation {indent:.2f} mm | coupling {coupling * 100:.0f}%\n"
+            f"Reconstructed {len(self.env.accumulator.get_points())} pts | "
+            f"physics {stats['achieved_hz']:.0f} Hz (p99 {stats['period_p99_ms']:.2f} ms)"
         )
+        ts = self._tissue_state()
+        in_contact = bool(ts is not None and ts.in_contact)
+        tissue = {
+            "contact_pb": patient_to_pybullet_points(t_p[:3, 3]).tolist(),
+            "beam_pb": beam_pb.tolist(),
+            "force_n": float(ts.reaction_force_n) if in_contact else 0.0,
+            "stiffness_n_per_mm": float(getattr(ts, "contact_stiffness_n_per_mm", ts.stiffness_n_per_mm))
+            if in_contact else 0.0,
+            "indentation_mm": indent,
+            "in_contact": in_contact,
+        }
+        target = {
+            "tissue": tissue,
+            "ee_pos": ee_pos.tolist(),
+            "ee_orn": list(probe_axes_to_pybullet_quaternion(beam_p, lateral_p)),
+            "contact_pb": contact_pb.tolist(),
+            "beam_pb": beam_pb.tolist(),
+            "lateral_pb": (P_TO_PB_ROT @ lateral_p).tolist(),
+            "teleport": teleport,
+            "force_n": fn,
+            "hud": hud,
+        }
+        self.last_target = target
+        self.channels.commands.put(("target", target))
+        if self.viewer_proc is not None:
+            self.channels.viewer.put(("target", target))
 
-        # Command or teleport revolute joints
-        if teleport:
-            for j_idx, q_val in zip(self.arm_joints, joint_targets[:7]):
-                p.resetJointState(self.robot_id, j_idx, q_val)
-        else:
-            p.setJointMotorControlArray(
-                self.robot_id,
-                self.arm_joints,
-                p.POSITION_CONTROL,
-                targetPositions=joint_targets[:7],
-                forces=[150.0] * 7,
-            )
-
-        # PyBullet GUI visual feedback
-        if self.gui:
-            # 1. Contact Force Vector (Color coded: Green=Safe, Amber=Elevated, Red=Violation)
-            if fn <= 6.0:
-                f_color = [0.1, 0.95, 0.3]
-            elif fn <= 8.0:
-                f_color = [1.0, 0.75, 0.1]
-            else:
-                f_color = [1.0, 0.15, 0.1]
-
-            force_vec_end = [x_pb, y_pb, z_contact + fn * 0.015]
-            p.addUserDebugLine(
-                [x_pb, y_pb, z_contact],
-                force_vec_end,
-                f_color,
-                lineWidth=4,
-                lifeTime=0.20,
-            )
-
-            # 2. Dynamic Soft-Tissue Kelvinlet Indentation Crater
-            # Visualizes the physical depression of the skin mesh under probe pressure
-            indent_m = max(0.0, delta_m)
-            r_contact = 0.014  # Transducer tip radius (14 mm)
-            r_mid = 0.026      # Mid transition radius (26 mm)
-            r_rim = 0.040      # Relaxed outer boundary (40 mm)
-            n_spokes = 12
-            thetas = np.linspace(0, 2 * np.pi, n_spokes, endpoint=False)
-
-            # Draw concentric circular contour rings & radial spokes
-            for k in range(n_spokes):
-                th1 = thetas[k]
-                th2 = thetas[(k + 1) % n_spokes]
-
-                # Inner ring (at probe indentation depth)
-                p0_a = [x_pb + r_contact * np.cos(th1), y_pb + r_contact * np.sin(th1), z_contact]
-                p0_b = [x_pb + r_contact * np.cos(th2), y_pb + r_contact * np.sin(th2), z_contact]
-                p.addUserDebugLine(p0_a, p0_b, f_color, lineWidth=3, lifeTime=0.20)
-
-                # Mid ring (Kelvinlet 40% decay profile)
-                z_mid = 0.42 - 0.35 * indent_m
-                p1_a = [x_pb + r_mid * np.cos(th1), y_pb + r_mid * np.sin(th1), z_mid]
-                p1_b = [x_pb + r_mid * np.cos(th2), y_pb + r_mid * np.sin(th2), z_mid]
-                p.addUserDebugLine(p1_a, p1_b, [0.3, 0.7, 0.9], lineWidth=2, lifeTime=0.20)
-
-                # Outer rim (undeformed skin surface at z=0.42)
-                p2_a = [x_pb + r_rim * np.cos(th1), y_pb + r_rim * np.sin(th1), 0.42]
-                p2_b = [x_pb + r_rim * np.cos(th2), y_pb + r_rim * np.sin(th2), 0.42]
-                p.addUserDebugLine(p2_a, p2_b, [0.6, 0.6, 0.6], lineWidth=1, lifeTime=0.20)
-
-                # Radial deformation spokes connecting the crater
-                if k % 2 == 0:
-                    p.addUserDebugLine(p0_a, p1_a, f_color, lineWidth=2, lifeTime=0.20)
-                    p.addUserDebugLine(p1_a, p2_a, [0.3, 0.7, 0.9], lineWidth=1, lifeTime=0.20)
-
-            # 3. Ultrasound Acoustic Slicing Plane (Cyan Frustum penetrating toward spine)
-            half_w = 0.018  # 36 mm transducer lateral width
-            depth = 0.06    # 60 mm acoustic penetration depth
-            c_bl = [x_pb - half_w, y_pb, z_contact - depth]
-            c_br = [x_pb + half_w, y_pb, z_contact - depth]
-            c_tl = [x_pb - half_w, y_pb, z_contact]
-            c_tr = [x_pb + half_w, y_pb, z_contact]
-            cyan = [0.0, 0.85, 1.0]
-            p.addUserDebugLine(c_tl, c_bl, cyan, lineWidth=2, lifeTime=0.20)
-            p.addUserDebugLine(c_tr, c_br, cyan, lineWidth=2, lifeTime=0.20)
-            p.addUserDebugLine(c_bl, c_br, cyan, lineWidth=2, lifeTime=0.20)
-
-            # 4. Dynamic On-Screen HUD Overlay with Soft-Body Telemetry
-            pts_count = len(self.env.accumulator.get_points())
-            indent_mm = indent_m * 1000.0
-            hud_msg = (
-                f"ROBOTIC ULTRASOUND OPERATING SUITE (SOFT-BODY DEFORMABLE)\n"
-                f"Patient: TotalSegmentator Lumbar L1-L5 | mu = 4.0 kPa, nu = 0.46\n"
-                f"Normal Force: {fn:.2f} N | Tissue Indentation: {indent_mm:.2f} mm\n"
-                f"Acoustic Coupling: {coupling*100:.1f}% | Reconstructed: {pts_count} pts\n"
-                f"Slicer 3D Bridge: {self.publish_fps:.0f} FPS Streaming"
-            )
-            self.hud_text_id = p.addUserDebugText(
-                hud_msg,
-                textPosition=[0.42, -0.30, 0.62],
-                textColorRGB=[0.1, 0.95, 0.4],
-                textSize=1.1,
-                lifeTime=0.20,
-                replaceItemUniqueId=self.hud_text_id if self.hud_text_id != -1 else -1,
-            )
-
-    def _execute_scan_step_and_publish(self, current_time: float):
-        """Executes one scan step in the environment and publishes multimodality packets."""
-        # Autonomous Scan Step
-        if self.trajectory is not None and self.traj_idx < len(self.trajectory):
-            target_p = self.trajectory[self.traj_idx]
-            curr_p = self.env.current_pose_params
-
-            dx = np.clip((target_p[0] - curr_p[0]) / self.env.action_scale_trans, -1.0, 1.0)
-            dz = np.clip((target_p[1] - curr_p[1]) / self.env.action_scale_trans, -1.0, 1.0)
-            dyaw = np.clip((target_p[2] - curr_p[2]) / self.env.action_scale_yaw, -1.0, 1.0)
-            dpitch = np.clip((target_p[3] - curr_p[3]) / self.env.action_scale_pitch, -1.0, 1.0)
-
-            action = np.array([dx, dz, dyaw, dpitch], dtype=np.float32)
-            self.obs, reward, term, trunc, info = self.env.step(action)
+    # --------------------------------------------------------------- scanning
+    def _policy_action(self) -> Optional[np.ndarray]:
+        env = self.env
+        curr = env.current_pose_params
+        if self.trajectory is not None:
+            target_p = self.trajectory[self.traj_idx % len(self.trajectory)]
             self.traj_idx += 1
+            return np.array([
+                np.clip((target_p[0] - curr[0]) / env.action_scale_trans, -1.0, 1.0),
+                np.clip((target_p[1] - curr[1]) / env.action_scale_trans, -1.0, 1.0),
+                np.clip((target_p[2] - curr[2]) / env.action_scale_yaw, -1.0, 1.0),
+                np.clip((target_p[3] - curr[3]) / env.action_scale_pitch, -1.0, 1.0),
+            ], dtype=np.float32)
+        if self.scan_mode == "nbv":
+            self.visited_positions.append((float(curr[0]), float(curr[1])))
+            coupling_fn = getattr(env, "compute_contact_force_and_coupling", None)
+            best, best_score = None, -float("inf")
+            for dx, dz, dyaw, dpitch in self.candidate_deltas:
+                cx = np.clip(curr[0] + dx, *env.c1_bounds)
+                cz = np.clip(curr[1] + dz, *env.c2_bounds)
+                penalty = sum(np.exp(-0.5 * ((cx - vx) ** 2 + (cz - vz) ** 2) / 25.0)
+                              for vx, vz in self.visited_positions[-40:])
+                kappa = coupling_fn(cx, cz, curr[2] + dyaw, curr[3] + dpitch)[1] if coupling_fn else 1.0
+                score = 5.0 * kappa - 1.2 * penalty - 0.01 * np.hypot(cx, cz + 31.0)
+                if score > best_score:
+                    best_score = score
+                    best = np.array([dx / env.action_scale_trans, dz / env.action_scale_trans,
+                                     dyaw / env.action_scale_yaw, dpitch / env.action_scale_pitch], dtype=np.float32)
+            return best
+        if self.scan_mode in ("diffusion", "cfm"):
+            if not self.action_queue:
+                pts_t = torch.tensor(self.obs["reconstructed_points"], dtype=torch.float32, device=self.device).unsqueeze(0)
+                pose_t = torch.tensor(self.obs["probe_pose"], dtype=torch.float32, device=self.device).unsqueeze(0)
+                with torch.no_grad():
+                    if self.scan_mode == "diffusion" and self.diffusion_policy is not None:
+                        chunk = self.diffusion_policy.sample_actions(pts_t, pose_t, num_steps=5).squeeze(0).cpu().numpy()
+                    elif self.scan_mode == "cfm" and self.cfm_policy is not None:
+                        cond = torch.cat([self.pointnet(pts_t), pose_t], dim=-1)
+                        chunk = self.cfm_policy.generate_action_chunk(cond, num_steps=5).squeeze(0).cpu().numpy()
+                    else:
+                        return None
+                self.action_queue.extend(list(chunk[:2]))
+            return self.action_queue.pop(0)
+        return None  # interactive: hold pose
 
-            with self.physics_lock:
-                self.update_robot_ik_and_visuals()
+    def _execute_scan_step_and_publish(self, current_time: float) -> None:
+        action = self._policy_action()
+        if action is not None:
+            self.obs, _, _, _, info = self.env.step(action)
+            self._send_target()
+            if self.trajectory is not None and self.traj_idx % len(self.trajectory) == 0:
+                print(f"[+] Scan pass complete: {len(self.env.accumulator.get_points())} points, "
+                      f"coverage {info.get('coverage_ratio', float('nan')) * 100:.1f}%")
+        self.publish(current_time)
 
-            if self.traj_idx >= len(self.trajectory):
-                total_pts = len(self.env.accumulator.get_points())
-                print(
-                    f"[+] Full Spine Scan Pass Completed: "
-                    f"Total Reconstructed Points={total_pts}, "
-                    f"Coverage={info['coverage_ratio']*100:.1f}%, "
-                    f"NormalForce={info['normal_force']:.2f}N, Coupling={info['acoustic_coupling']*100:.1f}%"
-                )
-                self.traj_idx = 0
+    def deformed_skin_vertices(self) -> np.ndarray:
+        """(S, 3) float32 deformed skin-patch vertices (P mm, same order as ``self.skin_vertices``)."""
+        ts = self._tissue_state()
+        if ts is None or not ts.in_contact:
+            return self.skin_vertices
+        model = self.env.tissue_model
+        with torch.no_grad():
+            if hasattr(model, "skin_surface_mesh"):
+                v = model.skin_surface_mesh(ts)[0]
+            else:
+                x = torch.as_tensor(self.skin_vertices, dtype=torch.float32, device=self.device)
+                v = ts.displace(x).detach().cpu().numpy()
+        return np.ascontiguousarray(v, dtype=np.float32)
 
-        # --- Network Publishing ---
+    def _skin_message(self) -> Optional[np.ndarray]:
+        """(1, S, 3) DeformedSkin payload, or None if the skin did not change since the last one sent."""
+        v = self.deformed_skin_vertices()
+        if self._last_skin_sent is not None and np.max(np.abs(v - self._last_skin_sent)) < SKIN_CHANGE_MIN_MM:
+            return None
+        self._last_skin_sent = v
+        return v[np.newaxis]
 
-        # A. Ultrasound Probe Transform in Slicer RAS
-        t_probe = self.env._build_probe_matrix(*self.env.current_pose_params)
-        msg_probe = pyigtl.TransformMessage(t_probe.astype(np.float64), device_name="UltrasoundProbe")
-        self._safe_send(msg_probe)
+    def publish(self, current_time: float) -> None:
+        env = self.env
+        t_probe = np.asarray(env._build_probe_matrix(*env.current_pose_params), dtype=np.float64)  # indented face
+        self._safe_send(pyigtl.TransformMessage(t_probe, device_name="UltrasoundProbe"))
 
-        # B. 2D B-mode Ultrasound Image (US_Image)
         bmode = (np.clip(self.obs["bmode"], 0.0, 1.0) * 255.0).astype(np.uint8)
-        img_msg = pyigtl.ImageMessage(bmode[:, :, np.newaxis], device_name="US_Image")
-        self._safe_send(img_msg)
+        self._safe_send(pyigtl.ImageMessage(bmode[:, :, np.newaxis], device_name="US_Image"))
 
-        # C. Incremental 3D Reconstructed Bone Points (throttled to avoid TCP buffer congestion)
-        pts = self.env.accumulator.get_points()
+        pts = env.accumulator.get_points()
         n_pts = len(pts)
-        if n_pts > 0 and (n_pts >= self.last_points_sent + 5 or (current_time - self.last_points_publish_time >= 0.15)):
-            pts_msg = pyigtl.PointMessage(positions=pts.astype(np.float32), device_name="ReconstructedBone")
-            self._safe_send(pts_msg)
+        if n_pts > 0 and (n_pts >= self.last_points_sent + 5 or current_time - self.last_points_publish_time >= 0.15):
+            arr = np.ascontiguousarray(np.asarray(pts, dtype=np.float32).reshape(1, -1, 3))
+            self._safe_send(pyigtl.ImageMessage(arr, device_name="ReconstructedBone"))
             self.last_points_sent = n_pts
             self.last_points_publish_time = current_time
 
-        # D. Real-Time Contact Forces
-        curr_f = float(self.env.current_normal_force)
-        c_array = np.array(
-            [[self.env.current_pose_params[0], self.env.get_skin_surface(*self.env.current_pose_params[:2]),
-              self.env.current_pose_params[1], 0.0, -1.0, 0.0, curr_f]],
-            dtype=np.float32,
-        )
-        force_msg = pyigtl.StringMessage(json.dumps(c_array.tolist()), device_name="ContactForces")
-        self._safe_send(force_msg)
+        skin = self._skin_message()
+        if skin is not None:
+            self._safe_send(pyigtl.ImageMessage(skin, device_name="DeformedSkin"))
+            if self.viewer_proc is not None:
+                self.channels.viewer.put(("skin", patient_to_pybullet_points(skin[0]).astype(np.float32)))
 
+        ts = self._tissue_state()
+        telemetry = {
+            "normal_force_n": float(env.current_normal_force),
+            "indentation_mm": self._indentation_mm(),
+            "in_contact": bool(ts.in_contact) if ts is not None else None,
+            "contact_stiffness_n_per_mm": float(getattr(ts, "contact_stiffness_n_per_mm", 0.0)) if ts is not None else None,
+            "coupling": float(env.current_coupling),
+            "num_points": int(n_pts),
+            "physics": self._cached_stats,
+            "rigid_contacts": self.channels.read_contact(),
+        }
+        self._safe_send(pyigtl.StringMessage(json.dumps(telemetry), device_name="Telemetry"))
         self.last_publish_time = current_time
         self.total_frames_published += 1
 
-    def _physics_worker(self):
-        """Dedicated 1000 Hz physics simulation loop decoupled from Slicer streaming."""
-        target_dt = self.dt_physics
+    # ------------------------------------------------------------------ loops
+    def physics_stats(self) -> Dict[str, float]:
+        return self.channels.rate_reader().snapshot()
+
+    def _maybe_log_rate(self) -> None:
+        now = time.perf_counter()
+        if now - self._last_stats_refresh >= 1.0:  # percentiles over the window are not free; refresh at 1 Hz
+            self._last_stats_refresh = now
+            self._cached_stats = self.physics_stats()
+        if now - self.last_rate_log >= self.rate_log_interval_s:
+            self.last_rate_log = now
+            print(f"[rate] {PhysicsRateMonitor.format(self._cached_stats)} | "
+                  f"stream frames {self.total_frames_published}")
+
+    def _network_streaming_worker(self, duration_s: Optional[float] = None) -> None:
+        t_begin = time.perf_counter()
         while self.is_running:
             t0 = time.perf_counter()
-            with self.physics_lock:
-                self.backend.step(target_dt)
-            elapsed = time.perf_counter() - t0
-            sleep_time = target_dt - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
-    def _network_streaming_worker(self):
-        """Dedicated network streaming loop running at display FPS (30-60 Hz)."""
-        while self.is_running:
-            t0 = time.perf_counter()
-            with self.physics_lock:
-                self.handle_incoming_messages()
-            self._execute_scan_step_and_publish(time.time())
-            elapsed = time.perf_counter() - t0
-            sleep_time = self.publish_interval - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
-    def step_simulation_and_stream(self):
-        """Synchronously steps physics and publishes for unit tests and deterministic execution."""
-        with self.physics_lock:
             self.handle_incoming_messages()
-            self.update_robot_ik_and_visuals()
-            self.backend.step(self.dt_physics)
+            self._execute_scan_step_and_publish(time.time())
+            self._maybe_log_rate()
+            if self.physics_proc is not None and not self.physics_proc.is_alive():
+                print("[!] Physics process exited; stopping.")
+                break
+            if duration_s is not None and t0 - t_begin >= duration_s:
+                break
+            sleep_time = self.publish_interval - (time.perf_counter() - t0)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
-        current_time = time.time()
-        if current_time - self.last_publish_time >= self.publish_interval:
-            self._execute_scan_step_and_publish(current_time)
+    def step_simulation_and_stream(self, physics_ticks: int = 1) -> None:
+        """Deterministic synchronous step (inline mode only): one scan/publish step + N physics ticks."""
+        if self.backend is None or self.physics_mode != "inline":
+            raise RuntimeError("step_simulation_and_stream requires physics_mode='inline'")
+        self.handle_incoming_messages()
+        self._execute_scan_step_and_publish(time.time())
+        for _ in range(physics_ticks):
+            t0 = time.perf_counter()
+            self.backend.tick(self.channels)
+            self._inline_monitor().tick(t0, time.perf_counter())
 
-        time.sleep(self.dt_physics)
+    def _inline_monitor(self) -> PhysicsRateMonitor:
+        if not hasattr(self, "_inline_mon"):
+            self._inline_mon = PhysicsRateMonitor(target_hz=self.physics_hz, window=self.channels.rate_window,
+                                                  shared_buffer=self.channels.rate)
+        return self._inline_mon
 
-    def run(self):
-        """Main service loop with 1000 Hz physics decoupled from network streaming."""
-        print(f"==================================================================")
-        print(f"[*] Unified Surgical Physics & Ultrasound Reconstruction Server Running")
-        print(f"[*] Port: {self.port} | Display FPS: {self.publish_fps} | Mode: {self.scan_mode.upper()} | GUI: {self.gui}")
-        print(f"[*] Multi-Rate Decoupling: 1000 Hz Physics Worker + {self.publish_fps} Hz Slicer Streamer")
-        print(f"==================================================================")
-        physics_thread = threading.Thread(target=self._physics_worker, daemon=True, name="PyBulletPhysicsThread")
-        physics_thread.start()
+    def run(self, duration_s: Optional[float] = None) -> Dict[str, float]:
+        print("=" * 70)
+        print(f"[*] Unified server | port {self.port} | stream {self.publish_fps} Hz | mode {self.scan_mode} | "
+              f"physics {self.physics_mode} @ {self.physics_hz:.0f} Hz | GUI {self.gui}")
+        print("=" * 70)
+        if self.physics_thread is not None:
+            self.physics_thread.start()
+        # Count only the steady state (both loops running), not scene/env construction.
+        self.channels.rate_reader().reset()
+        self.total_frames_published = 0
         try:
-            self._network_streaming_worker()
+            self._network_streaming_worker(duration_s)
         except KeyboardInterrupt:
-            print("\n[*] Stopping Unified Server...")
-        finally:
-            self.is_running = False
-            physics_thread.join(timeout=1.0)
-            self.server.stop()
+            print("\n[*] Stopping unified server...")
+        stats = self.physics_stats()
+        self.shutdown()
+        return stats
+
+    def shutdown(self) -> None:
+        self.is_running = False
+        self.channels.stop.set()
+        if self.physics_thread is not None and self.physics_thread.is_alive():
+            self.physics_thread.join(timeout=2.0)
+        for proc in (self.physics_proc, self.viewer_proc):
+            if proc is not None:
+                proc.join(timeout=5.0)
+                if proc.is_alive():
+                    proc.terminate()
+        if self.backend is not None:
             self.backend.disconnect()
-            print("[+] Unified Server cleanly shutdown.")
+            self.backend = None
+        try:
+            self.server.stop()
+        except Exception:
+            pass
 
 
 def main():
     parser = argparse.ArgumentParser(description="Unified Surgical Physics & Ultrasound Reconstruction Server")
     parser.add_argument("--port", type=int, default=18944, help="OpenIGTLink port (default 18944)")
-    parser.add_argument("--urdf", type=str, default="", help="Path to robot URDF")
-    parser.add_argument("--patient-dir", type=str, default="", help="Path to TotalSegmentator patient directory")
-    parser.add_argument("--gui", action="store_true", help="Launch native PyBullet GUI")
-    parser.add_argument("--fps", type=float, default=30.0, help="Publishing rate to Slicer (Hz)")
-    parser.add_argument("--mode", type=str, choices=["orbital", "raster", "interactive"], default="orbital",
-                        help="Scan execution mode: orbital, raster, or interactive")
+    parser.add_argument("--urdf", type=str, default="", help="Path to robot URDF (default: Franka Panda)")
+    parser.add_argument("--patient-dir", type=str, default="", help="TotalSegmentator-style patient directory")
+    parser.add_argument("--gui", action="store_true", help="Open the PyBullet GUI")
+    parser.add_argument("--fps", type=float, default=30.0, help="Streaming / scan-step rate to Slicer (Hz)")
+    parser.add_argument("--mode", type=str, choices=SCAN_MODES, default="orbital_l4", help="Scan execution mode")
+    parser.add_argument("--physics-mode", choices=["process", "thread"], default="process",
+                        help="Run the 1 kHz physics loop in its own process (default) or in a thread")
+    parser.add_argument("--physics-hz", type=float, default=1000.0, help="Physics loop rate (Hz)")
+    parser.add_argument("--tissue-backend", choices=["fem", "kelvinlet"], default="fem",
+                        help="Soft-tissue model: precomputed GPU FEM (default) or analytic Kelvinlet")
+    parser.add_argument("--benchmark-seconds", type=float, default=0.0,
+                        help="Headless benchmark: run both loops (PyBullet DIRECT) for N s and print physics-rate stats")
+    parser.add_argument("--no-benchmark-client", action="store_true",
+                        help="Benchmark without a draining OpenIGTLink client (messages are then never packed)")
     args = parser.parse_args()
 
+    bench = args.benchmark_seconds > 0
+    client = None
+    if bench and not args.no_benchmark_client:
+        # A separate-process OpenIGTLink client that drains everything, so the benchmark includes the real
+        # server-side message packing / CRC / socket cost (nothing is packed while no client is connected).
+        import subprocess
+        client = subprocess.Popen([sys.executable, "-c", BENCH_CLIENT_SRC, str(args.port)])
     server = UnifiedSurgicalBridgeServer(
         port=args.port,
-        urdf_path=args.urdf if args.urdf else None,
-        patient_dir=args.patient_dir if args.patient_dir else None,
-        gui=args.gui,
+        urdf_path=args.urdf or None,
+        patient_dir=args.patient_dir or None,
+        gui=False if bench else args.gui,
         publish_fps=args.fps,
         scan_mode=args.mode,
+        physics_mode=args.physics_mode,
+        physics_hz=args.physics_hz,
+        tissue_backend=args.tissue_backend,
     )
-    server.run()
+    if client is not None:
+        t_wait = time.time()
+        while not server.server.is_connected() and time.time() - t_wait < 15.0:
+            time.sleep(0.1)
+        print(f"[benchmark] OpenIGTLink drain client connected: {server.server.is_connected()}")
+    stats = server.run(duration_s=args.benchmark_seconds if bench else None)
+    if client is not None:
+        client.terminate()
+    if bench:
+        frames = server.total_frames_published
+        print("[benchmark] " + PhysicsRateMonitor.format(stats))
+        print(f"[benchmark] streaming loop: {frames} scan steps in {args.benchmark_seconds:.1f} s "
+              f"({frames / args.benchmark_seconds:.1f} Hz, target {args.fps:.0f} Hz)")
+        print("[benchmark] json " + json.dumps({"physics_mode": args.physics_mode, **stats,
+                                                 "stream_hz": frames / args.benchmark_seconds}))
 
 
 if __name__ == "__main__":

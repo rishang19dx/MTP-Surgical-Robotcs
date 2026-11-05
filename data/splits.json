@@ -1,0 +1,35 @@
+{
+  "description": "Fixed patient split (DEC-041, T4). Subjects sorted by midline soft-tissue thickness at L4 (meta.json qa.midline_soft_tissue_mm); every 3rd (positions 1, 4, 7, 10) is held out so the test set spans thin to thick backs. The sample patient (case-0004) is train/dev only; its source is a different dataset.",
+  "patients_root": "data/patients",
+  "train": [
+    "../sample_totalsegmentator_patient",
+    "sonogym_s0015",
+    "sonogym_s0010",
+    "sonogym_s0012",
+    "sonogym_s0038",
+    "sonogym_s0024",
+    "sonogym_s0004",
+    "sonogym_s0028",
+    "sonogym_s0014"
+  ],
+  "test": [
+    "sonogym_s0029",
+    "sonogym_s0006",
+    "sonogym_s0034",
+    "sonogym_s0030"
+  ],
+  "thickness_order_mm": {
+    "sonogym_s0015": 15.0,
+    "sonogym_s0029": 28.0,
+    "sonogym_s0010": 36.0,
+    "sonogym_s0012": 40.0,
+    "sonogym_s0006": 43.0,
+    "sonogym_s0038": 43.0,
+    "sonogym_s0024": 47.0,
+    "sonogym_s0034": 47.0,
+    "sonogym_s0004": 57.0,
+    "sonogym_s0028": 60.0,
+    "sonogym_s0030": 67.0,
+    "sonogym_s0014": 78.0
+  }
+}

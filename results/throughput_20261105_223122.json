@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/throughput_benchmark.py",
+    "args": {
+      "patient_dir": "/home/rishang/Desktop/MTP/data/sample_totalsegmentator_patient",
+      "num_envs": "1,8,32,128",
+      "modes": "rigid,aware",
+      "steps": 20,
+      "warmup": 3,
+      "seed": 0,
+      "out_dir": "/home/rishang/Desktop/MTP/results"
+    },
+    "commit": "76a4895-dirty",
+    "timestamp": "20261105_223122",
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "torch": "2.5.1+cu124",
+    "patient": "data/sample_totalsegmentator_patient",
+    "task": "FreeScan (zero reward; simulation cost only)"
+  },
+  "rows": [
+    {
+      "num_envs": 1,
+      "mode": "rigid",
+      "steps": 20,
+      "seconds": 0.42545894000068074,
+      "ms_per_step": 21.272947000034037,
+      "env_steps_per_s": 47.00806145939253,
+      "peak_vram_mb": 280.533504,
+      "force_mean_n": 3.9018731117248535,
+      "force_std_n": 0.21905532479286194
+    },
+    {
+      "num_envs": 8,
+      "mode": "rigid",
+      "steps": 20,
+      "seconds": 0.5488505979992624,
+      "ms_per_step": 27.44252989996312,
+      "env_steps_per_s": 291.51831223879805,
+      "peak_vram_mb": 317.101056,
+      "force_mean_n": 3.9379868507385254,
+      "force_std_n": 0.23181462287902832
+    },
+    {
+      "num_envs": 32,
+      "mode": "rigid",
+      "steps": 20,
+      "seconds": 0.9977803670008143,
+      "ms_per_step": 49.889018350040715,
+      "env_steps_per_s": 641.4237252670634,
+      "peak_vram_mb": 444.294144,
+      "force_mean_n": 3.9364566802978516,
+      "force_std_n": 0.20904594659805298
+    },
+    {
+      "num_envs": 128,
+      "mode": "rigid",
+      "steps": 20,
+      "seconds": 2.811719669000013,
+      "ms_per_step": 140.58598345000064,
+      "env_steps_per_s": 910.4748343957287,
+      "peak_vram_mb": 949.668352,
+      "force_mean_n": 3.9186978340148926,
+      "force_std_n": 0.26420098543167114
+    },
+    {
+      "num_envs": 1,
+      "mode": "aware",
+      "steps": 20,
+      "seconds": 0.48302288300328655,
+      "ms_per_step": 24.151144150164328,
+      "env_steps_per_s": 41.4059058147436,
+      "peak_vram_mb": 321.20064,
+      "force_mean_n": 3.9018731117248535,
+      "force_std_n": 0.21905532479286194
+    },
+    {
+      "num_envs": 8,
+      "mode": "aware",
+      "steps": 20,
+      "seconds": 0.6168623919984384,
+      "ms_per_step": 30.84311959992192,
+      "env_steps_per_s": 259.3771351202831,
+      "peak_vram_mb": 320.704512,
+      "force_mean_n": 3.9379868507385254,
+      "force_std_n": 0.23181462287902832
+    },
+    {
+      "num_envs": 32,
+      "mode": "aware",
+      "steps": 20,
+      "seconds": 1.2149213279990363,
+      "ms_per_step": 60.746066399951815,
+      "env_steps_per_s": 526.783080723485,
+      "peak_vram_mb": 453.123584,
+      "force_mean_n": 3.9364566802978516,
+      "force_std_n": 0.20904594659805298
+    },
+    {
+      "num_envs": 128,
+      "mode": "aware",
+      "steps": 20,
+      "seconds": 3.598156945001392,
+      "ms_per_step": 179.9078472500696,
+      "env_steps_per_s": 711.4753578374024,
+      "peak_vram_mb": 979.402752,
+      "force_mean_n": 3.9186978340148926,
+      "force_std_n": 0.26420098543167114
+    }
+  ]
+}

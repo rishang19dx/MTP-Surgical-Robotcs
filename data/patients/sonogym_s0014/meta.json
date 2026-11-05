@@ -1,0 +1,51 @@
+{
+  "subject": "s0014",
+  "source": "huggingface.co/datasets/yunkao/SonoGym_assets_models (assets.tar.gz)",
+  "licence": "CC BY 4.0 (SonoGym assets); CTs and labels from TotalSegmentator (Wasserthal et al. 2023)",
+  "frame": "P (LPS, mm): P = R (RAS - l4_ras) + l4_P, R = diag(-1,-1,1)",
+  "l4_centroid_ras_mm": [
+    15.21126130386898,
+    135.6716724762497,
+    13.493272051997565
+  ],
+  "l4_centroid_P_mm": [
+    -0.670805875584648,
+    -7.768951450217422,
+    -30.82335888585048
+  ],
+  "grid_mm": {
+    "x": [
+      -70.0,
+      70.0
+    ],
+    "y": [
+      -50.0,
+      120.0
+    ],
+    "z": [
+      -90.0,
+      85.0
+    ],
+    "spacing": 1.0
+  },
+  "source_spacing_mm": [
+    1.5,
+    1.5,
+    1.5
+  ],
+  "source_shape": [
+    286,
+    286,
+    308
+  ],
+  "source_oblique_deg": 0.0,
+  "non_body_voxels_removed": 55.0,
+  "qa": {
+    "midline_skin_y_mm": 95.0,
+    "midline_bone_top_y_mm": 17.0,
+    "midline_soft_tissue_mm": 78.0,
+    "paraspinal20_soft_tissue_mm": 91.0,
+    "paraspinal20_fat_mm": 76.0,
+    "skin_touches_fov_top": false
+  }
+}

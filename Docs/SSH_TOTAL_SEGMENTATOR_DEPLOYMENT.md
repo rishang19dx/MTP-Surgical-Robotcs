@@ -1,13 +1,22 @@
 # Deploying the Autonomous Ultrasound Pipeline to a Remote GPU Server (SSH) with TotalSegmentator
 
-This guide explains how to transfer the **Surgical Physics Bridge & Autonomous Robotic Ultrasound** codebase to a remote SSH GPU cluster/workstation and execute the complete pipeline on real clinical patient anatomy from the **TotalSegmentator** dataset.
+This guide explains how to copy the codebase to a remote GPU host over SSH and run the pipeline
+(`scripts/run_remote_totalsegmentator.sh`) on a TotalSegmentator-format CT.
+
+> **Constraints:**
+> - **Workspace.** The script refuses to run unless the project root is inside `*/workspace/rishang/*`. Set
+>   `ALLOW_OUTSIDE_WORKSPACE=1` only for local testing. It keeps pip, HF, torch and matplotlib caches and temp files
+>   inside the project (`.cache/`, `.tmp/`).
+> - **Dependencies.** They come from the single top-level `requirements.txt`.
+> - **Target.** The pipeline targets **L4** (the `vertebrae_L4` default of the benchmark and training scripts).
+>   The script's `--vertebrae` option is parsed but not passed to any Python entry point.
 
 ---
 
 ## 1. Fast Transfer to Remote Server via SSH (`rsync`)
 
 Run this command from your local terminal to copy the repository to your remote SSH server. 
-It excludes heavy local artifacts (`.venv`, compiled caches, video outputs) to make transfer fast ($< 30\text{ seconds}$):
+It excludes the local venv, caches and the gitignored `.agents/` scratch directory (which may contain credentials):
 
 ```bash
 # Sync local repository to the dedicated workspace directory on remote server
@@ -16,9 +25,9 @@ rsync -avz --progress \
   --exclude '__pycache__' \
   --exclude '.pytest_cache' \
   --exclude '*.log' \
-  --exclude 'demonstrations/*.mp4' \
-  --exclude 'demonstrations/*.gif' \
-  /home/rishang/Desktop/Insti_Stuff/MTP/ user@172.18.17.35:/home/user/workspace/rishang/MTP/
+  --exclude '.agents' \
+  --exclude 'ReconstructionPipeline/.fem_cache' \
+  ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/
 ```
 
 ---
@@ -77,7 +86,7 @@ bash scripts/run_remote_totalsegmentator.sh --mode setup
 ```
 
 #### Step 2: Ingest & Preprocess Patient Anatomy
-Validates the patient volume, crops to the lumbar spine ROI (optimizing GPU memory), generates acoustic property maps, and extracts ground-truth bone points:
+Loads the subject with `PatientAssetGenerator.load_totalsegmentator_subject` and prints the volume shape, spacing, bone-point count and skin height. This step only validates the data. The FEM tissue model is built (and cached in `ReconstructionPipeline/.fem_cache`) on first use by training or the benchmark.
 ```bash
 bash scripts/run_remote_totalsegmentator.sh \
   --mode prepare \
@@ -85,7 +94,7 @@ bash scripts/run_remote_totalsegmentator.sh \
 ```
 
 #### Step 3: Train Autonomous Scanning Policies on Clinical Patient
-Trains Submodular PPO (20,000 steps) and 3D Diffusion Policy (40 epochs) with soft-body tissue deformation and contact force compliance active:
+Trains Submodular PPO (`--timesteps`, script default 15,000) and the CFM + EDM diffusion policies (`--epochs`, script default 30; 25 demo episodes) in the FEM environment. Note that the checkpoints behind `results/benchmark_latest.md` used the Python defaults instead: 50,000 PPO steps and 200 BC episodes with 60 epochs.
 ```bash
 bash scripts/run_remote_totalsegmentator.sh \
   --mode train \
@@ -95,7 +104,7 @@ bash scripts/run_remote_totalsegmentator.sh \
 ```
 
 #### Step 4: Run the 6-Policy Clinical Benchmark
-Benchmarks Raster Sweep, Greedy NBV, Submodular PPO, Continuous Flow Matching, and 3D Diffusion Policy:
+Runs `benchmark_runner.py` for all six policies (raster, orbital, NBV, PPO, CFM, diffusion). Any learned-policy checkpoint missing from `checkpoints/` is an error, so run `--mode train` first:
 ```bash
 bash scripts/run_remote_totalsegmentator.sh \
   --mode benchmark \
@@ -112,27 +121,16 @@ Once remote training and benchmarking complete, pull the trained checkpoints and
 ```bash
 # Run from your local terminal:
 rsync -avz --progress \
-  user@remote-gpu-host:/home/user/MTP/checkpoints/ \
-  /home/rishang/Desktop/Insti_Stuff/MTP/checkpoints/
+  user@172.18.17.35:/home/user/workspace/rishang/MTP/checkpoints/ ./checkpoints/
+rsync -avz --progress \
+  user@172.18.17.35:/home/user/workspace/rishang/MTP/results/ ./results/
 ```
 
 ---
 
-## 5. Output Verification Table
+## 5. Output
 
-Upon benchmark completion, the script prints the clinical comparison table evaluating the 6 policies on real patient anatomy:
-
-```text
-===============================================================================================
-3D ROBOTIC ULTRASOUND RECONSTRUCTION BENCHMARK COMPARISON TABLE (CLINICAL TOTALSEGMENTATOR)
-===============================================================================================
-Method               | Coverage (%)   | Chamfer (mm)   | Path (mm)    | Rotation (deg) | Force Safe (%) | Coupling  
----------------------------------------------------------------------------------------------------------------
-Raster_Scan          | 48.2 ± 3.1     | 4.12 ± 0.35    | 680.5        | 12.4           | 62.1%          | 0.64      
-Greedy_NBV           | 61.5 ± 2.8     | 3.20 ± 0.28    | 410.2        | 88.5           | 78.4%          | 0.79      
-Submodular_PPO       | 79.4 ± 1.9     | 2.15 ± 0.18    | 320.1        | 54.2           | 94.6%          | 0.93      
-Flow_Matching        | 74.8 ± 2.4     | 2.48 ± 0.22    | 345.0        | 62.0           | 91.2%          | 0.89      
-Diffusion_Policy     | 82.1 ± 1.6     | 1.95 ± 0.14    | 298.4        | 49.8           | 96.2%          | 0.95      
-Random_Exploration   | 28.4 ± 4.2     | 7.85 ± 0.82    | 512.0        | 145.2          | 41.0%          | 0.42      
-===============================================================================================
-```
+The benchmark prints a table and writes `results/benchmark_<timestamp>.json` and `results/benchmark_latest.md`.
+Earlier versions of this guide showed an example table (for example "Diffusion_Policy 82.1 %" and "Random_Exploration").
+Those numbers were never produced by the code and have been removed. For the current numbers on the sample
+patient, see [`results/benchmark_latest.md`](../results/benchmark_latest.md).

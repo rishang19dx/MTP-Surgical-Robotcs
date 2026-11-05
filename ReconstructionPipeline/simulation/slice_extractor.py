@@ -3,19 +3,18 @@ GPU-Accelerated 3D Volume Slice Extractor for Robotic Ultrasound Simulation.
 Extracts 2D image slices from 3D CT and segmentation volumes using torch.nn.functional.grid_sample.
 """
 
-from typing import Tuple, Optional, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 import torch
 import torch.nn.functional as F
 import numpy as np
 
-from ReconstructionPipeline.simulation.kelvinlet_deformation import RegularizedKelvinletDeformation
 
 
 class VolumeSliceExtractor:
     """
     Extracts 2D slice planes from 3D medical volumes given probe poses.
-    Supports both rigid slicing and dynamic soft-tissue deformation via
-    backward Eulerian coordinate warping coupled to Regularized Kelvinlets.
+    Supports rigid slicing and soft-tissue deformation via backward Eulerian warping with a
+    `TissueState` (contract C1) from any `TissueModel` backend.
     
     Transforms the probe imaging plane grid (in probe millimeters) into the 3D volume
     voxel coordinate frame, normalizes them to [-1, 1], and samples via grid_sample.
@@ -27,7 +26,6 @@ class VolumeSliceExtractor:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         image_size: Tuple[int, int] = (200, 150),
         physical_size_mm: Tuple[float, float] = (75.0, 50.0),
-        deformation_solver: Optional[RegularizedKelvinletDeformation] = None,
         device: Optional[torch.device] = None,
     ):
         """
@@ -37,7 +35,6 @@ class VolumeSliceExtractor:
             origin: Physical coordinates (ox, oy, oz) of voxel (0, 0, 0) in mm.
             image_size: (height_px, width_px) of the 2D ultrasound image plane.
             physical_size_mm: (depth_mm, width_mm) of the ultrasound scanning plane.
-            deformation_solver: Optional RegularizedKelvinletDeformation solver for soft-tissue dynamics.
             device: torch.device ('cuda' or 'cpu').
         """
         if device is None:
@@ -60,14 +57,6 @@ class VolumeSliceExtractor:
         self.origin = torch.tensor(origin, dtype=torch.float32, device=self.device)
         self.image_h, self.image_w = image_size
         self.depth_mm, self.width_mm = physical_size_mm
-
-        # Deformation engine: instantiate default Kelvinlet solver if not provided
-        self.deformation_solver = deformation_solver or RegularizedKelvinletDeformation(
-            shear_modulus_kpa=4.5,
-            poissons_ratio=0.46,
-            probe_radius_mm=14.0,
-            device=self.device,
-        )
 
         # Precompute the local 2D pixel coordinates in probe frame {U} (in mm)
         # Probe convention:
@@ -97,27 +86,26 @@ class VolumeSliceExtractor:
         self,
         probe_poses: Union[torch.Tensor, np.ndarray],
         interpolation: str = "bilinear",
-        contact_force_n: float = 0.0,
-        contact_normal: Optional[Union[torch.Tensor, np.ndarray]] = None,
-        bone_depth_mm: Optional[float] = 30.0,
+        tissue_state: Optional[Any] = None,
+        warp_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        batched_warp_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
     ) -> torch.Tensor:
         """
-        Extracts 2D slices corresponding to one or more probe poses,
-        accounting for soft-tissue deformation via backward Eulerian coordinate warping.
+        Extracts 2D slices for one or more probe poses with backward Eulerian warping:
+        every image pixel at deformed position x is sampled from the CT at X = warp_to_reference(x).
 
         Args:
-            probe_poses: 4x4 matrix or batch of matrices (B, 4, 4) representing
-                         transform from probe frame {U} to patient volume frame {P}.
-                         P_point = T_patient_probe @ U_point.
-            interpolation: 'bilinear' for continuous CT intensities, 'nearest' for labels.
-            contact_force_n: Contact normal force (N). If > 0, tissue compresses along beam axis.
-            contact_normal: Optional 3D contact normal vector. Defaults to probe beam axis (+Y_probe).
-            bone_depth_mm: Depth of rigid bone cortex beneath transducer face where deformation decays.
+            probe_poses: 4x4 or (B,4,4) T_P<-U of the IMAGE plane (probe face).  When a
+                `tissue_state` / `warp_fn` is given this must be the indented face pose
+                (`TissueState.probe_face_pose`).
+            interpolation: 'bilinear' (CT) or 'nearest' (labels).
+            tissue_state: `TissueState` (contract C1); its `warp_to_reference` is applied.
+            warp_fn: alternative callable (N,3) deformed -> (N,3) reference points (mm, frame P).
+            batched_warp_fn: callable (B,N,3) -> (B,N,3) with one deformation per pose, e.g.
+                `BatchedFEMState.warp_to_reference` (fem_batched.py).  Exclusive with the two above.
 
         Returns:
-            Extracted 2D slices tensor:
-                If B == 1: shape (image_h, image_w)
-                If B > 1: shape (B, image_h, image_w)
+            (H, W) for a single pose, else (B, H, W).
         """
         if isinstance(probe_poses, np.ndarray):
             poses = torch.from_numpy(probe_poses).float().to(self.device)
@@ -128,93 +116,38 @@ class VolumeSliceExtractor:
         if poses.ndim == 2:
             poses = poses.unsqueeze(0)
             is_single = True
-
         batch_size = poses.shape[0]
 
-        # Local probe grid: (H, W, 4) -> flatten to (H*W, 4)
-        pts_local = self.local_grid.view(-1, 4).t() # (4, H*W)
+        warps: List[Optional[Callable]] = [None] * batch_size
+        if tissue_state is not None:
+            warps = [tissue_state.warp_to_reference] * batch_size
+        elif warp_fn is not None:
+            warps = [warp_fn] * batch_size
 
-        # Batch transform: (B, 4, 4) @ (4, H*W) -> (B, 4, H*W)
-        pts_world = torch.bmm(poses, pts_local.unsqueeze(0).expand(batch_size, -1, -1)) # (B, 4, H*W)
-        pts_xyz = pts_world[:, :3, :].transpose(1, 2) # (B, H*W, 3) (deformed coordinates)
+        # Local probe grid (H*W,4) -> world (B,H*W,3) deformed coordinates
+        pts_local = self.local_grid.view(-1, 4).t()
+        pts_world = torch.bmm(poses, pts_local.unsqueeze(0).expand(batch_size, -1, -1))
+        pts_xyz = pts_world[:, :3, :].transpose(1, 2)
 
-        # --- Backward Eulerian Soft-Tissue Deformation ---
-        if contact_force_n > 0.05 and self.deformation_solver is not None:
-            # Contact point is probe origin (transducer face center)
-            contact_pt = poses[:, :3, 3] # (B, 3)
+        if batched_warp_fn is not None:
+            if tissue_state is not None or warp_fn is not None:
+                raise ValueError("batched_warp_fn is exclusive with tissue_state / warp_fn")
+            pts_xyz = batched_warp_fn(pts_xyz).float()
+        elif any(w is not None for w in warps):
+            pts_xyz = torch.stack(
+                [w(pts_xyz[bi]) if w is not None else pts_xyz[bi] for bi, w in enumerate(warps)], dim=0
+            )
 
-            # Normal vector: beam direction is column 1 (+Y_probe in world frame)
-            if contact_normal is not None:
-                if isinstance(contact_normal, np.ndarray):
-                    norm_vec = torch.from_numpy(contact_normal).float().to(self.device)
-                else:
-                    norm_vec = contact_normal.float().to(self.device)
-                if norm_vec.ndim == 1:
-                    norm_vec = norm_vec.unsqueeze(0).expand(batch_size, -1)
-            else:
-                # Default normal along beam direction (+Y of probe frame)
-                norm_vec = poses[:, :3, 1] # (B, 3)
-                norm_vec = norm_vec / (torch.norm(norm_vec, dim=-1, keepdim=True) + 1e-6)
-
-            force_vec = norm_vec * float(contact_force_n) # (B, 3)
-
-            # Probe face indentation u_0 at contact point
-            u_0 = self.deformation_solver.compute_displacement(
-                query_points=contact_pt,
-                contact_point=contact_pt,
-                force_vector=force_vec,
-                bone_depth_mm=bone_depth_mm,
-            ) # (B, 3)
-
-            u_samples = []
-            for b in range(batch_size):
-                u_0_b = u_0[b:b+1] # (1, 3)
-                # Physical query coordinates indented by probe contact: x_query = x + u_0
-                pts_query = pts_xyz[b] + u_0_b
-                # Material displacement field u(x_query) with bone anchoring
-                u_b = self.deformation_solver.compute_displacement(
-                    query_points=pts_query,
-                    contact_point=contact_pt[b] + u_0_b.squeeze(0),
-                    force_vector=force_vec[b],
-                    bone_depth_mm=bone_depth_mm,
-                )
-                # True Backward Eulerian mapping: X_ref = x_query - u(x_query)
-                x_ref_b = pts_query - u_b
-                u_samples.append(x_ref_b)
-
-            pts_sample_xyz = torch.stack(u_samples, dim=0) # (B, H*W, 3)
-        else:
-            pts_sample_xyz = pts_xyz
-
-        # Convert physical coordinates (mm) to voxel indices:
-        # voxel = (world - origin) / spacing
-        voxel_coords = (pts_sample_xyz - self.origin.unsqueeze(0).unsqueeze(0)) / self.spacing.unsqueeze(0).unsqueeze(0)
-
-        # Volume shape is (1, 1, D, H_vol, W_vol)
-        # grid_sample expects normalized coordinates [-1, 1] in order (x, y, z)
+        voxel_coords = (pts_xyz - self.origin.view(1, 1, 3)) / self.spacing.view(1, 1, 3)
         _, _, d_vol, h_vol, w_vol = self.volume.shape
         grid_w = 2.0 * (voxel_coords[:, :, 0] / (w_vol - 1.0)) - 1.0
         grid_h = 2.0 * (voxel_coords[:, :, 1] / (h_vol - 1.0)) - 1.0
         grid_d = 2.0 * (voxel_coords[:, :, 2] / (d_vol - 1.0)) - 1.0
+        sampling_grid = torch.stack([grid_w, grid_h, grid_d], dim=-1).view(batch_size, 1, self.image_h, self.image_w, 3)
 
-        # Stack into (B, 1, H, W, 3) for 5D grid_sample
-        sampling_grid = torch.stack([grid_w, grid_h, grid_d], dim=-1)
-        sampling_grid = sampling_grid.view(batch_size, 1, self.image_h, self.image_w, 3)
-
-        # Expand volume to batch_size if batch_size > 1
         vol_batch = self.volume.expand(batch_size, -1, -1, -1, -1)
-
-        # Sample 3D volume
-        sampled = F.grid_sample(
-            vol_batch,
-            sampling_grid,
-            mode=interpolation,
-            padding_mode="zeros",
-            align_corners=True
-        )
-
-        slices = sampled.squeeze(1).squeeze(1) # (B, H_out, W_out)
+        sampled = F.grid_sample(vol_batch, sampling_grid, mode=interpolation, padding_mode="zeros", align_corners=True)
+        slices = sampled.squeeze(1).squeeze(1)
         if is_single:
             slices = slices.squeeze(0)
-
         return slices

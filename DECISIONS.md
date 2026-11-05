@@ -10,14 +10,14 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | :--- | :--- | :--- | :--- |
 | **Aug 2025** | `DEC-001` | Selection of OpenIGTLink over ROS / ROS2 Middleware | **Accepted** |
 | **Aug 2025** | `DEC-002` | Selection of PyBullet for 1000 Hz Contact Physics | **Accepted** |
-| **Aug 2025** | `DEC-003` | 3D Slicer C++ Loadable Module with In-Place Memory Mutation | **Accepted** |
+| **Aug 2025** | `DEC-003` | 3D Slicer C++ Loadable Module with In-Place Memory Mutation | **Superseded** (DEC-037: module deleted) |
 | **Sep 2025** | `DEC-004` | Model-Based GPU Ray Acoustics over 2D GAN Texturing | **Accepted** |
-| **Sep 2025** | `DEC-005` | Mathematical Coordinate Transformation (PyBullet to Slicer RAS) | **Accepted** |
+| **Sep 2025** | `DEC-005` | Mathematical Coordinate Transformation (PyBullet to Slicer RAS) | **Superseded** (DEC-038) |
 | **Sep 2025** | `DEC-006` | Native Virtual Keep-Out Fixtures via PyBullet GJK/EPA | **Accepted** |
 | **Oct 2025** | `DEC-007` | Submodular MDP Formulation for Active View Selection | **Accepted** |
 | **Oct 2025** | `DEC-008` | PointNet 3D Geometric State Representation over 3D CNNs | **Accepted** |
 | **Oct 2025** | `DEC-009` | 6-Policy Comparative Benchmarking Suite | **Accepted** |
-| **Oct 2026** | `DEC-010` | Lateral Flank Scanning Approach (Patient Lying Down) | **Accepted** |
+| **Oct 2026** | `DEC-010` | Lateral Flank Scanning Approach (Patient Lying Down) | **Superseded** (DEC-037: lateral mode removed) |
 | **Oct 2026** | `DEC-011` | Pure 2D B-Mode Ultrasound Signal Surface Extraction | **Accepted** |
 | **Oct 2026** | `DEC-012` | Interactive Slicer Fiducial Markups to Closed-Loop IK | **Accepted** |
 | **Oct 2026** | `DEC-013` | Research Direction: SonoGym Extension with Soft Body Deformations | **Accepted** |
@@ -27,7 +27,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Oct 2026** | `DEC-017` | Evaluation of SOFA Framework vs Regularized Kelvinlets for Real-Time Soft Body Ultrasound | **Accepted** |
 | **Oct 2026** | `DEC-018` | Remote SSH Deployment & Ingestion Protocol for Real TotalSegmentator Clinical Data | **Accepted** |
 | **Oct 2026** | `DEC-019` | Strict Isolation to `workspace/rishang` on Remote GPU Host | **Accepted** |
-| **Oct 2026** | `DEC-020` | Dual Interactive Soft-Tissue Biomechanics Studios (Desktop & Web/Canvas) | **Accepted** |
+| **Oct 2026** | `DEC-020` | Dual Interactive Soft-Tissue Biomechanics Studios (Desktop & Web/Canvas) | **Superseded** (DEC-037: scripts deleted) |
 | **Oct 2026** | `DEC-021` | Zero-Compile 3D Slicer 5.12 Integration via Embedded `pyigtl` Scripted Bridge | **Accepted** |
 | **Oct 2026** | `DEC-022` | Dual-Window PyBullet Native GUI & 3D Slicer Suite with Franka Panda & TotalSegmentator | **Accepted** |
 | **Oct 2026** | `DEC-023` | Orbital Acoustic Tilt Parameterization & Slicer Socket Congestion Prevention | **Accepted** |
@@ -41,6 +41,13 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-031` | SonoGym-SoftBody Benchmark Suite with Continuum Mechanics & Deformable B-Mode Reslicing | **Accepted** |
 | **Nov 2026** | `DEC-032` | Multi-Modal Demonstration Recording Suite with Soft-Body Deformations & Offline Expert Dataset | **Accepted** |
 | **Nov 2026** | `DEC-033` | Migration from Synthetic Ellipsoid/Box Phantom to Authentic Clinical Human Lumbar CT (L1-L5 + Sacrum) & Anatomic Surface Meshes | **Accepted** |
+| **Nov 2026** | `DEC-034` | Clinical Ultrasound Time Gain Compensation (TGC), Bone Acoustic Impedance Calibration & Dorsal Surface Evaluation Alignment | **Accepted** |
+| **Nov 2026** | `DEC-035` | L4 Vertebra SonoGym Benchmark Alignment, Dynamic TGC Confidence Coupling & Real-Time In-Place Slicer Kelvinlet Deformation | **Accepted** |
+| **Nov 2026** | `DEC-036` | 6-Policy Continuous Flow Matching & Diffusion Action Chunking Trained on L4 Spinal Target | **Accepted** |
+| **Nov 2026** | `DEC-037` | Audit Remediation: GPU FEM Soft Tissue, Inner-Loop Force Control, Honest Metrics & Dead-Code Removal | **Accepted** |
+| **Nov 2026** | `DEC-038` | Integration & Retraining: FEM Default, 1 kHz Force Extrapolation, Frame P = LPS, Fair Benchmark | **Accepted** |
+| **Nov 2026** | `DEC-039` | Slicer B-mode Display Fix and Wayland-Safe Screenshots | **Accepted** |
+| **Nov 2026** | `DEC-040` | FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup | **Accepted** |
 
 ---
 
@@ -71,6 +78,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 ---
 
 ### `DEC-003`: 3D Slicer C++ Loadable Module with In-Place Memory Mutation
+> **Superseded (DEC-037)**: the C++ module was never built and has been deleted; the Python bridge is the only Slicer client.
+
 * **Date**: August 2025
 * **Context**: High-frequency streaming of moving soft tissue vertices and reconstructed bone point clouds into 3D Slicer.
 * **Alternatives Considered**:
@@ -101,6 +110,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
      $$T_{\text{conv}} = \begin{bmatrix} 0 & 1000 & 0 & 0 \\ 1000 & 0 & 0 & 0 \\ 0 & 0 & 1000 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
 * **Decision**: Centralize all coordinate conversions in `surgical_physics_bridge/src/coordinates.py`.
 * **Rationale**: Mathematically rigorous spatial consistency between PyBullet kinematics and Slicer MRML displays.
+* **Status: Superseded by DEC-038.** The matrix above was never consistent with the data: frame P is LPS, P→RAS is `diag(-1,-1,1)` and P→PyBullet is the permutation in `coordinates.py` (see DEC-038 item 6).
 
 ---
 
@@ -154,6 +164,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 ---
 
 ### `DEC-010`: Lateral Flank Scanning Approach (Patient Lying Down)
+> **Superseded (DEC-037)**: lateral mode removed; scanning is dorsal only.
+
 * **Date**: October 23, 2026
 * **Context**: User noted that clinical spine ultrasound procedures (e.g., LLIF, facet injections) are performed with the patient lying down horizontally, not standing or being viewed from the dorsal top.
 * **Decision**: 
@@ -249,7 +261,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Date**: October 28, 2026
 * **Context**: Moving from synthetic lumbar phantoms to real clinical patient data requires training and benchmarking on multi-gigabyte NIfTI CT volumes from TotalSegmentator on remote SSH GPU servers/clusters.
 * **Decision**: 
-  1. Built an all-in-one automation script [`scripts/run_remote_totalsegmentator.sh`](file:///home/rishang/Desktop/Insti_Stuff/MTP/scripts/run_remote_totalsegmentator.sh) supporting modular phases (`setup`, `prepare`, `train`, `benchmark`, `all`).
+  1. Built an all-in-one automation script [`scripts/run_remote_totalsegmentator.sh`](scripts/run_remote_totalsegmentator.sh) supporting modular phases (`setup`, `prepare`, `train`, `benchmark`, `all`).
   2. Standardized remote data ingestion via `load_totalsegmentator_subject` in `prepare_patient_assets.py` to auto-crop spine bounding boxes and generate acoustic impedance property maps directly from clinical NIfTI masks.
   3. Formulated fast rsync transfer protocols excluding local `.venv` and video caches to enable $< 30\text{ s}$ repo deployment to any remote compute node.
 * **Rationale**: Eliminates manual remote configuration errors, ensures pure ultrasound signal extraction without ground-truth label leakage on real clinical scans, and accelerates DRL/Diffusion Policy training on high-VRAM remote GPUs.
@@ -272,8 +284,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Date**: October 30, 2026
 * **Context**: Need to provide accessible, high-interactivity demonstrations of Track 2 (Soft-Body Kelvinlet Deformation & Dynamic B-Mode Ultrasound Reslicing) that can be explored locally without waiting for remote server connectivity.
 * **Decision**:
-  1. Built an interactive native desktop Matplotlib studio [`ReconstructionPipeline/scripts/interactive_soft_tissue_gui.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/ReconstructionPipeline/scripts/interactive_soft_tissue_gui.py) linked directly to the PyTorch Euler reslicer and model-based ultrasound simulator with live sliders.
-  2. Built a zero-dependency interactive HTML5/Canvas studio [`soft_tissue_simulation_studio.html`](file:///home/rishang/.gemini/antigravity/brain/74fa53a7-e709-4968-96a9-a382251afd24/soft_tissue_simulation_studio.html) that computes closed-form Navier-Cauchy Kelvinlets at 60 FPS in browser with real-time probe dragging, A-scan oscilloscope, and clinical presets.
+  1. Built an interactive native desktop Matplotlib studio [`ReconstructionPipeline/scripts/interactive_soft_tissue_gui.py`](ReconstructionPipeline/scripts/interactive_soft_tissue_gui.py) linked directly to the PyTorch Euler reslicer and model-based ultrasound simulator with live sliders.
+  2. Built a zero-dependency interactive HTML5/Canvas studio `soft_tissue_simulation_studio.html` (external file, not in the repository) that computes closed-form Navier-Cauchy Kelvinlets at 60 FPS in browser with real-time probe dragging, A-scan oscilloscope, and clinical presets.
 * **Rationale**: Enables immediate visual verification of contact force acoustic windows, subcutaneous fat thinning, and hyperechoic echo shift on any local machine.
 
 ---
@@ -283,7 +295,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Context**: Slicer 5.12.4 (pre-release build in `~/Downloads/Slicer-5.12.4-linux-amd64`) does not have hosted binary extension archives on Kitware for `OpenIGTLinkIF`.
 * **Decision**:
   1. Bootstrapped `pyigtl` directly into Slicer's embedded Python runtime via `slicer.util.pip_install("pyigtl")`.
-  2. Implemented a zero-compile Python bridge [`Slicer/slicer_surgical_physics_bridge.py`](file:///home/rishang/Desktop/Insti_Stuff/MTP/Slicer/slicer_surgical_physics_bridge.py) with non-blocking Qt timer (`QTimer`) polling.
+  2. Implemented a zero-compile Python bridge [`Slicer/slicer_surgical_physics_bridge.py`](Slicer/slicer_surgical_physics_bridge.py) with non-blocking Qt timer (`QTimer`) polling.
   3. Enforced in-place VTK memory mutation (`vtkMRMLScalarVolumeNode` via `updateVolumeFromArray` and `vtkPolyData.SetPoints()`) to eliminate memory leaks and 30 FPS display jitter.
   4. Resolved OpenIGTLink message protocol discrepancy: replaced non-standard `NDArrayMessage` with `StringMessage` (JSON) and `PointMessage`.
 * **Rationale**: Bypasses the need for complex C++ module compilation against Slicer source headers while delivering verified $< 33\text{ ms}$ streaming latency for 2D ultrasound slices, 6-DoF probe transforms, and 3D reconstructed point clouds.
@@ -495,3 +507,322 @@ A chronological record of all architectural, research, algorithmic, and engineer
   4. *Exploration Visitation Kernel for Greedy NBV*:
      - Added a Gaussian spatial visitation penalty to `run_greedy_nbv_benchmark`: $\sum \exp(-\|\mathbf{x} - \mathbf{x}_{\text{visited}}\|^2 / 2\sigma^2)$, completely eliminating two-point limit cycles and restoring continuous spatial exploration ($\text{MAD} = 1.965\text{ mm}$).
 * **Rationale**: Restores clinical acoustic physics, sub-millimeter reconstruction precision ($0.945\text{ mm}$), and rigorous benchmark metrics on authentic human CT anatomy.
+
+---
+
+### `DEC-035`: L4 Vertebra SonoGym Benchmark Alignment, Dynamic TGC Confidence Coupling & Real-Time In-Place Slicer Kelvinlet Deformation
+* **Date**: November 3, 2026
+* **Context**:
+  1. *SonoGym Benchmark Target Alignment*: SonoGym (Ao et al., Nature Communications / ArXiv 2025) benchmarks autonomous robotic ultrasound specifically targeting the human **L4 vertebra** (isolated segmentation label `vertebrae_L4.nii.gz`). Previously, our environment loaded L1-L5 with scans centered at $Z \in [-30, 30]\text{ mm}$ (centered on L3), resulting in low (~3.5%) coverage of the L4 vertebra.
+  2. *L4 Coordinate Spatial Bounds*: In TotalSegmentator patient coordinates, the L4 vertebra dorsal bone surface spans $Z \in [-57, -9]\text{ mm}$ (geometric centroid $Z \approx -31\text{ mm}$), $X \in [-32, 32]\text{ mm}$, with acoustic dorsal entry at $Y \approx 15\text{--}40\text{ mm}$.
+  3. *TGC-Coupled Acoustic Confidence Estimation*: At spinal depths ($35\text{--}65\text{ mm}$), exponential depth attenuation caused raw acoustic energy to drop below $0.05$. The random walk confidence estimator multiplying by uncompensated energy map falsely suppressed the confidence of hyperechoic bone interfaces down to $<0.05$, triggering false dropout and discarding 89% of valid bone echoes.
+  4. *OpenIGTLink Deformation Bandwidth Bottleneck*: Streaming 12,863 deformed mesh vertices via `pyigtl.PointMessage` in Python took $>40$ seconds per frame due to Python string formatting in `PointMessage.pack()`, causing complete socket stall and Slicer freezing.
+* **Decision**:
+  1. *Targeted L4 Anatomical Extraction*:
+     - Enhanced `PatientAssetGenerator.load_totalsegmentator_subject` to selectively extract and isolate `vertebrae_L4.nii.gz` (66,921 bone points), computing dedicated L4 OBJ meshes (`patient_l4_vertebra.obj` and `patient_l4_vertebra_ras.obj`).
+     - Added `--target-vertebra` parameter across `UltrasoundReconstructionEnv`, `HeuristicScanPlanner`, and `unified_server.py`.
+     - Centered raster sweeps ($Z \in [-50, -12]\text{ mm}$, $X \in [-20, 20]\text{ mm}$) and orbital sweeps (center $(0, -31)\text{ mm}$, radii $14\text{--}24\text{ mm}$) directly over L4.
+  2. *Effective Energy with Time Gain Compensation (TGC)*:
+     - Coupled clinical exponential TGC gain into `effective_energy` returned by `simulate_bmode`: $\text{effective\_energy}(y) = \text{clamp}(E(y) \cdot G(y), 0.0, 1.0)$.
+     - Coupled `effective_energy` into `UltrasoundConfidenceMapEstimator.compute_confidence_map`, elevating acoustic confidence at spinal depths ($35\text{--}65\text{ mm}$) to $\ge 0.65$ and restoring bone contour recall from 11% to 84.3% without CT label leakage.
+  3. *Client-Side In-Place Vectorized Kelvinlet Deformation*:
+     - Replaced streaming of 12,863 points with streaming contact force vectors ($\mathbf{F}_N \in \mathbb{R}^3$, contact point $\mathbf{x}_0 \in \mathbb{R}^3$) via `StringMessage`.
+     - In `slicer_surgical_physics_bridge.py`, implemented regularized Kelvinlet displacement evaluated in vectorized NumPy directly against pre-allocated `vtkPolyData` memory buffers (`SetComponent` / `numpy_to_vtk(deep=False)`).
+     - Execution time dropped from 40.8 s to **1.6 ms**, running smoothly at 30–60 FPS with zero memory reallocation.
+* **Rationale**: Reaches clinical alignment with SonoGym, boosts L4 bone coverage from 3.59% to >50%, and enables lag-free real-time visualization of soft tissue deformation in 3D Slicer.
+
+---
+
+### `DEC-036`: 6-Policy Continuous Flow Matching & Diffusion Action Chunking Trained on L4 Spinal Target
+* **Date**: November 3, 2026
+* **Context**: The user requested that all policy alternatives—Next-Best-View (NBV), Continuous Flow Matching (CFM), Submodular PPO, and Diffusion Policy—be trained and benchmarked against each other on the L4 vertebra reconstruction target, maximizing the bone coverage percentage from raw ultrasound images without CT label map leakage.
+* **Decision**:
+  1. *L4 Training Demonstration Pipeline*:
+     - Upgraded `train_diffusion_policy.py` and `train_submodular_ppo.py` with `--target-vertebra vertebrae_L4` support.
+     - Specialized demonstration collection trajectories: raster patterns sweeping $Z \in [-50, -12]\text{ mm}, X \in [-20, 20]\text{ mm}$ and orbital patterns centered at $(0.0, -31.0)\text{ mm}$.
+  2. *Unified CFM & Diffusion Architecture*:
+     - Integrated joint training of Continuous Flow Matching (`FlowMatchingPolicy` with Optimal Transport straight paths) and Karras EDM Diffusion Transformer (`SOTADiffusionPolicy` with AdaLN-Zero conditioning) on authentic patient demonstrations.
+     - Automatically updated `checkpoints/flow_matching.pt`, `checkpoints/diffusion_policy.pt`, and `checkpoints/submodular_ppo.pt`.
+  3. *Automated Benchmark Checkpoint Discovery*:
+     - Enhanced `benchmark_runner.py` to auto-discover and load trained policy checkpoints when present.
+* **Rationale**: Delivers a fully verified autonomous scanning benchmark on L4 with reproducible metrics and high reconstruction coverage directly from B-mode frames.
+
+---
+
+### `DEC-037`: Audit Remediation: GPU FEM Soft Tissue, Inner-Loop Force Control, Honest Metrics & Dead-Code Removal
+* **Date**: November 3, 2026
+* **Context**: A full audit (2026-11-03) found that (1) contact force in the RL/benchmark env was the constant `target_force_n` (4.0 N), making all force-safety metrics 100% by construction; (2) the soft-body benchmark reported a hardcoded indentation (`F/2500`), a boundary-artifact echo depth (3.75 mm), and a stiffness sweep whose parameter never reached the force; (3) the "Regularized Kelvinlet" omitted the de Goes & James epsilon^2 term and the PyBullet torso was rigid (deformation rendered only as debug lines); (4) B-mode reconstruction precision was ~50% and confidence used the simulator's privileged energy map; (5) the raster swept within the transverse image plane; (6) yaw (rotation about the beam) was penalised as tilt; (7) `env.step` queried PyBullet from the streaming thread without the physics lock, and the 1000 Hz rate was never measured; (8) documented results (DEC-034 "0.945 mm", DEC-035 ">50% coverage", README tables) were stale or unsupported.
+* **Grilling outcome (QUIZME A2, F2, cleanup, git)** — user decisions:
+  1. *Soft-tissue engine*: **quasi-static GPU FEM on a CT-derived tetrahedral mesh of soft tissue, bone voxels as Dirichlet boundary**, producing (a) a displacement field consumed by backward Eulerian warping for B-mode, (b) a physically computed reaction force, (c) deformed skin vertices for PyBullet/Slicer. Runs outside the 1 kHz physics thread. Alternatives considered: corrected Kelvinlet only (fast but approximate near bone), PyBullet native FEM soft body (CPU-bound, unstable at 1 ms, breaks invariant 2), SOFA (heavy dependency), hybrid.
+  2. *Force*: **inner-loop admittance controller** adjusts probe depth along the beam to track 4 N; actual force is an output of the tissue model and varies with anatomy/tilt. Policies keep the 4-DoF action space. Alternative (force as 5th action) rejected for now.
+  3. *Deletions approved*: C++ `SlicerSurgicalBridge` module, legacy `server.py`, stale demo media/NPZ, Kinova kinematics, lateral flank mode, and dead scripts (interactive GUI, deformation demo, SOFA comparison).
+  4. *Git*: work on branch `audit-fixes` with one commit per milestone.
+* **Errata**: Quantitative claims in DEC-026, DEC-031, DEC-034 and DEC-035 (indentation table, echo-shift table, multi-stiffness table, 0.945 mm precision, >50% L4 coverage) are **superseded**; all reported numbers must be regenerated by the benchmark script after this remediation.
+* **Rationale**: Metrics must be able to fail; physics claimed in docs must exist in code.
+
+---
+
+### `DEC-038`: Integration & Retraining: FEM Default, 1 kHz Force Extrapolation, Frame P = LPS, Fair Benchmark
+* **Date**: November 4, 2026 (commits `94158ce`, `f86b5b9`, `b70c3d2` on branch `audit-fixes`)
+* **Context**: DEC-037 chose a GPU FEM tissue model and an admittance force loop. This entry records how they were integrated end to end, the frame fix, and the retraining and benchmark protocol that produced the current numbers.
+* **Decisions**:
+  1. **FEM is the default tissue engine; Kelvinlet is an alternative.** `FEMTissueModel` (`simulation/fem_tissue.py`, `tet_mesh.py`) is a patient-specific linear tetrahedral FEM on a 4 mm lattice. Bone cells and the ROI deep/side faces are fixed, and ν = 0.45. The condensed skin compliance is precomputed once on the GPU and cached in `ReconstructionPipeline/.fem_cache`. Each pose then solves frictionless contact with an active set. `--tissue-backend kelvinlet` (env, benchmark and server) selects the corrected Kelvinlet model. *Alternatives*: Kelvinlet as default (cheaper, but approximate near bone and much softer: 5.15 mm vs 7.12 mm from first contact at 4 N in the force sweep); PyBullet native FEM and SOFA (rejected in DEC-037).
+  2. **Indentation is measured from the undeformed skin under the probe centre, and the controller works from first contact.** A flat transverse probe touches the paraspinal ridges before the midline, so first contact is negative: −9.0 mm at the benchmark midline pose. The admittance controller searches over [first contact, max indentation] and is warm-started relative to first contact. This makes 4 N reachable on the midline.
+  3. **1 kHz force extrapolation.** Every streaming step (~30 Hz) sends F0, the contact stiffness K_c = dF/dδ (frozen active set, checked against finite differences in `test_fem_tissue.py`), δ0, the contact point and the beam. The physics tick applies `F = F0 + K_c(δ − δ0)`, clipped to [0, `TISSUE_FORCE_MAX_N`], and never waits on the FEM. The torso has no rigid probe collision. *Alternative*: calling the solver in the tick (about 1.3 ms per solve, so it would not fit the 1 ms budget).
+  4. **GUI viewer process.** The PyBullet GUI moved to a separate viewer process with its own client. It mirrors joint and probe state at ~60 Hz and rebuilds the deformed skin visual mesh, so rendering never runs on the physics loop.
+  5. **DeformedSkin full-vertex protocol.** At startup the server writes `meshes/patient_fem_skin.obj` from the FEM skin surface. It then sends float32 `(1, N, 3)` with all N deformed vertices in file order. The Slicer bridge loads the file with the order-preserving `obj_io` and writes the vertices in place. The bridge still accepts the older `(1, K, 4)` index/displacement rows.
+  6. **Frame P = LPS.** The sample CT was resampled 1:1 from an LPS source (`case-0004`, axcodes L,P,S), so P is LPS even though the NIfTI header and `*_ras.obj` names say RAS. `P_TO_RAS = diag(−1, −1, 1)` is applied once by the Slicer `PatientToRAS` transform node. The P→PyBullet map `pb = (0.55 + x, z, 0.42 + (y − 55))·1e-3` reproduces the exported PyBullet meshes. This supersedes DEC-005.
+  7. **Benchmark fairness rules.**
+     - Every method gets 72 frames, the raster length.
+     - Trial k of every method uses the same seed and the same start pose, drawn by `planning/start_pose.py` (whole scan window inset 4 mm, ±15° yaw, ±10° pitch).
+     - A missing checkpoint for a requested learned policy is an error, never a randomly initialised network.
+     - PPO is evaluated by sampling its stochastic policy; `--ppo-deterministic` reports the mean action separately.
+     - CFM and Diffusion execute 2 actions of each 8-step chunk.
+  8. **LayerNorm PointNet.** Per-point LayerNorm replaces BatchNorm, so batch-1 rollouts, mini-batch updates and eval mode give identical features. Point normalisation buffers (`point_center`, `point_scale`) are stored in the checkpoints.
+  9. **BC validation split.** Demonstrations come from a randomised raster expert. Episodes are split train/val (15 %) before chunking, and the checkpoint with the best validation loss (fixed noise seed) is kept. The zero-point-cloud demo path was removed.
+  10. **PPO fixes.** The log-probabilities are exact, the rollout and the update use the same stored point cloud, truncation bootstraps with γV(s_{T+1}), the reward is the coverage gain (`--reward coverage`), and training can be time-boxed (`--max-minutes`).
+* **Results** (from `results/benchmark_latest.md`, run 20261104_160815: one patient, L4, 3 trials, FEM, 4 N; mean action from `results/ppo_deterministic/benchmark_latest.md`; physics rate from `results/physics_rate_20261104_idle.json`):
+
+| Method | Cov@3 % | Prec@2 vis % | Chamfer mm | F RMSE N | Path mm |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| Heuristic_Raster | 88.1 ± 0.4 | 97.4 ± 0.2 | 1.05 ± 0.01 | 0.07 ± 0.02 | 174 ± 9 |
+| Submodular_PPO (sampled) | 85.2 ± 0.4 | 92.1 ± 0.5 | 1.14 ± 0.00 | 0.45 ± 0.16 | 271 ± 13 |
+| Greedy_NBV | 83.8 ± 1.1 | 97.0 ± 0.4 | 1.20 ± 0.02 | 0.10 ± 0.04 | 342 ± 7 |
+| Flow_Matching_CFM | 78.4 ± 5.7 | 97.1 ± 0.1 | 1.27 ± 0.15 | 0.05 ± 0.01 | 120 ± 11 |
+| Heuristic_Orbital | 70.2 ± 0.3 | 94.5 ± 0.1 | 1.61 ± 0.02 | 0.09 ± 0.00 | 227 ± 2 |
+| Diffusion_Policy | 69.7 ± 4.1 | 96.0 ± 1.8 | 1.72 ± 0.21 | 0.07 ± 0.03 | 175 ± 21 |
+| Submodular_PPO_mean (deterministic) | 52.7 ± 5.4 | 91.5 ± 0.9 | 2.46 ± 0.33 | 0.06 ± 0.01 | 60 ± 7 |
+
+  Soft-body ablation (raster): FEM aware vs unaware is 88.1 vs 88.9 % Cov@3 and 97.2 vs 81.5 % Prec@2 vis; Kelvinlet aware vs unaware is 89.0 vs 23.1 % Cov@3. Physics loop on an idle RTX 2050 laptop with FEM-backed streaming: 1000.0 Hz, p99 period 1.137 ms, 2 overruns in 20,040 ticks, streaming at 29.95 Hz.
+* **Consequences / limitations**:
+  - No learned policy beats the raster.
+  - PPO depends on sampling noise.
+  - The CFM and Diffusion policies are capped by their expert.
+  - Everything is trained and tested on one patient.
+  - Visible-surface precision (92–97 %) is above the 0.8–0.9 reported for real spine US, so the simulator is too easy.
+  - The FEM is linear and frictionless, with stiffening on the force only.
+  - The Slicer bridge is untested inside Slicer.
+  - With the FEM, the deformation-unaware penalty is mainly visible precision, not coverage.
+* **Rationale**: Every claimed mechanism now exists in code, is exercised by tests (`test_fem_tissue.py`, `test_fem_env.py`, `test_server.py`, `test_coordinates.py`) and produces numbers that are regenerated by scripts into `results/`.
+
+
+### `DEC-039`: Slicer B-mode Display Fix and Wayland-Safe Screenshots
+* **Date**: November 5, 2026 (branch `audit-fixes`)
+* **Context**: The first hand run of the Slicer bridge inside Slicer 5.12.4 showed the live B-mode as binary salt-and-pepper noise. Frames captured straight off the OpenIGTLink stream were correct (speckle, bone echoes, acoustic shadows), so the fault was in Slicer's display. Screenshots for the check were also blocked: on GNOME/Wayland, external capture tools (`import`, `xwininfo`) cannot see the PyBullet or Slicer windows.
+* **Decisions**:
+  1. **Fixed grey W/L for `US_Image`.** `slicer.util.updateVolumeFromArray` does not create a display node. The old code's `SetWindow(255)/SetLevel(127.5)` therefore ran on nothing, and `setSliceViewerLayers` later created a default node with auto W/L computed from the all-zero placeholder: W/L = 0/0, which thresholds every frame. The bridge now creates the display node itself, with the Grey colour table, auto W/L off and W/L = 255/127.5. The frames are already scaled to 0..255 uint8. *Alternative*: auto W/L recomputed per frame (rejected: it changes the brightness from frame to frame and hides the TGC).
+  2. **Image geometry matches the simulator.** The spacing is 50/149 mm lateral by 75/199 mm axial (`IMAGE_SIZE = (200, 150)`, `PHYSICAL_SIZE_MM = (75, 50)` in `env_reconstruction.py`; linspace grid in `slice_extractor.py`). The 3D beam-plane model is 50 × 75 mm. It was previously hardcoded at 38 × 60 mm with 0.38/0.375 mm spacing.
+  3. **Opt-in viewer snapshots.** When `MTP_VIEWER_SNAPSHOT_DIR` is set, the PyBullet viewer process renders its own debug camera to PNG every `MTP_VIEWER_SNAPSHOT_S` seconds. This runs only in the viewer process, never in the physics loop. Slicer views are captured with Qt `grab()` from inside Slicer (FLOW.md recipe 10).
+* **Consequences / limitations**: The bridge is still not covered by automated tests inside Slicer. The 2026-11-05 run is a hand check: W/L 255/127.5, frames received at the stream rate, physics at 1000 Hz.
+
+
+---
+
+### `DEC-040`: FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup
+* **Date**: November 5, 2026 (branch `audit-fixes`, commits `498ef37`, `255bfd2`)
+* **Context**: The FEM contact (DEC-037/038) measured each face sample's overlap vertically and applied every
+  contact force along −Y_P. The policies tilt the probe (start poses ±10° pitch, ±15° yaw; the orbital raster
+  tilts on purpose). A frictionless flat face can only push along its own normal, the beam b. Measured before the
+  change on case-0004: with the probe rolled 10° at the flat paraspinal site, the force on the probe was
+  `[0, 4.06, 0]` N against a beam of `[−0.17, −0.98, 0]`. About 0.7 N of lateral load and the shear it causes
+  were missing, and the reported force was the vertical sum times cos(tilt).
+* **Grilling outcome (QUIZME F2)** — user decisions on 2026-11-05:
+  1. Fix this limitation first (alternatives offered: nonlinear displacement field, friction, verification tests only).
+  2. Accept 3× precompute and store the field in fp16 to limit VRAM.
+  3. Re-run the full 6-policy benchmark and the PPO mean-action run with the existing checkpoints (no retraining).
+* **Decision**:
+  1. The precompute solves for a unit force along x, y and z at every free skin node (3 × 750 right-hand sides).
+     The skin compliance becomes 3S × 3S. The lattice field `G_lat` has 3S rows and is stored in fp16: 233 MB on
+     the GPU for the sample patient. The cache version is now 4.
+  2. Per query, each face sample's overlap g_j is measured along b: a fixed-point search for the skin point
+     p_j = q_j − g_j b on the height map. The skin nodes are interpolated at p_j. The contact compliance along b
+     is Cb = bᵀ C b per node pair. Nodal forces act along b. The field is u = Σ_c f_c (b · G_c), and the force on
+     the probe is `force_vec_n = −b F`. The contact stiffness uses dg_j/dδ = 1.
+  3. For an untilted probe b = −Y_P, so the new model reproduces the old forces. A regression test pins them to
+     0.2 % at 4 sites × 3 indentations.
+  4. *Alternatives*: keep only the y response and approximate shear with a Poisson factor (rejected: not a
+     solution of the FEM); fp32 field (about 470 MB; rejected by the user for VRAM); friction (needs normal
+     contact first, and a stick/slip state between frames).
+* **Verification (TDD)**:
+  - New tests in `test_fem_tissue.py`:
+    - the force is parallel to −b within 0.5° at ±10° roll (this test failed before the change);
+    - Maxwell–Betti reciprocity: the relative asymmetry of the raw compliance is 2.4e-6;
+    - an element patch test: rigid modes give zero force, and a uniform strain gives exactly V/2 ε:C:ε;
+    - the untilted regression test.
+  - A sanity check that a tilted probe shears the tissue towards b_x **already passed on the old model**: lopsided
+    vertical loading plus the Poisson effect also shear. So that test does not discriminate between the models,
+    and it is not evidence for the fix.
+  - Full suite: 103 passed.
+* **Results**:
+  - Costs, from `test_fem_tissue.py -s`: solve 1.50 ms (was 1.22 ms), peak VRAM 261 MB (was 169 MB), cold
+    precompute about 23 s (was about 6.6 s).
+  - Physics rate (`results/physics_rate_20261105_normal_contact.json`): 1000.0 Hz, p99 1.000 ms, 17 overruns in
+    20,015 ticks, streaming 29.9 Hz.
+  - Benchmark (`results/benchmark_latest.md`, run 20261105_120357; same command, seeds and checkpoints as
+    20261104_160815). Cov@3 (%), before → after:
+
+    | Method | Before | After |
+    | :--- | :---: | :---: |
+    | Raster | 88.1 | 88.1 |
+    | Orbital | 70.2 | 70.1 |
+    | NBV | 83.8 | 83.8 |
+    | PPO (sampled) | 85.2 | 85.0 |
+    | CFM | 78.4 ± 5.7 | 83.7 ± 1.4 |
+    | Diffusion | 69.7 | 71.0 |
+    | PPO mean (`results/ppo_deterministic/benchmark_latest.md`) | 52.7 | 52.6 |
+
+  - The benchmark is deterministic: re-running raster + CFM gave identical numbers. So the CFM shift comes from
+    the physics change, not run-to-run noise. Small changes in the observations at tilted poses send the cloned
+    policy's trajectory elsewhere. With n = 3 and a previous std of 5.7, this is not evidence that CFM improved.
+  - Sampled PPO's force tracking changed from RMSE 0.45 / max 6.1 N to 0.23 / 4.8 N.
+* **Cleanup in the same session** (commit `255bfd2`, with the suite green): functions with no callers, parameters
+  that were accepted but ignored, the stale root PNG and Kinova YAML, and the stock nested `.gitignore` were
+  removed. `compute_confidence_map` no longer accepts `energy_map`, so passing the privileged map now raises
+  `TypeError` (invariant 5); its test was changed first. Historical banners were added to the 2025 design doc,
+  the Slicer MuJoCo plan and the mid-term presentation folder.
+* **Consequences / limitations**:
+  - Still linear, small strain and frictionless.
+  - Skin points are found on the undeformed surface.
+  - The learned checkpoints predate this change.
+  - VRAM grew by about 90 MB.
+
+### `DEC-041`: RSS 2027 Direction: GPU-Batched Gymnasium Env on the PyTorch FEM, Hypothesis-Led Paper, Three Tasks
+* **Date**: November 5, 2026 (branch `audit-fixes`; planning only, no code changed)
+* **Context**: The user is targeting RSS 2027. The CFP was checked on 2026-11-05:
+  - Stage 1 is a 6-page extended abstract, due 4 Dec 2026, judged on hypothesis and methodology.
+  - The final paper is due 16 Apr 2027.
+
+  The goal is SonoGym parity (arXiv 2507.01152; rigid anatomy, no contact force) plus soft-tissue deformation, as a
+  framework that other researchers can train and test policies on. The literature review flagged a close competitor:
+  CRESSim-Neo (arXiv 2608.25192) already has a batched GPU XPBD UltrasoundScan env, with no CT anatomy, no fidelity
+  check and no policy results. So "first parallel soft-body US gym" cannot be claimed.
+
+  Constraints: simulation only (no robot or phantom); one RTX 5000 Blackwell Pro.
+* **Grilling outcome** — user decisions on 2026-11-05:
+  1. **Simulation stack:** keep the PyTorch FEM and batch it on the GPU behind a Gymnasium `VectorEnv`; do not port to
+     Isaac Lab before Stage 1.
+     - Alternatives considered: Isaac Lab/PhysX deformables (they do not report contact forces), Newton (experimental in
+       Isaac Lab 3.0), SOFA (CPU-only), Genesis (fast-moving and unpublished), XPBD (uncalibrated forces).
+     - An Isaac Lab wrapper stays optional for Stage 2.
+  2. **Framing:** a hypothesis-led paper with the gym as the instrument (H1–H4 in `tasks/plan.md`), rather than a pure
+     benchmark paper. This fits the Stage 1 review criteria.
+  3. **Tasks:** bone reconstruction, navigation to a standard plane, and a new force-regulated scan. Pedicle drilling
+     is out of scope.
+* **Decision**:
+  - A batched, PyBullet-free training path shares `fem_tissue` and the B-mode code with the existing 1 kHz PyBullet +
+    Slicer path. A parity test will tie the two together.
+  - Invariant 2 still holds for the 1 kHz path.
+  - The plan and task list are in `tasks/plan.md` and `tasks/todo.md`.
+* **Consequences**:
+  - FLOW.md must gain the new training entry point once T3 lands.
+  - Throughput numbers must be regenerated into `results/` (T8) before anyone cites them.
+  - Claims must not include "first deformable US simulator" (Goksel & Salcudean TMI 2009, Bürger et al. TMI 2013) or
+    "first parallel soft-body US gym" (CRESSim-Neo).
+* **Progress, T1 (2026-11-05)**: `ReconstructionPipeline/simulation/fem_batched.py` (`BatchedFEMSolver`). It wraps one
+  patient's `FEMTissueModel` and solves B (pose, indentation) queries at once on the GPU:
+  - padded per-env candidate skin nodes;
+  - batched active-set `torch.linalg.solve`;
+  - one dense GEMM for the field;
+  - optional per-env `e_scale` for stiffness randomisation.
+
+  The single-env path is unchanged. `tests/test_fem_batched.py` checks parity in fp64 against `FEMTissueModel._solve`
+  for force, force vector, torque, contact stiffness, active-node count and field, including out-of-contact and
+  tilted envs.
+
+  **Default contact dtype is float32.** Reasons:
+  - GPUs run fp64 at a small fraction of the fp32 rate. On the RTX 2050 the 128-env step was about 3× faster in fp32
+    (89 → 27 ms without the field, scratch profiling).
+  - The test bounds the fp32 error against fp64 at < 1e-5 relative force and < 0.05 mm field.
+
+  Timings printed by `test_batch_sizes_run` on the RTX 2050 (informational, not asserted; T8 will put
+  throughput into `results/`): 6.0 / 8.3 / 13.0 / 33.3 ms per batched step for B = 1 / 8 / 32 / 128; peak VRAM
+  305–450 MB.
+* **Progress, T2/T3/T8 (2026-11-05)**:
+  - **T2.** `BatchedFEMState.warp_to_reference` and `probe_face_poses`, plus
+    `VolumeSliceExtractor.extract_slices(batched_warp_fn=...)`. `test_batched_render.py` compares against the
+    single-env slices. It also checks that tissue under a face indented 2–8 mm maps back to within 0.5 mm of the
+    undeformed skin.
+  - **T3.** New package `mtp_gym`:
+    - `UltrasoundVectorEnv` is a Gymnasium 1.0 `VectorEnv` with torch tensors on the device and same-step autoreset.
+      It is registered as `MTP/FreeScan-v0`.
+    - Tasks plug in through `mtp_gym/tasks/base.py`.
+    - Envs are grouped per patient.
+    - The batched admittance control uses `BatchedFEMSolver.first_contact / max_indentation / force`, which match
+      the single-env methods in a test.
+    - `test_gym_api.py` checks parity with `env_reconstruction`, autoreset, rigid mode, stiffness randomisation, and
+      that PyBullet is never imported.
+  - **T8.** `ReconstructionPipeline/evaluation/throughput_benchmark.py`. `results/throughput_20261105_223122.md`
+    (RTX 2050, FreeScan task, 20 steps) gives:
+    - `aware` (FEM-deformed): 41.4 / 259.4 / 526.8 / 711.5 env-steps/s for N = 1 / 8 / 32 / 128.
+    - `rigid` (undeformed image, FEM force control kept): 47.0 / 291.5 / 641.4 / 910.5.
+
+    The run was made from an uncommitted tree (commit field `-dirty`), so re-run it after committing before
+    citing it.
+  - The Kelvinlet backend is not batched. The vector env is FEM-only.
+* **Progress, T4/T5 (2026-11-05)**:
+  - **T4, patients.** `ReconstructionPipeline/data/import_sonogym_subjects.py` imports the 12 SonoGym subjects
+    (HF `yunkao/SonoGym_assets_models`, CC BY 4.0) into `data/patients/sonogym_<id>/`. Checks made before
+    writing it:
+    - The CTs are true RAS: posterior is −Y in all 12. Frame P needs the proper rotation diag(−1, −1, 1).
+    - L4 = TotalSegmentator label 28, checked against SonoGym's `vertebrae_L4.stl` for all 12.
+    - Two scans (s0004, s0012) are slightly oblique (≤ 3°). The full inverse affine is used.
+    - The CT table touches the dorsal skin. It is removed by keeping the largest connected body component.
+
+    Each subject is resampled onto the sample patient's 1 mm canonical grid, with y extended to 120 mm, and
+    placed so that its L4 centroid lands on the sample's L4 centroid. Skin depth stays patient-specific.
+    Midline soft tissue at L4 spans 15–78 mm (`meta.json` `qa`). Axial QA images were inspected (scratch, not
+    committed).
+
+    `data/splits.json`: subjects are sorted by thickness and every third is held out (s0029, s0006, s0034,
+    s0030).
+  - **Loader caveat found.** `load_totalsegmentator_subject` chooses the axis order with a shape heuristic
+    (`shape[0] < shape[2]`). The imported grids satisfy it (141 < 176), but the heuristic would mis-order a raw
+    scan such as SonoGym s0034 (308, 308, 283). Raw scans must go through the importer.
+  - **T5.** `MTP/Recon-v0` (`mtp_gym/tasks/reconstruction.py`):
+    - `mtp_gym/perception.py::segment_bmode_batch` is a torch port of `segment_from_bmode`. It equals the numpy
+      version pixel for pixel (test).
+    - A GPU occupancy grid (1.5 mm) gives the area reward, as in the single env. GPU coverage uses raw
+      back-projected points.
+    - The observations are the 32³ reconstruction grid and the coverage.
+    - The benchmark raster (72 frames) reaches coverage 0.890 in the single env and 0.897 in the vector env
+      (`test_raster_coverage_matches_single_env`, printed).
+    - Invariant 5 is tested: shifting the ground-truth target changes the coverage but no observation.
+* **Decision (user, 2026-11-05): shared tissue moduli across patients.**
+  - **Before.** Each patient's FEM modulus scale was calibrated so that its scan window follows the same
+    literature curve (k0 = 0.5 N/mm).
+  - **Problem.** Over the 13 patients this spread `e_scale` from 0.62 to 2.86
+    (`results/patients_fem_20261105_225601.json`). That equalised the force response and largely removed the
+    anatomy-driven force differences H2 tests.
+  - **Now.** `PatientSim(stiffness="shared")` is the default. All patients use E_fat / E_muscle = 10.96 / 21.92
+    kPa: `SHARED_E_SCALE` = 1.0958, the sample patient's calibrated value, first row of that file.
+  - **Ablation.** `stiffness="calibrated"` keeps per-patient calibration.
+  - **Effect.** `test_multi_patient.py::test_anatomy_changes_force_under_shared_moduli`: at first contact
+    + 6 mm on the midline, the thin back s0015 gives 9.43 N and the thick back s0014 gives 3.48 N (printed).
+  - **Alternatives considered.** Per-patient calibration (rejected as the default: it hides anatomy). Moduli fitted
+    per tissue from population data (not available without real force data; possible Stage 2 work).
+  - **Limitation.** One sample's calibration sets the absolute stiffness level. T14 (comparison with a nonlinear
+    FEM and published values) is where it gets checked.
+* **Progress, T9 gate (2026-11-05): force changes the simulated image, for every patient.**
+  `ReconstructionPipeline/evaluation/compression_sweep.py`: 13 patients, shared moduli, 3×3 untilted poses over the
+  L4 window, F = 1…15 N by bisection on the batched FEM, fixed speckle seed, all measured from the B-mode only.
+  The results file is named in the commit that adds it.
+  - **Statistic choices made while developing the script** (each was replaced before any result was used):
+    1. Averaging echo depth over whichever poses had an echo at each force mixed poses. The thick s0014 shows
+       no echo at 1 N anywhere.
+    2. The per-image median depth was confounded: in s0034 the laminae (about 66 mm) enter the field of view
+       under compression and outvote the spinous-process tip (about 44 mm), even though both move toward the
+       probe. Inspected visually (scratch figure).
+
+    Final statistic: per scanline, paired between the lowest and the highest force.
+  - **Limitation.** Speckle is generated in image coordinates, so it does not move with the tissue. The fixed
+    seed removes it from this comparison, but speckle decorrelation under compression is not modelled. That is a
+    realism item (T19).
+* **Erratum (2026-11-06): commit hashes inside results files.** Before the first push, the unpushed `audit-fixes`
+  commits were re-authored as `rishang19dx`. File contents are unchanged, but the hashes changed. Results files
+  written before that name the old hashes:
+  - `8f89f63` is now `bbea34f`;
+  - `50f4919` is now `ba16e82`, which is the source of `results/compression_sweep_20261105_235841.*` and
+    `results/throughput_20261105_235332.*`.
+
+  `results/patients_fem_20261105_225601.json` records no commit; it was produced from the tree of `bbea34f`.
+

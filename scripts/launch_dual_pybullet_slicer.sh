@@ -8,7 +8,7 @@
 # 1. Native PyBullet 3D GUI Window:
 #    - Franka Emika Panda 7-DoF robot manipulator with mounted ultrasound probe
 #    - Operating table and patient torso soft-tissue phantom (TotalSegmentator CT)
-#    - Dynamic contact mechanics (Kelvinlets), contact force vectors, and beam cone
+#    - 1 kHz physics in its own process; probe force/indentation from the tissue model
 # 2. 3D Slicer Clinical Application (Slicer 5.12+):
 #    - Side-by-side view: 2D Live B-mode ultrasound slice & 3D patient space
 #    - Dynamic 3D ultrasound transducer probe model
@@ -32,7 +32,7 @@ cd "${PROJECT_ROOT}"
 
 # Default parameters
 export DISPLAY="${DISPLAY:-:0}"
-SCAN_MODE="raster"
+SCAN_MODE="orbital_l4"
 PUBLISH_FPS="30.0"
 PORT="18944"
 PATIENT_DIR="${PROJECT_ROOT}/data/sample_totalsegmentator_patient"
@@ -51,7 +51,7 @@ print_help() {
     echo "Usage: bash scripts/launch_dual_pybullet_slicer.sh [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --mode <orbital|raster>    Scanning pattern (default: orbital)"
+    echo "  --mode <mode>              orbital_l4|raster_l4|orbital|raster|nbv|diffusion|cfm|interactive (default: orbital_l4)"
     echo "  --fps <n>                  Publishing rate to Slicer in Hz (default: 30.0)"
     echo "  --port <port>              OpenIGTLink socket port (default: 18944)"
     echo "  --patient-dir <path>       Custom TotalSegmentator patient directory"

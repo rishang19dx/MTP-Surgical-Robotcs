@@ -1,187 +1,253 @@
 """
 Model-Based (Acoustic Ray-Tracing) Ultrasound Simulator.
-Faithfully implements acoustic wave reflection, depth attenuation, specular incidence penalties,
-bone acoustic shadowing, Point Spread Function (PSF) convolution, and speckle backscattering.
+
+Implements, per scanline (image column, beam along +y):
+  * depth attenuation with frequency-dependent coefficients alpha [dB/(cm*MHz)], converted to nepers
+    (1 dB = 0.1151 Np for amplitude) and integrated over the physical pixel spacing (round trip),
+  * interface transmission losses (1 - R^2 per crossed interface, round trip),
+  * specular reflection R = |Z2 - Z1| / (Z2 + Z1) weighted by an incidence-angle term,
+  * Rayleigh speckle: complex Gaussian scatterers convolved with an anisotropic Gaussian PSF
+    whose sigmas are given in millimetres (converted per axis to pixels), envelope = |.|,
+  * additive Rayleigh electronic noise (so acoustic shadows are dark but not exactly zero),
+  * a fixed nominal Time Gain Compensation (TGC) ramp in dB/cm that does NOT depend on the
+    tissue actually present (as on a real scanner),
+  * log compression to a fixed display dynamic range.
+
 Based on SonoGym (Ao et al., 2025) and Salehi et al. (MICCAI 2015).
+
+Attenuation constants (amplitude, dB/(cm*MHz)), standard literature values
+(Duck, "Physical Properties of Tissue", 1990; Szabo, "Diagnostic Ultrasound Imaging", 2004):
+  soft tissue 0.6 (range 0.5-0.7), cortical bone 20 (range ~10-20+, here the upper end since
+  it also stands in for scattering losses in trabecular bone).
 """
 
-from typing import Optional, Tuple, Dict
+from typing import Optional, Dict
+import math
+import warnings
+
 import torch
 import torch.nn.functional as F
-import numpy as np
+
+DB_TO_NEPER = math.log(10.0) / 20.0  # 0.1151 Np per dB (amplitude)
 
 
 class ModelBasedUltrasoundSimulator:
     """
     GPU/CPU vectorized model-based ultrasound simulator generating B-mode US images
     from 2D CT slices and anatomical label maps.
+
+    Image convention: rows = axial depth (beam along +row), columns = lateral position.
     """
+
     def __init__(
         self,
         frequency_mhz: float = 5.0,
         initial_energy: float = 1.0,
-        spatial_resolution_mm: float = 0.5,
-        psf_sigma_axial: float = 2.0,
-        psf_sigma_lateral: float = 1.5,
-        kernel_size: int = 15,
-        specular_exponent: float = 4.0,
+        axial_resolution_mm: float = 0.375,
+        lateral_resolution_mm: float = 0.333,
+        psf_sigma_axial_mm: float = 0.35,
+        psf_sigma_lateral_mm: float = 0.7,
+        alpha_soft_tissue_db: float = 0.6,
+        alpha_bone_db: float = 20.0,
+        tgc_db_per_cm: float = 5.0,
+        tgc_max_db: float = 40.0,
+        dynamic_range_db: float = 60.0,
+        reference_amplitude: float = 1.0,
+        scatter_amplitude: float = 0.008,
+        noise_amplitude: float = 0.002,
+        specular_exponent: float = 2.0,
+        seed: Optional[int] = None,
         device: Optional[torch.device] = None,
+        spatial_resolution_mm: Optional[float] = None,
+        psf_sigma_axial: Optional[float] = None,
+        psf_sigma_lateral: Optional[float] = None,
+        kernel_size: Optional[int] = None,
     ):
         """
         Args:
-            frequency_mhz: Acoustic transducer center frequency in MHz.
-            initial_energy: Transmit acoustic energy E0.
-            spatial_resolution_mm: Pixel spacing in mm.
-            psf_sigma_axial: Standard deviation for PSF along beam axis (y) in pixels.
-            psf_sigma_lateral: Standard deviation for PSF across beam (x) in pixels.
-            kernel_size: Size of 2D Gaussian convolution kernel (must be odd).
-            specular_exponent: Exponent sharpening specular angle-dependence.
+            frequency_mhz: Transducer centre frequency f [MHz].
+            initial_energy: Transmit amplitude scale E0.
+            axial_resolution_mm: Pixel spacing along the beam (rows) [mm]. Use depth_mm / (H - 1).
+            lateral_resolution_mm: Pixel spacing across the beam (columns) [mm]. Use width_mm / (W - 1).
+            psf_sigma_axial_mm / psf_sigma_lateral_mm: Gaussian PSF standard deviations [mm].
+            alpha_soft_tissue_db / alpha_bone_db: Amplitude attenuation [dB/(cm*MHz)].
+            tgc_db_per_cm: Fixed nominal TGC slope [dB/cm of depth] (independent of the tissue).
+            tgc_max_db: TGC gain cap [dB].
+            dynamic_range_db: Displayed log-compression dynamic range [dB].
+            reference_amplitude: Echo amplitude mapped to full brightness (1.0).
+            scatter_amplitude: Diffuse backscatter amplitude of soft tissue (relative to E0).
+            noise_amplitude: Rayleigh electronic noise floor added after TGC (sets shadow brightness).
+            specular_exponent: Exponent n in cos(theta)^n incidence weighting.
+            seed: Optional seed for the internal speckle generator (reproducible frames).
             device: torch.device ('cuda' or 'cpu').
+            spatial_resolution_mm: DEPRECATED alias that sets both axial and lateral spacing.
+            psf_sigma_axial / psf_sigma_lateral: DEPRECATED PSF sigmas in pixels (override the mm values).
+            kernel_size: DEPRECATED fixed PSF kernel size (now derived from the sigmas, 3 sigma).
         """
-        if device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        else:
-            self.device = device
+        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.frequency = frequency_mhz
-        self.initial_energy = initial_energy
-        self.delta_y_cm = spatial_resolution_mm / 10.0  # mm to cm for dB/(cm*MHz)
-        self.specular_exponent = specular_exponent
+        if spatial_resolution_mm is not None:
+            warnings.warn(
+                "spatial_resolution_mm is deprecated; pass axial_resolution_mm and lateral_resolution_mm",
+                DeprecationWarning, stacklevel=2,
+            )
+            axial_resolution_mm = lateral_resolution_mm = float(spatial_resolution_mm)
 
-        # Construct 2D anisotropic Gaussian Point Spread Function (PSF) kernel
-        self.psf_kernel = self._build_psf_kernel(kernel_size, psf_sigma_axial, psf_sigma_lateral)
+        self.frequency = float(frequency_mhz)
+        self.initial_energy = float(initial_energy)
+        self.axial_resolution_mm = float(axial_resolution_mm)
+        self.lateral_resolution_mm = float(lateral_resolution_mm)
+        self.delta_y_cm = self.axial_resolution_mm / 10.0
+        self.specular_exponent = float(specular_exponent)
 
-        # Standard attenuation coefficients alpha in dB / (cm * MHz)
-        # Scaled for natural exponential attenuation
-        self.alpha_soft_tissue = 0.06
-        self.alpha_bone = 0.95   # Strong acoustic attenuation causing bone shadow
-        self.alpha_fluid = 0.005
+        self.alpha_soft_tissue_db = float(alpha_soft_tissue_db)
+        self.alpha_bone_db = float(alpha_bone_db)
+        self.tgc_db_per_cm = float(tgc_db_per_cm)
+        self.tgc_max_db = float(tgc_max_db)
+        self.dynamic_range_db = float(dynamic_range_db)
+        self.reference_amplitude = float(reference_amplitude)
+        self.scatter_amplitude = float(scatter_amplitude)
+        self.noise_amplitude = float(noise_amplitude)
 
-    def _build_psf_kernel(self, ksize: int, sigma_y: float, sigma_x: float) -> torch.Tensor:
-        """Creates an oriented 2D Gaussian convolution kernel."""
-        ax = torch.arange(ksize, device=self.device) - ksize // 2
-        ay = torch.arange(ksize, device=self.device) - ksize // 2
-        y, x = torch.meshgrid(ay, ax, indexing="ij")
+        # PSF sigmas in pixels per axis
+        sig_ax_px = psf_sigma_axial if psf_sigma_axial is not None else psf_sigma_axial_mm / self.axial_resolution_mm
+        sig_lat_px = psf_sigma_lateral if psf_sigma_lateral is not None else psf_sigma_lateral_mm / self.lateral_resolution_mm
+        self.psf_sigma_axial_px = float(sig_ax_px)
+        self.psf_sigma_lateral_px = float(sig_lat_px)
+        self.psf_axial = self._gauss_1d(sig_ax_px, kernel_size).view(1, 1, -1, 1)
+        self.psf_lateral = self._gauss_1d(sig_lat_px, kernel_size).view(1, 1, 1, -1)
 
-        kernel = torch.exp(-0.5 * ((x / sigma_x) ** 2 + (y / sigma_y) ** 2))
-        kernel = kernel / torch.sum(kernel)
-        # Reshape to (1, 1, ksize, ksize) for F.conv2d
-        return kernel.unsqueeze(0).unsqueeze(0)
+        self.generator: Optional[torch.Generator] = None
+        if seed is not None:
+            self.generator = torch.Generator(device=self.device)
+            self.generator.manual_seed(int(seed))
+
+    def _gauss_1d(self, sigma_px: float, ksize: Optional[int]) -> torch.Tensor:
+        """Peak-normalised 1D Gaussian (a single-pixel reflector keeps its amplitude)."""
+        sigma_px = max(float(sigma_px), 1e-3)
+        half = int(math.ceil(3.0 * sigma_px))
+        if ksize is not None:
+            half = min(half, ksize // 2)
+        r = torch.arange(-half, half + 1, device=self.device, dtype=torch.float32)
+        return torch.exp(-0.5 * (r / sigma_px) ** 2)
+
+    def _psf(self, x: torch.Tensor) -> torch.Tensor:
+        """Separable PSF convolution. x: (N, C, H, W) -> same shape."""
+        c = x.shape[1]
+        ka = self.psf_axial.expand(c, 1, -1, -1)
+        kl = self.psf_lateral.expand(c, 1, -1, -1)
+        x = F.conv2d(x, ka, padding=(ka.shape[2] // 2, 0), groups=c)
+        return F.conv2d(x, kl, padding=(0, kl.shape[3] // 2), groups=c)
 
     def simulate_bmode(
         self,
         ct_slice: torch.Tensor,
         label_slice: Optional[torch.Tensor] = None,
         bone_label_id: int = 1,
+        generator: Optional[torch.Generator] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Simulates a B-mode ultrasound image from a 2D CT slice and optional anatomical label map.
 
         Args:
-            ct_slice: 2D tensor (H, W) or 3D tensor (B, H, W) of CT Hounsfield Units.
-            label_slice: Optional 2D/3D tensor of integer tissue segmentation labels.
-            bone_label_id: Class index corresponding to cortical/trabecular bone.
+            ct_slice: (H, W) or (B, H, W) CT Hounsfield Units.
+            label_slice: Optional (H, W) / (B, H, W) integer tissue labels.
+            bone_label_id: Label value of bone.
+            generator: Optional torch.Generator (on self.device) for the speckle; falls back to the
+                       internal seeded generator, then to the global torch RNG.
 
-        Returns:
-            Dictionary containing:
-                'bmode': Simulated ultrasound image (B, H, W) normalized to [0, 1]
-                'reflection': Specular reflection component R (B, H, W)
-                'backscatter': Backscattering speckle component B (B, H, W)
-                'energy': Remaining acoustic energy map E (B, H, W)
+        Returns dict (privileged keys `energy`, `effective_energy`, `bone_mask` are simulator internals
+        and must not be consumed by the perception pipeline):
+            'bmode': (B, H, W) log-compressed image in [0, 1]
+            'reflection': PSF-convolved specular echo amplitude (after TGC)
+            'backscatter': speckle envelope amplitude (after TGC)
+            'energy': round-trip transmitted amplitude reaching each pixel (no TGC)
+            'effective_energy': energy * TGC gain, clamped to [0, 1]
+            'bone_mask': bone indicator used by the simulator
         """
-        if ct_slice.ndim == 2:
-            ct = ct_slice.unsqueeze(0).to(self.device) # (1, H, W)
-            labels = label_slice.unsqueeze(0).to(self.device) if label_slice is not None else None
-            is_single = True
-        else:
-            ct = ct_slice.to(self.device)
-            labels = label_slice.to(self.device) if label_slice is not None else None
-            is_single = False
-
-        batch_size, h, w = ct.shape
-
-        # 1. Anatomical Bone Mask & Acoustic Attenuation
-        if labels is not None:
-            bone_mask = ((labels == bone_label_id) | (ct > 300.0)).float()
-        else:
-            bone_mask = (ct > 300.0).float()
-
-        # 2. Acoustic Impedance Z:
-        # Soft tissue baseline ~1.54 MRayl, cortical bone ~6.5 MRayl, fat ~1.38 MRayl
-        ct_clamped = torch.clamp(ct, min=-1000.0, max=2500.0)
-        z_tissue = 1.54 + torch.clamp(ct_clamped - 40.0, min=-500.0, max=200.0) / 1000.0
-        z_bone = 6.5 + torch.clamp(ct_clamped - 300.0, min=0.0, max=1500.0) / 750.0
-        impedance = torch.where(bone_mask > 0.5, z_bone, z_tissue)
-
-        # 3. Local Attenuation Map alpha:
-        alpha_map = self.alpha_soft_tissue * (1.0 - bone_mask) + self.alpha_bone * bone_mask
-
-        # 4. Cumulative Acoustic Energy E(u): round-trip attenuation along axis +y
-        cumulative_attenuation = torch.cumsum(alpha_map * self.delta_y_cm, dim=1)
-        energy = self.initial_energy * torch.exp(-2.0 * self.frequency * cumulative_attenuation)
-
-        # 5. Clinical Time Gain Compensation (TGC):
-        # Compensates exponential soft tissue attenuation with depth, matching clinical scanners
-        y_indices = torch.arange(h, device=self.device, dtype=torch.float32).view(1, -1, 1)
-        tgc_gain = torch.clamp(
-            torch.exp(2.0 * self.frequency * self.alpha_soft_tissue * y_indices * self.delta_y_cm),
-            min=1.0, max=14.0
-        )
-
-        # 6. Tissue Boundary Gradient & Incidence Angle Theta
-        dZ_dy = torch.zeros_like(impedance)
-        dZ_dx = torch.zeros_like(impedance)
-        dZ_dy[:, 1:, :] = impedance[:, 1:, :] - impedance[:, :-1, :]
-        dZ_dx[:, :, 1:] = impedance[:, :, 1:] - impedance[:, :, :-1]
-
-        grad_norm = torch.sqrt(dZ_dy ** 2 + dZ_dx ** 2 + 1e-6)
-        cos_theta = torch.clamp(torch.abs(dZ_dy) / grad_norm, 0.0, 1.0)
-        specular_factor = torch.pow(cos_theta, self.specular_exponent)
-
-        boundary_indicator = torch.sigmoid((grad_norm - 0.2) * 8.0)
-
-        # Acoustic reflection coefficient: |Z2 - Z1| / (Z2 + Z1)
-        z_curr = impedance[:, :-1, :]
-        z_next = impedance[:, 1:, :]
-        refl_coeff = torch.zeros_like(impedance)
-        refl_coeff[:, :-1, :] = torch.abs((z_next - z_curr) / (z_next + z_curr + 1e-6))
-
-        # Raw Reflection R_raw = (E * TGC) * cos(Theta) * refl_coeff * G
-        effective_energy = energy * tgc_gain
-        reflection_raw = effective_energy * specular_factor * refl_coeff * boundary_indicator
-
-        # 7. Backscattering (Speckle Texture) B
-        n0 = torch.randn_like(impedance)
-        n1 = torch.rand_like(impedance)
-        scatter_mask = (n1 < 0.75).float()
-        speckle_texture = (0.2 + 0.3 * torch.abs(n0)) * scatter_mask
-        tissue_scatter = torch.where(bone_mask > 0.5, 0.01, 0.07)
-        backscatter_raw = effective_energy * tissue_scatter * speckle_texture
-
-        # 8. Convolution with Point Spread Function (PSF)
-        pad = self.psf_kernel.shape[-1] // 2
-        r_convolved = F.conv2d(reflection_raw.unsqueeze(1), self.psf_kernel, padding=pad).squeeze(1)
-        b_convolved = F.conv2d(backscatter_raw.unsqueeze(1), self.psf_kernel, padding=pad).squeeze(1)
-
-        # 9. Total Image Synthesis with logarithmic dynamic range compression
-        # Bone specular reflection is significantly stronger (>15 dB) than diffuse soft-tissue speckle
-        total_intensity = r_convolved * 14.0 + b_convolved
-        bmode_log = torch.log1p(10.0 * total_intensity) / torch.log1p(torch.tensor(10.0, device=self.device))
-        bmode = torch.clamp(bmode_log, 0.0, 1.0)
-
+        ct = ct_slice.to(self.device).float()
+        labels = label_slice.to(self.device) if label_slice is not None else None
+        is_single = ct.ndim == 2
         if is_single:
-            return {
-                "bmode": bmode.squeeze(0),
-                "reflection": r_convolved.squeeze(0),
-                "backscatter": b_convolved.squeeze(0),
-                "energy": energy.squeeze(0),
-                "bone_mask": bone_mask.squeeze(0),
-            }
+            ct = ct.unsqueeze(0)
+            labels = labels.unsqueeze(0) if labels is not None else None
+        b, h, w = ct.shape
 
-        return {
+        # 1. Bone mask
+        bone_mask = ct > 300.0
+        if labels is not None:
+            bone_mask = bone_mask | (labels == bone_label_id)
+        bone_f = bone_mask.float()
+
+        # 2. Acoustic impedance [MRayl]: soft tissue ~1.54 (fat ~1.38), cortical bone ~6-8
+        ct_c = torch.clamp(ct, -1000.0, 2500.0)
+        z_tissue = 1.54 + torch.clamp(ct_c - 40.0, -500.0, 200.0) / 1000.0
+        z_bone = 6.5 + torch.clamp(ct_c - 300.0, 0.0, 1500.0) / 750.0
+        impedance = torch.where(bone_mask, z_bone, z_tissue)
+
+        # 3. Interface reflection coefficient at the boundary between row y and y+1 (assigned to row y+1,
+        #    i.e. the first pixel of the deeper medium where the echo returns from).
+        refl = torch.zeros_like(impedance)
+        z_prev, z_next = impedance[:, :-1, :], impedance[:, 1:, :]
+        refl[:, 1:, :] = torch.abs((z_next - z_prev) / (z_next + z_prev))
+
+        # 4. Round-trip amplitude attenuation in nepers, integrated over physical depth (exclusive of the
+        #    current pixel so a reflector is not attenuated by the medium beneath it).
+        alpha_np_per_cm = DB_TO_NEPER * self.frequency * (
+            self.alpha_soft_tissue_db * (1.0 - bone_f) + self.alpha_bone_db * bone_f
+        )
+        path_np = 2.0 * alpha_np_per_cm * self.delta_y_cm
+        att_np = torch.cumsum(path_np, dim=1) - path_np
+        # Interface transmission losses (round trip amplitude factor 1 - R^2), exclusive of current pixel
+        log_t = torch.log(torch.clamp(1.0 - refl ** 2, min=1e-6))
+        trans_np = torch.cumsum(log_t, dim=1) - log_t
+        energy = self.initial_energy * torch.exp(-att_np + trans_np)
+
+        # 5. Fixed nominal TGC: depth ramp in dB/cm, independent of the actual tissue
+        depth_cm = torch.arange(h, device=self.device, dtype=torch.float32).view(1, -1, 1) * self.delta_y_cm
+        tgc_db = torch.clamp(self.tgc_db_per_cm * depth_cm, max=self.tgc_max_db)
+        tgc_gain = torch.pow(10.0, tgc_db / 20.0)
+        effective_energy = torch.clamp(energy * tgc_gain, 0.0, 1.0)
+
+        # 6. Incidence angle from the impedance gradient (physical units): beam along +y
+        dz_dy = torch.zeros_like(impedance)
+        dz_dx = torch.zeros_like(impedance)
+        dz_dy[:, 1:, :] = (impedance[:, 1:, :] - impedance[:, :-1, :]) / self.axial_resolution_mm
+        dz_dx[:, :, 1:-1] = (impedance[:, :, 2:] - impedance[:, :, :-2]) / (2.0 * self.lateral_resolution_mm)
+        grad_norm = torch.sqrt(dz_dy ** 2 + dz_dx ** 2 + 1e-12)
+        cos_theta = torch.clamp(torch.abs(dz_dy) / grad_norm, 0.0, 1.0)
+        specular = torch.pow(cos_theta, self.specular_exponent)
+
+        amp = energy * tgc_gain
+        reflection_raw = amp * refl * specular
+
+        # 7. Rayleigh speckle: complex Gaussian scatterers -> PSF -> envelope
+        gen = generator if generator is not None else self.generator
+        rnd = torch.randn((b, 4, h, w), generator=gen, device=self.device, dtype=torch.float32)
+        scat, noise = rnd[:, :2], rnd[:, 2:]
+        scatter_strength = torch.where(bone_mask, 0.5, 1.0) * self.scatter_amplitude
+        scat = scat * (amp * scatter_strength).unsqueeze(1)
+
+        # 8. PSF (one grouped separable conv over [reflection, scatter_re, scatter_im])
+        stacked = torch.cat([reflection_raw.unsqueeze(1), scat], dim=1)
+        conv = self._psf(stacked)
+        r_conv = conv[:, 0]
+        b_env = torch.sqrt(conv[:, 1] ** 2 + conv[:, 2] ** 2)
+
+        # 9. Envelope (incoherent sum) and log compression to a fixed dynamic range
+        noise_env = self.noise_amplitude * torch.sqrt(noise[:, 0] ** 2 + noise[:, 1] ** 2)
+        envelope = r_conv + b_env + noise_env
+        db = 20.0 * torch.log10(envelope / self.reference_amplitude + 1e-12)
+        bmode = torch.clamp(1.0 + db / self.dynamic_range_db, 0.0, 1.0)
+
+        out = {
             "bmode": bmode,
-            "reflection": r_convolved,
-            "backscatter": b_convolved,
+            "reflection": r_conv,
+            "backscatter": b_env,
             "energy": energy,
-            "bone_mask": bone_mask,
+            "effective_energy": effective_energy,
+            "bone_mask": bone_f,
         }
+        if is_single:
+            out = {k: v.squeeze(0) for k, v in out.items()}
+        return out

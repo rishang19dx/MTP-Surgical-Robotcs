@@ -8,6 +8,8 @@ from typing import Tuple, Dict, Optional
 import numpy as np
 import open3d as o3d
 
+from ReconstructionPipeline.reconstruction.metrics import compute_reconstruction_metrics
+
 
 class IntraoperativeRegistration:
     """
@@ -107,35 +109,13 @@ class IntraoperativeRegistration:
         coverage_tolerance_mm: float = 3.0,
     ) -> Tuple[float, float]:
         """
-        Computes Chamfer Distance and Surface Coverage Ratio using KD-trees.
+        Back-compat wrapper around `compute_reconstruction_metrics` (vectorized KD-tree).
 
         Returns:
-            chamfer_dist: Mean bidirectional nearest-neighbor distance (mm).
-            coverage_ratio: Proportion of target points having a reconstructed point within tolerance.
+            chamfer_dist: 0.5 * (mean source->target + mean target->source) nearest-neighbour distance (mm).
+            coverage_ratio: Fraction of target points with a source point within tolerance.
         """
         if len(source_points) == 0 or len(target_points) == 0:
             return float("inf"), 0.0
-
-        target_tree = o3d.geometry.KDTreeFlann(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(target_points)))
-        source_tree = o3d.geometry.KDTreeFlann(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(source_points)))
-
-        # 1. Source -> Target distances
-        dists_s2t = []
-        for p in source_points:
-            _, idx, d2 = target_tree.search_knn_vector_3d(p, 1)
-            dists_s2t.append(np.sqrt(d2[0]))
-
-        # 2. Target -> Source distances
-        dists_t2s = []
-        covered_count = 0
-        for p in target_points:
-            _, idx, d2 = source_tree.search_knn_vector_3d(p, 1)
-            dist = np.sqrt(d2[0])
-            dists_t2s.append(dist)
-            if dist <= coverage_tolerance_mm:
-                covered_count += 1
-
-        chamfer_distance = (np.mean(dists_s2t) + np.mean(dists_t2s)) / 2.0
-        coverage_ratio = float(covered_count) / float(len(target_points))
-
-        return float(chamfer_distance), float(coverage_ratio)
+        m = compute_reconstruction_metrics(source_points, target_points, None, tol_mm=coverage_tolerance_mm)
+        return float(m["chamfer_mm"]), float(m["coverage"])

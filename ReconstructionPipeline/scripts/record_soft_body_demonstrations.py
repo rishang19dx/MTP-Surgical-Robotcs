@@ -1,16 +1,19 @@
 """
-Comprehensive Demonstration Recording Suite with Soft-Body Integrations.
+Soft-body demonstration recording (FEM tissue model, DEC-037).
 
-Records:
-1. Visual 3-Panel Synchronized Robot Ultrasound Scan (MP4 & GIF):
-   - Panel 1: PyBullet 3D Robot & Patient Suite (Franka Panda, translucent torso, ivory L1-L5 spine, dynamic Kelvinlet indentation crater)
-   - Panel 2: Live 2D Ultrasound Slicer B-Mode Echogram (dynamic soft-tissue compression & hyperechoic bone echo shift)
-   - Panel 3: Real-Time Biomechanical Telemetry & Strip Charts (F_N, delta, kappa, mu, reconstructed point count)
-2. Multi-Stiffness Soft-Body Comparison (MP4 & GIF):
-   - Side-by-side comparison of soft adipose (2 kPa), normal torso (4 kPa), and stiff muscle (8 kPa)
-3. Expert Demonstration Dataset (.npz):
-   - 20 episodes of expert demonstrations collected with active Kelvinlet soft-body deformation
-   - Ready for SOTA 3D Diffusion Policy (DP3 / EDM) and Continuous Flow Matching (CFM) training
+1. Video (MP4 + GIF, ``--video``): the Franka Panda presses a transverse probe on the L4 midline with a
+   force ramp 3 -> 10 -> 3 N and then slides laterally, all through ``UltrasoundReconstructionEnv``
+   with the default GPU FEM tissue model. Four panels, every number from real model outputs:
+     a. PyBullet render (TinyRenderer, DIRECT) of the robot, spine and the FEM-deformed skin patch
+        (``FEMTissueModel.skin_surface_mesh(state)``, same P -> PyBullet mapping as the server);
+     b. the simulated B-mode at that pose (bone echo moves up as the tissue is compressed);
+     c. transverse skin profile under the probe (undeformed vs FEM-deformed skin vertices, true scale);
+     d. force trace: FEM reaction force vs the admittance target, and the indentation.
+2. Expert demonstration dataset (.npz, ``--dataset``, git-ignored): force and indentation are the values
+   reported by the environment's tissue model (``env.current_normal_force``, ``env.tissue_state``).
+
+Usage:
+    ./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video
 """
 
 import os
@@ -21,350 +24,147 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import imageio
 import pybullet as p
-import pybullet_data
 
 from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
 from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
 from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner
 from ReconstructionPipeline.registration.icp_registration import IntraoperativeRegistration
-from ReconstructionPipeline.simulation.kelvinlet_deformation import RegularizedKelvinletDeformation
-from ReconstructionPipeline.simulation.slice_extractor import VolumeSliceExtractor
-from ReconstructionPipeline.simulation.ultrasound_model_based import ModelBasedUltrasoundSimulator
+from surgical_physics_bridge.src.coordinates import P_TO_PB_ROT, patient_to_pybullet_points, probe_axes_to_pybullet_quaternion
+from surgical_physics_bridge.src.pybullet_backend import PyBulletBackend
+
+
+def _indentation_mm(env) -> float:
+    ts = env.tissue_state
+    return float(ts.indentation_mm) if ts is not None else float(env.current_indentation_mm)
+
+
+def _demo_schedule(n_press: int, n_slide: int):
+    """(c1, c2, target force) per frame: force ramp at the L4 midline, then a lateral slide at 6 N."""
+    half = n_press // 2
+    f_up = np.linspace(3.0, 10.0, half)
+    f_dn = np.linspace(10.0, 3.0, n_press - half)
+    sched = [(0.0, -32.5, float(f)) for f in np.concatenate([f_up, f_dn])]
+    sched += [(float(x), -32.5, 6.0) for x in np.linspace(0.0, 24.0, n_slide)]
+    return sched
 
 
 def record_robot_soft_body_scan_video(
     patient_dir: str = "data/sample_totalsegmentator_patient",
-    output_mp4: str = "demonstrations/demo_robot_soft_body_scan.mp4",
-    output_gif: str = "demonstrations/demo_robot_soft_body_scan.gif",
-    num_frames: int = 50,
+    output_mp4: str = "demonstrations/demo_fem_soft_body.mp4",
+    output_gif: str = "demonstrations/demo_fem_soft_body.gif",
+    n_press: int = 36,
+    n_slide: int = 16,
+    fps: int = 8,
 ):
-    """
-    Renders and records a synchronized 3-panel MP4 and GIF video of the Franka Panda
-    robot performing an ultrasound scan over patient lumbar anatomy with soft-tissue Kelvinlet deformation.
-    """
-    os.makedirs(os.path.dirname(output_mp4), exist_ok=True)
+    os.makedirs(os.path.dirname(output_mp4) or ".", exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[*] Initializing Robot Soft-Body Scan Recording on device: {device}")
-
-    # 1. Initialize PyBullet in headless DIRECT mode for high-speed rendering
-    p.connect(p.DIRECT)
-    p.setAdditionalSearchPath(pybullet_data.getDataPath())
-    p.setGravity(0, 0, -9.81)
-
-    p.loadURDF("plane.urdf", [0, 0, 0])
-
-    # Table
-    table_col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.42, 0.30, 0.15])
-    table_vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[0.42, 0.30, 0.15], rgbaColor=[0.68, 0.72, 0.75, 1.0])
-    p.createMultiBody(baseMass=0, baseCollisionShapeIndex=table_col, baseVisualShapeIndex=table_vis, basePosition=[0.55, 0.0, 0.15])
-
-    # Patient Meshes
     mesh_dir = os.path.join(patient_dir, "meshes")
-    spine_mesh = os.path.join(mesh_dir, "patient_lumbar_spine.obj")
-    torso_mesh = os.path.join(mesh_dir, "patient_torso_skin.obj")
-
-    if not os.path.exists(spine_mesh) or not os.path.exists(torso_mesh):
+    if not os.path.exists(os.path.join(mesh_dir, "patient_lumbar_spine.obj")):
         PatientAssetGenerator.export_patient_meshes(patient_dir)
 
-    if os.path.exists(spine_mesh):
-        spine_vis = p.createVisualShape(p.GEOM_MESH, fileName=spine_mesh, rgbaColor=[0.92, 0.89, 0.78, 1.0])
-        p.createMultiBody(baseMass=0, baseVisualShapeIndex=spine_vis, basePosition=[0, 0, 0])
+    env = UltrasoundReconstructionEnv(patient_data=patient_dir, target_vertebra="vertebrae_L4",
+                                      max_steps=10_000, device=device, seed=0)
+    model = env.tissue_model
+    if not hasattr(model, "skin_surface_mesh"):
+        raise RuntimeError("the soft-body demo needs the FEM tissue backend")
+    env.reset(seed=0)
+    skin_ref, skin_tris = model.skin_surface_mesh(None)
 
-    if os.path.exists(torso_mesh):
-        torso_vis = p.createVisualShape(p.GEOM_MESH, fileName=torso_mesh, rgbaColor=[0.86, 0.68, 0.58, 0.55])
-        p.createMultiBody(baseMass=0, baseVisualShapeIndex=torso_vis, basePosition=[0, 0, 0])
+    # PyBullet scene: same builder as the server (DIRECT client; rendered with TinyRenderer).
+    pb = PyBulletBackend(gui=False, patient_dir=patient_dir)
+    pb.set_skin_mesh(skin_tris)
+    c = pb.cid
+    if pb.torso_id >= 0:
+        p.changeVisualShape(pb.torso_id, -1, rgbaColor=[0.86, 0.68, 0.58, 0.25], physicsClientId=c)
+    cam_target = patient_to_pybullet_points(np.array([0.0, skin_ref[:, 1].max() - 15.0, -32.5]))
+    view = p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=cam_target.tolist(), distance=0.2, yaw=60,
+                                               pitch=-28, roll=0, upAxisIndex=2)
+    proj = p.computeProjectionMatrixFOV(fov=45, aspect=4 / 3, nearVal=0.02, farVal=3.0)
 
-    # Robot Arm
-    robot_id = p.loadURDF("franka_panda/panda.urdf", [0.0, 0.0, 0.10], useFixedBase=True)
-    ee_idx = 11
-
-    # Ultrasound Probe casing attached to robot
-    probe_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.016, length=0.09, rgbaColor=[0.2, 0.5, 0.85, 1.0])
-    probe_id = p.createMultiBody(baseMass=0.2, baseVisualShapeIndex=probe_vis, basePosition=[0.55, 0.0, 0.45])
-
-    # Contact Indentation Disc (Soft-body crater visualization)
-    crater_vis = p.createVisualShape(p.GEOM_CYLINDER, radius=0.024, length=0.003, rgbaColor=[0.1, 0.95, 0.3, 0.85])
-    crater_id = p.createMultiBody(baseMass=0, baseVisualShapeIndex=crater_vis, basePosition=[0.55, 0.0, 0.42])
-
-    arm_joints = [0, 1, 2, 3, 4, 5, 6]
-
-    # Camera View Matrices for PyBullet
-    view_matrix = p.computeViewMatrixFromYawPitchRoll(
-        cameraTargetPosition=[0.55, 0.0, 0.36],
-        distance=0.92,
-        yaw=52,
-        pitch=-26,
-        roll=0,
-        upAxisIndex=2,
-    )
-    proj_matrix = p.computeProjectionMatrixFOV(fov=48, aspect=1.333, nearVal=0.1, farVal=3.0)
-
-    # 2. Initialize Reconstruction Environment with soft-tissue Kelvinlet mechanics
-    env = UltrasoundReconstructionEnv(patient_data=patient_dir, max_steps=num_frames, device=device)
-    env.reset()
-
-    planner = HeuristicScanPlanner()
-    trajectory = planner.generate_orbital_trajectory(radii=[14.0, 22.0], points_per_orbit=num_frames // 2)
-
+    sched = _demo_schedule(n_press, n_slide)
+    hist = {"t": [], "F": [], "Ft": [], "d": []}
     frames = []
-    force_history = []
-    indentation_history = []
-    coupling_history = []
-    pts_count_history = []
+    fig = plt.figure(figsize=(10.0, 5.6), dpi=80)
+    for k, (cx, cz, f_target) in enumerate(sched):
+        env.target_force_n = f_target
+        p_now = env.current_pose_params
+        act = np.array([(cx - p_now[0]) / env.action_scale_trans, (cz - p_now[1]) / env.action_scale_trans,
+                        -p_now[2] / env.action_scale_yaw, -p_now[3] / env.action_scale_pitch], dtype=np.float32)
+        obs, _, _, _, info = env.step(np.clip(act, -1.0, 1.0))
+        st = env.tissue_state
+        V, _ = model.skin_surface_mesh(st)
+        hist["t"].append(k / fps)
+        hist["F"].append(info["normal_force"])
+        hist["Ft"].append(f_target)
+        hist["d"].append(info["indentation_mm"])
 
-    fig = plt.figure(figsize=(18, 5.4), dpi=100)
+        # a. robot + deformed skin (probe face at the indented pose)
+        t_skin = env.skin_pose(*env.current_pose_params)
+        beam_p, lat_p = t_skin[:3, 1], t_skin[:3, 0]
+        face = patient_to_pybullet_points(t_skin[:3, 3] + info["indentation_mm"] * beam_p)
+        beam_pb = P_TO_PB_ROT @ beam_p
+        pb.apply_target({"ee_pos": (face - beam_pb * pb.PROBE_LENGTH_M).tolist(),
+                         "ee_orn": list(probe_axes_to_pybullet_quaternion(beam_p, lat_p)), "teleport": True})
+        pb.update_skin(patient_to_pybullet_points(V))
+        rgb = np.asarray(p.getCameraImage(400, 300, view, proj, renderer=p.ER_TINY_RENDERER,
+                                          physicsClientId=c)[2], dtype=np.uint8).reshape(300, 400, 4)[:, :, :3]
 
-    print(f"[*] Rendering {min(num_frames, len(trajectory))} synchronized frames...")
-
-    for i in range(min(num_frames, len(trajectory))):
-        target_p = trajectory[i]
-        curr_p = env.current_pose_params
-
-        # Compliant 4-DoF action
-        act = np.array([
-            np.clip((target_p[0] - curr_p[0]) / env.action_scale_trans, -1.0, 1.0),
-            np.clip((target_p[1] - curr_p[1]) / env.action_scale_trans, -1.0, 1.0),
-            np.clip((target_p[2] - curr_p[2]) / env.action_scale_yaw, -1.0, 1.0),
-            np.clip((target_p[3] - curr_p[3]) / env.action_scale_pitch, -1.0, 1.0),
-        ], dtype=np.float32)
-
-        obs, reward, terminated, truncated, info = env.step(act)
-
-        c1 = float(env.current_pose_params[0])
-        c2 = float(env.current_pose_params[1])
-        yaw = float(env.current_pose_params[2])
-        pitch = float(env.current_pose_params[3])
-
-        # Realistic compliant contact force variation across trajectory and tissue curvature
-        fn_mod = np.clip(4.0 * np.cos(pitch) * np.cos(yaw) + 1.5 * np.sin(i / 3.5), 2.0, 6.5)
-        fn = float(fn_mod)
-        env.current_normal_force = fn
-        coupling = float(env.current_coupling)
-
-        # Kelvinlet indentation depth
-        delta_m = (fn / 2500.0) # up to 6 mm
-        delta_mm = delta_m * 1000.0
-
-        force_history.append(fn)
-        indentation_history.append(delta_mm)
-        coupling_history.append(coupling)
-        pts_count_history.append(len(env.accumulator.get_points()))
-
-        # Update PyBullet robot IK
-        x_pb = 0.55 + c1 * 1e-3
-        y_pb = 0.0 + c2 * 1e-3
-        z_contact = 0.42 - delta_m
-        z_ee = z_contact + 0.09
-
-        target_pos = [x_pb, y_pb, z_ee]
-        target_orn = p.getQuaternionFromEuler([np.pi + pitch, 0.0, yaw])
-
-        joint_targets = p.calculateInverseKinematics(
-            robot_id, ee_idx, target_pos, target_orn, maxNumIterations=35, residualThreshold=1e-4
-        )
-        for j_idx, q_val in zip(arm_joints, joint_targets[:7]):
-            p.resetJointState(robot_id, j_idx, q_val)
-
-        # Position probe tool & indentation crater
-        p.resetBasePositionAndOrientation(probe_id, [x_pb, y_pb, z_contact + 0.045], target_orn)
-        
-        # Color code crater by von Mises stress
-        if fn <= 6.0:
-            c_rgba = [0.1, 0.95, 0.3, 0.85]  # Green: Safe
-        elif fn <= 8.0:
-            c_rgba = [1.0, 0.75, 0.1, 0.85]  # Amber: Warning
-        else:
-            c_rgba = [1.0, 0.15, 0.1, 0.85]  # Red: Overload
-
-        p.changeVisualShape(crater_id, -1, rgbaColor=c_rgba)
-        p.resetBasePositionAndOrientation(crater_id, [x_pb, y_pb, z_contact + 0.001], [0, 0, 0, 1])
-
-        # Render 3D PyBullet camera image
-        _, _, rgb_pb, _, _ = p.getCameraImage(480, 360, view_matrix, proj_matrix, renderer=p.ER_TINY_RENDERER)
-        rgb_pb = rgb_pb[:, :, :3]
-
-        # Extract current B-mode ultrasound slice from env
-        bmode_img = obs["bmode"]
-        if isinstance(bmode_img, torch.Tensor):
-            bmode_img = bmode_img.detach().cpu().numpy()
-
-        # --- Draw 3-Panel Synchronized Figure ---
-        fig.clear()
-        gs = gridspec.GridSpec(1, 3, width_ratios=[1.3, 1.0, 1.2], figure=fig)
-
-        # Panel 1: 3D PyBullet Robotic Simulation
-        ax1 = fig.add_subplot(gs[0])
-        ax1.imshow(rgb_pb)
-        ax1.set_title("1. PyBullet 3D Robot & Anatomical Soft-Body Suite\nIvory L1-L5 Spine | Translucent Skin | Dynamic Crater", fontsize=9.5, fontweight="bold")
-        ax1.axis("off")
-
-        # Telemetry overlay badge on PyBullet view
-        overlay_txt = f"F_N: {fn:.2f} N | Indent: {delta_mm:.2f} mm\nCoupling: {coupling*100:.0f}% | Stress: {'SAFE' if fn<=6.0 else 'ELEVATED'}"
-        ax1.text(
-            0.03, 0.05, overlay_txt, transform=ax1.transAxes, fontsize=8.5,
-            bbox=dict(boxstyle="round,pad=0.4", facecolor="black", alpha=0.75, edgecolor="lime" if fn<=6.0 else "amber")
-        )
-
-        # Panel 2: Live 2D Ultrasound Slicer B-Mode
-        ax2 = fig.add_subplot(gs[1])
-        ax2.imshow(bmode_img, cmap="gray", vmin=0.0, vmax=1.0, extent=[-20.0, 20.0, 60.0, 0.0])
-        ax2.axhline(0.0, color="yellow", linewidth=2.5, label="Transducer Face")
-        ax2.set_title(f"2. Live 2D B-Mode Ultrasound\nCoupled Soft-Tissue Compression (Step {i+1}/{num_frames})", fontsize=9.5, fontweight="bold")
-        ax2.set_xlabel("Lateral Width (mm)")
-        ax2.set_ylabel("Depth (mm)")
-        ax2.legend(loc="lower right", fontsize=7.5)
-
-        # Panel 3: Biomechanical Strip Charts & Reconstruction Stats
-        ax3 = fig.add_subplot(gs[2])
-        steps_x = np.arange(len(force_history))
-        ax3.plot(steps_x, force_history, color="lime", linewidth=2.0, label="Normal Force $F_N$ (N)")
-        ax3.plot(steps_x, indentation_history, color="cyan", linewidth=1.8, linestyle="--", label="Indentation $\delta$ (mm)")
-        ax3.axhline(4.0, color="white", linestyle=":", alpha=0.7, label="Target Force (4 N)")
-        ax3.axhspan(2.0, 6.0, color="green", alpha=0.15, label="Safe Band [2, 6] N")
-        ax3.set_xlim(0, max(num_frames, 10))
-        ax3.set_ylim(0, 10.0)
-        ax3.set_xlabel("Scan Step")
-        ax3.set_ylabel("Force (N) / Indentation (mm)")
-        ax3.set_title(f"3. Biomechanical Telemetry & Coupling\nReconstructed 3D Bone Points: {pts_count_history[-1]}", fontsize=9.5, fontweight="bold")
-        ax3.grid(True, linestyle=":", alpha=0.5)
-        ax3.legend(loc="upper right", fontsize=7.5)
-
-        fig.tight_layout()
+        fig.clf()
+        gs = fig.add_gridspec(2, 3, width_ratios=[1.35, 0.8, 1.0], hspace=0.38, wspace=0.28)
+        ax = fig.add_subplot(gs[:, 0])
+        ax.imshow(rgb)
+        ax.set_axis_off()
+        ax.set_title(f"FEM skin patch under the probe\nF = {info['normal_force']:.1f} N (target {f_target:.1f} N)",
+                     fontsize=10)
+        ax = fig.add_subplot(gs[:, 1])
+        ax.imshow(obs["bmode"], cmap="gray", vmin=0, vmax=1, aspect="auto",
+                  extent=[-env.PHYSICAL_SIZE_MM[1] / 2, env.PHYSICAL_SIZE_MM[1] / 2, env.PHYSICAL_SIZE_MM[0], 0])
+        ax.set_title("Simulated B-mode", fontsize=10)
+        ax.set_xlabel("lateral mm", fontsize=8)
+        ax.set_ylabel("depth from probe face mm", fontsize=8)
+        ax.tick_params(labelsize=7)
+        # c. transverse skin profile through the probe centre (nodes of the nearest lattice row)
+        ax = fig.add_subplot(gs[0, 2])
+        zrow = skin_ref[np.argmin(np.abs(skin_ref[:, 2] - cz)), 2]
+        sel = np.abs(skin_ref[:, 2] - zrow) < 1e-3
+        order = np.argsort(skin_ref[sel, 0])
+        ax.plot(skin_ref[sel, 0][order], skin_ref[sel, 1][order], color="0.6", lw=1.2, label="undeformed")
+        ax.plot(V[sel, 0][order], V[sel, 1][order], color="tab:red", lw=1.6, label="FEM deformed")
+        x0 = env.current_pose_params[0]
+        ax.axvspan(x0 - model.face_dims[0] / 2, x0 + model.face_dims[0] / 2, color="tab:blue", alpha=0.12,
+                   label="probe face")
+        ax.set_xlim(-60, 60)
+        ax.set_title(f"Skin profile at z = {zrow:.0f} mm (true scale)", fontsize=9)
+        ax.set_xlabel("x mm", fontsize=8)
+        ax.set_ylabel("y mm", fontsize=8)
+        ax.tick_params(labelsize=7)
+        ax.legend(fontsize=6, loc="lower center")
+        ax = fig.add_subplot(gs[1, 2])
+        ax.plot(hist["t"], hist["Ft"], "k--", lw=1, label="target")
+        ax.plot(hist["t"], hist["F"], color="tab:red", lw=1.6, label="FEM force")
+        ax.set_xlim(0, len(sched) / fps)
+        ax.set_ylim(0, 12)
+        ax.set_xlabel("time s", fontsize=8)
+        ax.set_ylabel("N", fontsize=8)
+        ax.tick_params(labelsize=7)
+        ax2 = ax.twinx()
+        ax2.plot(hist["t"], hist["d"], color="tab:blue", lw=1.2, label="indentation")
+        ax2.set_ylabel("indentation mm", fontsize=8, color="tab:blue")
+        ax2.tick_params(labelsize=7)
+        ax.legend(fontsize=6, loc="upper right")
+        ax.set_title("Force tracking (admittance on FEM force)", fontsize=9)
         fig.canvas.draw()
-
-        rgba_buf = np.asarray(fig.canvas.buffer_rgba())
-        frames.append(np.array(rgba_buf[:, :, :3], copy=True))
-
-    p.disconnect()
+        frames.append(np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy())
+        print(f"  frame {k + 1}/{len(sched)}: F={info['normal_force']:.2f} N, d={info['indentation_mm']:.2f} mm")
     plt.close(fig)
+    pb.disconnect()
 
-    # Save GIF
-    print(f"[*] Saving Robot Soft-Body Scan GIF to {output_gif}...")
-    imageio.mimsave(output_gif, frames, fps=8)
-
-    # Save MP4
-    print(f"[*] Saving Robot Soft-Body Scan MP4 to {output_mp4}...")
-    writer = imageio.get_writer(output_mp4, fps=8, codec="libx264", quality=8)
-    for frame in frames:
-        writer.append_data(frame)
-    writer.close()
-
-    print(f"[+] Robot soft-body demonstration successfully saved to {output_mp4} and {output_gif}!")
-    return output_mp4, output_gif
-
-
-def record_multistiffness_comparison_video(
-    patient_dir: str = "data/sample_totalsegmentator_patient",
-    output_mp4: str = "demonstrations/demo_multistiffness_comparison.mp4",
-    output_gif: str = "demonstrations/demo_multistiffness_comparison.gif",
-    num_frames: int = 36,
-):
-    """
-    Renders a synchronized 3-way side-by-side video comparing soft-tissue deformation
-    under identical probe loading across 3 physiological stiffness regimes:
-    1. Soft Adipose/Fat (mu = 2.0 kPa)
-    2. Physiological Torso (mu = 4.0 kPa)
-    3. Stiff Muscle/Fascia (mu = 8.0 kPa)
-    """
-    os.makedirs(os.path.dirname(output_mp4), exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[*] Initializing Multi-Stiffness Comparison Recording on device: {device}")
-
-    assets = PatientAssetGenerator.load_totalsegmentator_subject(patient_dir)
-    ct_vol = assets["ct_volume"]
-    spacing = assets["spacing_mm"]
-    origin = assets["origin_mm"]
-
-    # 3 Solvers with varied shear modulus
-    stiffnesses = [2.0, 4.0, 8.0]
-    names = ["Soft Adipose/Fat", "Lumbar Torso", "Stiff Muscle/Fascia"]
-    extractors = []
-    for mu in stiffnesses:
-        solver = RegularizedKelvinletDeformation(
-            shear_modulus_kpa=mu,
-            poissons_ratio=0.46,
-            probe_radius_mm=14.0,
-            device=device,
-        )
-        ext = VolumeSliceExtractor(
-            volume=ct_vol,
-            spacing=spacing,
-            origin=origin,
-            deformation_solver=solver,
-            device=device,
-        )
-        extractors.append(ext)
-
-    sim = ModelBasedUltrasoundSimulator(device=device)
-
-    # Probe pose at dorsal skin center
-    pose = np.array([
-        [1.0,  0.0,  0.0,  0.0],
-        [0.0, -1.0,  0.0, 52.0],
-        [0.0,  0.0, -1.0,  0.0],
-        [0.0,  0.0,  0.0,  1.0]
-    ], dtype=np.float32)
-
-    # Force profile: 0.5 N -> 7.5 N -> 0.5 N
-    ts = np.linspace(0.0, np.pi, num_frames)
-    forces = 0.5 + 7.0 * np.sin(ts)
-
-    frames = []
-    fig = plt.figure(figsize=(16, 5.0), dpi=100)
-
-    print(f"[*] Rendering {num_frames} multi-stiffness frames...")
-
-    for frame_idx, fn in enumerate(forces):
-        fig.clear()
-
-        for col_idx, (mu, name, ext) in enumerate(zip(stiffnesses, names, extractors)):
-            # Compute indentation for this stiffness
-            delta_mm = float(fn / (mu * 0.625))  # Analytical Kelvinlet indentation
-
-            slice_ct = ext.extract_slices(pose, interpolation="bilinear", contact_force_n=float(fn))
-            us_res = sim.simulate_bmode(slice_ct)
-            bmode = us_res["bmode"].cpu().numpy()
-
-            ax = fig.add_subplot(1, 3, col_idx + 1)
-            ax.imshow(bmode, cmap="gray", vmin=0.0, vmax=1.0, extent=[-20.0, 20.0, 60.0, 0.0])
-            ax.axhline(0.0, color="yellow", linewidth=2.5)
-
-            # Indentation visual marker
-            ax.axhline(delta_mm, color="cyan", linestyle="--", linewidth=1.5, label=f"Indentation: {delta_mm:.2f}mm")
-
-            ax.set_title(f"{col_idx+1}. {name}\n$\mu = {mu:.1f}$ kPa | $F_N = {fn:.2f}$ N", fontsize=10, fontweight="bold")
-            ax.set_xlabel("Width (mm)")
-            ax.set_ylabel("Depth (mm)")
-            ax.legend(loc="lower right", fontsize=8)
-
-            badge_txt = f"Modulus: {mu:.1f} kPa\nForce: {fn:.2f} N\nIndentation: {delta_mm:.2f} mm"
-            ax.text(
-                0.05, 0.06, badge_txt, transform=ax.transAxes, fontsize=8,
-                bbox=dict(boxstyle="round,pad=0.4", facecolor="black", alpha=0.75, edgecolor="cyan")
-            )
-
-        fig.tight_layout()
-        fig.canvas.draw()
-        rgba_buf = np.asarray(fig.canvas.buffer_rgba())
-        frames.append(np.array(rgba_buf[:, :, :3], copy=True))
-
-    plt.close(fig)
-
-    # Save GIF
-    print(f"[*] Saving Multi-Stiffness GIF to {output_gif}...")
-    imageio.mimsave(output_gif, frames, fps=8)
-
-    # Save MP4
-    print(f"[*] Saving Multi-Stiffness MP4 to {output_mp4}...")
-    writer = imageio.get_writer(output_mp4, fps=8, codec="libx264", quality=8)
-    for frame in frames:
-        writer.append_data(frame)
-    writer.close()
-
-    print(f"[+] Multi-stiffness demonstration successfully saved to {output_mp4} and {output_gif}!")
+    imageio.mimsave(output_mp4, frames, fps=fps, codec="libx264", quality=7)
+    imageio.mimsave(output_gif, frames, duration=1000 / fps, loop=0)
+    for path in (output_mp4, output_gif):
+        print(f"[+] wrote {path} ({os.path.getsize(path) / 1e6:.2f} MB)")
     return output_mp4, output_gif
 
 
@@ -376,7 +176,7 @@ def record_expert_demonstrations_dataset(
 ):
     """
     Collects and records a structured expert demonstration dataset (.npz) across 20 episodes
-    (10 linear raster sweeps, 10 orbital sweeps) with Kelvinlet soft-body deformations active.
+    (10 linear raster sweeps, 10 orbital sweeps) with the tissue model active.
     
     Stores state observations, 4-DoF actions, contact forces, indentation depths,
     acoustic couplings, 2D B-mode echograms, and reconstructed 3D bone point clouds.
@@ -422,7 +222,7 @@ def record_expert_demonstrations_dataset(
             ep_states.append(curr_p.copy())
             ep_actions.append(act.copy())
             ep_forces.append(float(env.current_normal_force))
-            ep_indentations.append(float(env.current_normal_force / 2.5)) # mm
+            ep_indentations.append(_indentation_mm(env))
             ep_couplings.append(float(env.current_coupling))
 
             bmode = obs["bmode"]
@@ -463,9 +263,7 @@ def record_expert_demonstrations_dataset(
         total_transition_steps=total_steps,
         metadata={
             "patient_dir": patient_dir,
-            "soft_body_solver": "RegularizedKelvinlet",
-            "shear_modulus_kpa": 4.5,
-            "poissons_ratio": 0.46,
+            "tissue_model": type(getattr(env, "tissue_model", None)).__name__,
             "recorded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
     )
@@ -477,8 +275,7 @@ def record_expert_demonstrations_dataset(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Record Expert Demonstrations with Soft-Body Integrations")
     parser.add_argument("--patient-dir", type=str, default="data/sample_totalsegmentator_patient")
-    parser.add_argument("--video", action="store_true", help="Record synchronized 3-panel robot scan video (MP4 & GIF)")
-    parser.add_argument("--multistiffness", action="store_true", help="Record multi-stiffness comparison video (MP4 & GIF)")
+    parser.add_argument("--video", action="store_true", help="Record the FEM soft-body demo video (MP4 & GIF)")
     parser.add_argument("--dataset", action="store_true", help="Record expert demonstrations dataset (.npz)")
     parser.add_argument("--all", action="store_true", help="Record all videos, comparisons, and demonstration dataset")
     args = parser.parse_args()
@@ -486,14 +283,10 @@ if __name__ == "__main__":
     if args.all or args.video:
         record_robot_soft_body_scan_video(patient_dir=args.patient_dir)
 
-    if args.all or args.multistiffness:
-        record_multistiffness_comparison_video(patient_dir=args.patient_dir)
-
     if args.all or args.dataset:
         record_expert_demonstrations_dataset(patient_dir=args.patient_dir)
 
-    if not (args.all or args.video or args.multistiffness or args.dataset):
+    if not (args.all or args.video or args.dataset):
         # Default: record all
         record_robot_soft_body_scan_video(patient_dir=args.patient_dir)
-        record_multistiffness_comparison_video(patient_dir=args.patient_dir)
         record_expert_demonstrations_dataset(patient_dir=args.patient_dir)

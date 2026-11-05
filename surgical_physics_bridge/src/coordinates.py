@@ -44,11 +44,6 @@ P_TO_RAS = np.array(
 )
 
 
-def patient_to_ras_matrix() -> np.ndarray:
-    """Returns a copy of the 4x4 P -> RAS matrix (det +1)."""
-    return P_TO_RAS.copy()
-
-
 def patient_to_ras_points(points_p: np.ndarray) -> np.ndarray:
     """(N, 3) or (3,) points in P (mm) -> RAS (mm)."""
     pts = np.asarray(points_p, dtype=np.float64)

@@ -70,12 +70,10 @@ class PointCloudAccumulator:
         self,
         pixel_coords: np.ndarray,
         t_world_probe: np.ndarray,
-        filter_outliers: bool = False,
     ) -> int:
         """
         Back-projects 2D bone pixels with the 4x4 pose T_world<-probe and fuses them.
-        `filter_outliers` is accepted for backward compatibility; outlier removal is done in finalize()
-        so that the accumulated area stays monotone during an episode.
+        Outlier removal is done in finalize() so that the accumulated area stays monotone during an episode.
 
         Returns:
             Number of voxels currently satisfying `min_observations`.

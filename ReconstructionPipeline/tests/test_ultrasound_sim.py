@@ -112,9 +112,9 @@ def test_confidence_map_is_image_only():
     conf = est.compute_confidence_map(bmode)
     assert conf.shape == (100, 80)
     assert conf.min() >= 0.0 and conf.max() <= 1.0
-    # energy_map is ignored (back-compat kwarg only)
-    conf_e = est.compute_confidence_map(bmode, energy_map=torch.zeros((100, 80)))
-    assert torch.equal(conf, conf_e)
+    # the simulator's privileged energy map cannot even be passed in (invariant 5)
+    with pytest.raises(TypeError):
+        est.compute_confidence_map(bmode, energy_map=torch.zeros((100, 80)))
 
 
 def test_confidence_shadow_starts_below_bone_peak():

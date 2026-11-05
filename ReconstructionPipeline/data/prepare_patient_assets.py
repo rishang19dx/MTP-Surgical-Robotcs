@@ -14,7 +14,6 @@ from typing import Tuple, Dict, Optional, List, Any
 
 import numpy as np
 import nibabel as nib
-import trimesh
 
 
 class PatientAssetGenerator:
@@ -125,28 +124,6 @@ class PatientAssetGenerator:
             "origin": origin_mm,
             # Height map derived from the CT body mask exactly as for real data (median = skin_y_mm).
             **PatientAssetGenerator.compute_skin_height_map(ct_vol, origin_mm, spacing_mm),
-        }
-
-    @staticmethod
-    def load_totalsegmentator_nifti(
-        ct_nifti_path: str,
-        label_nifti_path: str,
-    ) -> Dict[str, any]:
-        """
-        Loads clinical CT and vertebra label maps from TotalSegmentator NIfTI files.
-        """
-        ct_img = nib.load(ct_nifti_path)
-        label_img = nib.load(label_nifti_path)
-
-        ct_data = ct_img.get_fdata().astype(np.float32)
-        label_data = label_img.get_fdata().astype(np.int32)
-        spacing = tuple(ct_img.header.get_zooms()[:3])
-
-        return {
-            "ct_volume": ct_data,
-            "label_volume": label_data,
-            "spacing_mm": spacing,
-            "affine": ct_img.affine,
         }
 
     @staticmethod
@@ -375,43 +352,6 @@ class PatientAssetGenerator:
             "speed_of_sound_m_s": speed_of_sound,
             "acoustic_impedance_mrayl": impedance_mrayl,
         }
-
-    @staticmethod
-    def generate_multi_patient_dataset(
-        num_patients: int = 3,
-        base_shape: Tuple[int, int, int] = (120, 160, 160),
-    ) -> Dict[str, Dict[str, any]]:
-        """
-        Synthesizes a cohort of diverse patient anatomies with varied BMI,
-        lordosis curvature, vertebral dimensions, and bone mineral density (HU).
-        """
-        patients = {}
-        for idx in range(num_patients):
-            # Patient-specific anatomical variations
-            np.random.seed(100 + idx)
-            # Bone density variation (young vs osteoporotic)
-            bone_hu = float(np.random.uniform(900.0, 1400.0))
-            # Vertebral dimension scaling
-            scale_vertebra = float(np.random.uniform(0.85, 1.15))
-
-            patient_data = PatientAssetGenerator.generate_lumbar_phantom(
-                shape=base_shape,
-                spacing_mm=(1.0, 1.0, 1.0),
-            )
-            # Modulate bone HU and skin elevation for this patient
-            bone_mask = patient_data["label_volume"] == 1
-            patient_data["ct_volume"][bone_mask] = bone_hu + np.random.normal(0, 20.0, np.sum(bone_mask))
-            patient_data["patient_id"] = f"PATIENT_{idx+1:03d}"
-            patient_data["bone_hu_nominal"] = bone_hu
-
-            # Precompute acoustic properties
-            patient_data["acoustic_maps"] = PatientAssetGenerator.ct_to_acoustic_properties(
-                patient_data["ct_volume"]
-            )
-
-            patients[patient_data["patient_id"]] = patient_data
-
-        return patients
 
     @staticmethod
     def export_totalsegmentator_dataset(

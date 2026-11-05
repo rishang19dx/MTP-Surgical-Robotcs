@@ -171,9 +171,3 @@ class RegularizedKelvinletDeformation:
                 ch *= float(half_space_factor(torch.tensor(1.0), nu))
             c0 -= ch
         return float(c0)
-
-    def get_contact_indentation(self, normal_force_n: float, bone_depth_mm: Optional[float] = None) -> float:
-        """Linear-elastic centre indentation (mm) under `normal_force_n` (N)."""
-        if normal_force_n <= 0.0:
-            return 0.0
-        return float(min(normal_force_n * self.center_compliance_mm_per_n(bone_depth_mm), self.max_indentation_mm))

@@ -67,10 +67,6 @@ class TetMesh:
     def num_nodes(self) -> int:
         return len(self.nodes)
 
-    def lattice_flat_index(self, ijk: np.ndarray) -> np.ndarray:
-        NX, NY, NZ = self.lattice_shape
-        return (ijk[..., 0] * NY + ijk[..., 1]) * NZ + ijk[..., 2]
-
     def summary(self) -> str:
         return (f"h={self.h} mm lattice {self.lattice_shape}: {len(self.cell_ijk)} soft cells, {len(self.tets)} tets, "
                 f"{self.num_nodes} nodes ({int(self.fixed.sum())} fixed), {len(self.skin_nodes)} skin nodes")

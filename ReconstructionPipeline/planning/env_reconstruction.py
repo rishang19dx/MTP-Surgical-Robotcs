@@ -78,13 +78,10 @@ class UltrasoundReconstructionEnv:
         weight_rot: float = 0.05,
         weight_force: float = 0.02,
         weight_decoupling: float = 0.05,
-        tissue_stiffness_n_per_mm: Optional[float] = None,  # deprecated, ignored (force comes from tissue_model)
         target_force_n: float = 4.0,
-        skin_curvature: Optional[float] = None,             # deprecated, ignored (skin from CT)
         scan_approach: str = "dorsal",
         reconstruction_source: str = "bmode",
         target_vertebra: Optional[str] = None,
-        pybullet_backend: Optional[Any] = None,             # visualisation only; force no longer read from it
         device: Optional[torch.device] = None,
         tissue_model: Optional[Any] = None,
         tissue_backend: str = "fem",
@@ -125,7 +122,6 @@ class UltrasoundReconstructionEnv:
         self.max_pitch = np.radians(max_pitch_deg)
         self.reconstruction_source = reconstruction_source.lower()
         self.target_vertebra = target_vertebra
-        self.pybullet_backend = pybullet_backend
         self.rng = np.random.default_rng(seed)
 
         # 1. Patient anatomy
@@ -305,9 +301,6 @@ class UltrasoundReconstructionEnv:
     def get_skin_surface(self, c1: float, c2: float) -> float:
         """Undeformed dorsal skin height y_skin(x=c1, z=c2) in mm (frame P) from the CT body mask."""
         return float(self.skin.height(c1, c2))
-
-    def get_skin_surface_y(self, x: float, z: float) -> float:
-        return self.get_skin_surface(x, z)
 
     @staticmethod
     def _probe_rotation(yaw: float, pitch: float) -> np.ndarray:
@@ -593,6 +586,3 @@ class UltrasoundReconstructionEnv:
         d, _ = cKDTree(recon).query(self.target_roi_bone_points, k=1, distance_upper_bound=self.coverage_tol_mm)
         return float(np.mean(np.isfinite(d)))
 
-    def _observe_current_state(self) -> Dict[str, Any]:
-        """Backward-compatible alias: acquire a frame at the current pose."""
-        return self._acquire(self.current_pose_params)[0]

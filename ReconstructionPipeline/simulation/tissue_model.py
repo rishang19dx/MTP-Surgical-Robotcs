@@ -248,14 +248,6 @@ class KelvinletTissueModel:
         skin = kwargs.pop("skin_surface", None) or SkinSurface.from_patient_data(patient_data)
         return cls(bone, patient_data["spacing_mm"], patient_data["origin_mm"], skin_surface=skin, **kwargs)
 
-    @staticmethod
-    def sample_parameter_ranges(rng: np.random.Generator) -> Dict[str, float]:
-        """Patient randomisation ranges from the literature: k0 in [0.3, 0.8] N/mm, beta in [0.10, 0.20] /mm."""
-        return {
-            "reference_k0_n_per_mm": float(rng.uniform(0.3, 0.8)),
-            "beta_per_mm": float(rng.uniform(0.10, 0.20)),
-        }
-
     # -------------------------------------------------------------- geometry
     @staticmethod
     def _frame(probe_pose_P: np.ndarray):

@@ -15,8 +15,8 @@ in an acoustic shadow), g is a guard of ~1.5 mm so the reflecting ridge itself k
 smoothed laterally (mimicking the lateral coupling of the random walk).
 
 Only the B-mode image is used. The simulator's privileged `energy` / `effective_energy` /
-`bone_mask` outputs must not be passed in; `energy_map` is accepted for backward compatibility
-and ignored.
+`bone_mask` outputs must not be passed in (there is no parameter for them;
+test_confidence_map_is_image_only checks that).
 """
 
 from typing import Optional
@@ -60,13 +60,11 @@ class UltrasoundConfidenceEstimator:
     def compute_confidence_map(
         self,
         bmode_image: torch.Tensor,
-        energy_map: Optional[torch.Tensor] = None,
         estimated_normals: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Args:
             bmode_image: (H, W) or (B, H, W) B-mode intensity in [0, 1] (rows = depth).
-            energy_map: Ignored (kept for backward compatibility; confidence is image-only).
             estimated_normals: Optional (H, W, 2) / (B, H, W, 2) surface normals [nx, ny].
 
         Returns:
@@ -111,17 +109,3 @@ class UltrasoundConfidenceEstimator:
 
         conf = torch.clamp(conf, 0.0, 1.0)
         return conf.squeeze(0) if is_single else conf
-
-    def extract_reliable_bone_points(
-        self,
-        bmode_image: torch.Tensor,
-        confidence_map: torch.Tensor,
-        intensity_threshold: float = 0.55,
-        confidence_threshold: float = 0.40,
-    ) -> torch.Tensor:
-        """Returns (N, 2) float [x, y] pixel coordinates that are bright and high-confidence."""
-        mask = (bmode_image >= intensity_threshold) & (confidence_map >= confidence_threshold)
-        indices = torch.nonzero(mask, as_tuple=False)
-        if len(indices) == 0:
-            return torch.empty((0, 2), device=self.device)
-        return torch.stack([indices[:, 1], indices[:, 0]], dim=-1).float()

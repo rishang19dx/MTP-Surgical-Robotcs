@@ -1,5 +1,9 @@
 # Slicer-Physics Backend Integration Architecture
 
+> **Historical plan (2025), not the current design.** The MuJoCo migration, `simulation_backend.py` and
+> `multiprocessing.sh` described here were never built. For the current system see [`README.md`](../README.md),
+> [`FLOW.md`](../FLOW.md) and [`DECISIONS.md`](../DECISIONS.md).
+
 Develop a robust, decoupled architecture integrating 3D Slicer with a physics backend (PyBullet initially, migrating to MuJoCo) for surgical simulation. This architecture will prioritize a strict separation between the clinical/semantic visualization loop and the real-time control/physics loop, enabling haptic control and advanced tissue simulation without being bottlenecked by GUI rendering.
 
 ## User Review Required

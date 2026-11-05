@@ -363,7 +363,7 @@ class UnifiedSurgicalBridgeServer:
                     target_p = ras_to_patient_points(np.asarray(data["roi_target"], dtype=np.float64))
                     self.env.current_pose_params[0] = np.clip(target_p[0], *self.env.c1_bounds)
                     self.env.current_pose_params[1] = np.clip(target_p[2], *self.env.c2_bounds)
-                    self.obs = self.env._observe_current_state()
+                    self.obs = self.env._acquire(self.env.current_pose_params)[0]
                     self._send_target()
             elif message.device_name == "VirtualFixture":
                 if "vertices" in data and "indices" in data:

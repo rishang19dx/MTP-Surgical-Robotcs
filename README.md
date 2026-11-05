@@ -317,7 +317,6 @@ MTP/
 │   └── obj_io.py                       # order-preserving OBJ reader/writer
 ├── Slicer/slicer_surgical_physics_bridge.py   # runs inside 3D Slicer (+ reference PDFs)
 ├── ReconstructionPipeline/
-│   ├── configs/simulation_config.yaml
 │   ├── data/prepare_patient_assets.py  # TotalSegmentator loader, skin height map, mesh export
 │   ├── simulation/
 │   │   ├── fem_tissue.py, tet_mesh.py  # GPU FEM tissue model (default)

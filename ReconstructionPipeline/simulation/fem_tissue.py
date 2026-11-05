@@ -409,13 +409,6 @@ class FEMTissueModel:
         return G_lat
 
     # --------------------------------------------------------------- params
-    @staticmethod
-    def sample_parameter_ranges(rng: np.random.Generator, base_e_scale: float = 1.0) -> Dict[str, float]:
-        """Domain randomisation: modulus scale for k0 in [0.3, 0.8] N/mm relative to the 0.5 N/mm
-        calibration point, beta in [0.10, 0.20] /mm (research_literature.md, section 2)."""
-        return {"e_scale": float(base_e_scale * rng.uniform(0.3, 0.8) / 0.5),
-                "beta_per_mm": float(rng.uniform(0.10, 0.20))}
-
     def set_parameters(self, e_scale: Optional[float] = None, beta_per_mm: Optional[float] = None):
         if e_scale is not None:
             self.e_scale = float(e_scale)
@@ -744,6 +737,3 @@ class FEMTissueModel:
         if state is not None and state.in_contact:
             V = state.displace(torch.from_numpy(V).float().to(self.device)).cpu().numpy().astype(np.float64)
         return V, self.mesh.skin_tris
-
-    def reset_cache(self):
-        self._cache_last = None

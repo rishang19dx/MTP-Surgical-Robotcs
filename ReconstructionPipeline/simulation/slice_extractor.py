@@ -26,7 +26,6 @@ class VolumeSliceExtractor:
         origin: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         image_size: Tuple[int, int] = (200, 150),
         physical_size_mm: Tuple[float, float] = (75.0, 50.0),
-        deformation_solver: Optional[Any] = None,
         device: Optional[torch.device] = None,
     ):
         """
@@ -36,7 +35,6 @@ class VolumeSliceExtractor:
             origin: Physical coordinates (ox, oy, oz) of voxel (0, 0, 0) in mm.
             image_size: (height_px, width_px) of the 2D ultrasound image plane.
             physical_size_mm: (depth_mm, width_mm) of the ultrasound scanning plane.
-            deformation_solver: Deprecated, ignored.
             device: torch.device ('cuda' or 'cpu').
         """
         if device is None:
@@ -59,9 +57,6 @@ class VolumeSliceExtractor:
         self.origin = torch.tensor(origin, dtype=torch.float32, device=self.device)
         self.image_h, self.image_w = image_size
         self.depth_mm, self.width_mm = physical_size_mm
-
-        # Deprecated: kept only for constructor backward compatibility (unused).
-        self.deformation_solver = deformation_solver
 
         # Precompute the local 2D pixel coordinates in probe frame {U} (in mm)
         # Probe convention:

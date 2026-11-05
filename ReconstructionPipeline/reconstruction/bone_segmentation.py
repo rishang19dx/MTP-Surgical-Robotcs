@@ -43,9 +43,6 @@ class BoneSurfaceSegmenter:
         lateral_smoothing_px: int = 3,
         rng: Optional[np.random.Generator] = None,
         seed: Optional[int] = None,
-        # Deprecated, unused (kept so old call sites do not break)
-        gradient_threshold: Optional[float] = None,
-        shadow_contrast_ratio: Optional[float] = None,
     ):
         """
         Args:
@@ -187,15 +184,3 @@ class BoneSurfaceSegmenter:
         if xs.size == 0:
             return np.empty((0, 2), dtype=np.int32)
         return np.stack([xs, ys], axis=1).astype(np.int32)
-
-    def segment(
-        self,
-        bmode_image: np.ndarray,
-        confidence_map: Optional[np.ndarray] = None,
-        label_slice: Optional[np.ndarray] = None,
-        source: str = "bmode",
-    ) -> np.ndarray:
-        """Unified interface. Defaults to B-mode; source='label' uses the oracle."""
-        if source == "label" and label_slice is not None:
-            return self.segment_from_label_map(label_slice)
-        return self.segment_from_bmode(bmode_image, confidence_map=confidence_map)

@@ -250,6 +250,11 @@ MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
   ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui
 #     Slicer: in its Python console, slicer.app.layoutManager().sliceWidget("Red").sliceView().grab().save("red.png")
 
+# 11. Progress-report figures and videos (demonstrations/report/, index.html opens locally)
+./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video
+cp demonstrations/demo_fem_soft_body.mp4 demonstrations/report/
+./.venv/bin/python -m ReconstructionPipeline.scripts.make_soft_body_report   # --only deformation,tilt,bmode,echo,recon_video,recon_3d,results
+
 # 9. Remote GPU host (must be inside */workspace/rishang/*)
 rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/
 ssh user@172.18.17.35 'cd /home/user/workspace/rishang/MTP && bash scripts/run_remote_totalsegmentator.sh --mode all'

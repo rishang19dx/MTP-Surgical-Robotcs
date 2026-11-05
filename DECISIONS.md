@@ -817,4 +817,12 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - **Limitation.** Speckle is generated in image coordinates, so it does not move with the tissue. The fixed
     seed removes it from this comparison, but speckle decorrelation under compression is not modelled. That is a
     realism item (T19).
+* **Erratum (2026-11-06): commit hashes inside results files.** Before the first push, the unpushed `audit-fixes`
+  commits were re-authored as `rishang19dx`. File contents are unchanged, but the hashes changed. Results files
+  written before that name the old hashes:
+  - `8f89f63` is now `bbea34f`;
+  - `50f4919` is now `ba16e82`, which is the source of `results/compression_sweep_20261105_235841.*` and
+    `results/throughput_20261105_235332.*`.
+
+  `results/patients_fem_20261105_225601.json` records no commit; it was produced from the tree of `bbea34f`.
 

@@ -7,7 +7,14 @@ CT. Bone surface points are segmented from the B-mode image alone and fused into
 scanning policies (two heuristics, greedy NBV, PPO, flow matching, diffusion) are compared on the same budget.
 The scene can be streamed to 3D Slicer over OpenIGTLink.
 
-This is a research prototype that runs on one patient CT. Read [Limitations](#limitations) before using any number below.
+For learning, [`mtp_gym`](#batched-training-environment-mtp_gym) runs N scanning environments at once on one GPU as a
+Gymnasium `VectorEnv`. The soft tissue is the same FEM, solved for all environments in one batch. It includes the 12
+TotalSegmentator patients used by SonoGym, imported into the project frame, plus the original sample patient. This
+is the work towards an RSS 2027 submission: SonoGym-style tasks with patient-specific soft-tissue deformation and
+contact force (DEC-041; plan in [`tasks/plan.md`](tasks/plan.md)).
+
+This is a research prototype. The 6-policy benchmark below still runs on one patient CT. Read
+[Limitations](#limitations) before using any number below.
 
 ![FEM soft-body demo](demonstrations/demo_fem_soft_body.gif)
 
@@ -120,7 +127,13 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets --export-totalseg data/sample_totalsegmentator_patient
 #    (without arguments the module only builds a synthetic phantom as a smoke check)
 
-# 3. Tests (103 tests; the FEM tests skip if the sample patient is missing)
+# 3. Optional: the 12 SonoGym TotalSegmentator subjects (HF yunkao/SonoGym_assets_models, CC BY 4.0), resampled into
+#    frame P and anchored at L4 (writes data/patients/sonogym_<id>/; the CTs are gitignored, meta.json is tracked),
+#    then build and QA the FEM of every patient (about 30-70 s per patient the first time, then cached)
+./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients
+./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample
+
+# 4. Tests (132 tests; FEM tests skip without the sample patient, multi-patient tests without data/patients)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -171,6 +184,55 @@ bash scripts/launch_dual_pybullet_slicer.sh --mode raster_l4
 **Demo video.** `./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video`
 
 **Remote GPU host.** See [`Docs/SSH_TOTAL_SEGMENTATOR_DEPLOYMENT.md`](Docs/SSH_TOTAL_SEGMENTATOR_DEPLOYMENT.md). The script refuses to run outside `*/workspace/rishang/*`.
+
+---
+
+## Batched training environment (`mtp_gym`)
+
+`mtp_gym` is the GPU-batched training path (DEC-041). It reproduces one step of the single environment
+(`env_reconstruction.py`) for N environments at once. The steps are admittance force control, the FEM tissue solve,
+a backward-warped CT slice, B-mode, acoustic coupling and the image-only confidence. It never imports PyBullet. The
+1 kHz PyBullet + Slicer path is unchanged and remains the interactive demo.
+
+```python
+import gymnasium as gym, mtp_gym
+envs = gym.make_vec("MTP/Recon-v0", num_envs=64, vectorization_mode="vector_entry_point",
+                    patients=["data/sample_totalsegmentator_patient"], deformation_mode="aware")  # or unaware / rigid
+obs, info = envs.reset(seed=0)            # dict of torch tensors on the GPU: bmode, probe_pose, force, recon_grid, coverage
+obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
+```
+
+- **Environments.** `MTP/FreeScan-v0` has no reward and measures simulation cost. `MTP/Recon-v0` is bone-surface
+  reconstruction with a 4-DoF action, the same reward as the single env and a 32³ reconstruction grid observation.
+  Navigation and a force-regulated scan task are planned (`tasks/todo.md`). Autoreset happens in the same step,
+  with `info["final_obs"]`.
+- **Patients.** `data/splits.json` holds the fixed train/held-out split: 9 train, 4 test, stratified by soft-tissue
+  thickness. All patients share the same tissue moduli (`PatientSim(stiffness="shared")`), so force depends on
+  anatomy. At 6 mm past first contact on the L4 midline, the thin back s0015 gives 9.43 N and the thick back s0014
+  gives 3.48 N (`tests/test_multi_patient.py`).
+- **Stiffness randomisation.** Set it per environment with `e_scale_range=(lo, hi)`.
+- **Checked against the single env (tests).**
+  - Batched FEM force, torque, stiffness and field: `test_fem_batched.py`.
+  - Deformed slices: `test_batched_render.py`.
+  - Force, indentation and coupling after reset and step: `test_gym_api.py`.
+  - B-mode bone segmentation, pixel for pixel: `test_vec_reconstruction.py`.
+  - The benchmark raster reaches coverage 0.890 in the single env and 0.897 in the vector env.
+  - Moving the ground-truth target changes the reward but no observation (invariant 5).
+
+**Throughput.** Source: [`results/throughput_20261105_235332.md`](results/throughput_20261105_235332.md) (laptop RTX
+2050, FreeScan task, sample patient). It is not yet measured on the workstation GPU.
+
+| Mode | 1 env | 8 envs | 32 envs | 128 envs |
+| :--- | ---: | ---: | ---: | ---: |
+| `aware` (FEM-deformed image), env-steps/s | 44.8 | 280.4 | 529.5 | 732.4 |
+| `rigid` (undeformed image, FEM force control kept), env-steps/s | 51.8 | 338.8 | 664.8 | 944.1 |
+
+**Does force change the image?** Source:
+[`results/compression_sweep_20261105_235841.md`](results/compression_sweep_20261105_235841.md). The sweep covers all
+13 patients, 9 poses per patient and 1–15 N, measured from the B-mode only. In the 12 patients where bone is visible
+at both 1 N and 15 N, the bone echo moves 6.4–9.6 mm toward the probe (median per patient, per scanline). In thick
+backs force also decides whether bone is visible at all: s0014 (76 mm of soft tissue) shows bone at 0 of 9 poses
+at 1 N and 8 of 9 at 15 N. A rigid simulator cannot produce either effect.
 
 ---
 
@@ -268,7 +330,8 @@ DEC-040, run right after the benchmark, load avg 3.3).
   segmentation on real spine ultrasound reaches about 0.8–0.9 precision within 1–2 mm (e.g. Baka et al. 2017:
   recall 0.86, precision 0.82). The simulated images lack the clutter, reverberation and soft-tissue echoes that
   cause false positives in practice, so the precision numbers here are optimistic.
-- **One patient and 3 trials.** All training and testing use the same CT (`case-0004`, L4). There is no held-out
+- **One patient and 3 trials (benchmark).** The 6-policy benchmark and the checkpoints still use one CT
+  (`case-0004`, L4). The 13-patient split exists in `mtp_gym`, but no policy has been trained or tested on it yet. There is no held-out
   anatomy, so the learned policies are not shown to generalise to other patients. With 3 trials, differences of a
   few percent (e.g. PPO 85.0 vs NBV 83.8 vs CFM 83.7 Cov@3) are within noise.
 - **No learned policy beats the raster.** The elevational raster has the best Cov@3 (88.1 %). Sampled PPO reaches
@@ -296,6 +359,16 @@ DEC-040, run right after the benchmark, load avg 3.3).
   mainly visible precision (97.2 → 81.5 % Prec@2 vis) and Chamfer distance (1.05 → 1.49 mm), and almost no Cov@3.
   The dramatic drop (89.0 → 23.1 % Cov@3) appears only with the softer Kelvinlet model (5.9 mm indentation). The
   claim that "deformation awareness matters" therefore depends on tissue stiffness and thickness.
+- **`mtp_gym` approximations.**
+  - The reconstruction reward counts coverage on raw back-projected points, not on voxel means (0.897 vs 0.890 on
+    the raster).
+  - Points outside a box around the target do not count towards the area reward.
+  - Speckle is drawn in image coordinates, so it does not move with compressed tissue.
+  - The Kelvinlet backend is not batched.
+  - All throughput numbers come from a 4 GB laptop GPU, which holds only a few patients' FEM fields (about 400 MB
+    each) at once.
+- **Shared moduli come from one calibration.** The common tissue stiffness is the sample patient's fit to a
+  literature force curve. It has not yet been compared with a nonlinear FEM or published moduli (task T14).
 - **Other gaps.** The B-mode simulation budget (< 2 ms) is a design target that no test asserts. The server's
   `diffusion` / `cfm` live modes load the checkpoints but are not covered by tests. `CMD`/`VirtualFixture` messages
   are handled by the server, but the Slicer bridge does not send them.
@@ -309,6 +382,13 @@ MTP/
 ├── README.md, FLOW.md, DECISIONS.md, QUIZME.md, AGENTS.md
 ├── requirements.txt                    # single dependency list (setup.py reads it)
 ├── setup.py
+├── tasks/plan.md, tasks/todo.md         # RSS 2027 plan, hypotheses and dated task list (DEC-041)
+├── mtp_gym/                            # GPU-batched Gymnasium VectorEnv (training path, no PyBullet)
+│   ├── core.py                         # UltrasoundVectorEnv, PatientSim, batched force control and imaging
+│   ├── perception.py                   # batched B-mode bone segmentation + back-projection
+│   └── tasks/                          # base.py (task contract), reconstruction.py
+├── data/splits.json                    # fixed train/held-out patient split
+├── data/patients/sonogym_<id>/         # imported SonoGym subjects (CT gitignored, meta.json tracked)
 ├── data/sample_totalsegmentator_patient/
 │   ├── ct.nii.gz, segmentations/*.nii.gz   # gitignored, created by prepare_patient_assets --export-totalseg
 │   └── meshes/                         # spine / L4 / torso OBJ (tracked); patient_fem_skin.obj written by the server
@@ -327,8 +407,11 @@ MTP/
 ├── Slicer/slicer_surgical_physics_bridge.py   # runs inside 3D Slicer (+ reference PDFs)
 ├── ReconstructionPipeline/
 │   ├── data/prepare_patient_assets.py  # TotalSegmentator loader, skin height map, mesh export
+│   ├── data/import_sonogym_subjects.py # SonoGym subjects -> frame P (RAS->LPS, L4 anchor, table removal)
+│   ├── data/build_patient_fem.py       # per-patient FEM build + QA -> results/patients_fem_*.json
 │   ├── simulation/
 │   │   ├── fem_tissue.py, tet_mesh.py  # GPU FEM tissue model (default)
+│   │   ├── fem_batched.py              # the same FEM solved for N probe queries at once
 │   │   ├── tissue_model.py             # TissueModel contract + Kelvinlet backend
 │   │   ├── kelvinlet_deformation.py    # regularised Kelvinlet kernel (de Goes & James 2017)
 │   │   ├── slice_extractor.py          # grid_sample reslicing
@@ -339,9 +422,9 @@ MTP/
 │   ├── planning/                       # env_reconstruction.py, heuristic_planner.py, start_pose.py,
 │   │                                   # pointnet_encoder.py, train_submodular_ppo.py,
 │   │                                   # train_diffusion_policy.py, diffusion_policy.py, flow_matching_policy.py
-│   ├── evaluation/benchmark_runner.py
+│   ├── evaluation/benchmark_runner.py, throughput_benchmark.py, compression_sweep.py
 │   ├── scripts/record_soft_body_demonstrations.py
-│   └── tests/                          # 12 test modules
+│   └── tests/                          # 17 test modules
 ├── Docs/                               # design notes, remote deployment guide, presentation sources (historical)
 ├── LiteratureSurvey/, Notes/
 └── .agents/                            # local agent scratch, gitignored
@@ -349,7 +432,10 @@ MTP/
 
 ## Project files
 
-- [`DECISIONS.md`](DECISIONS.md): decision log (DEC-037 audit, DEC-038 integration and retraining).
+- [`DECISIONS.md`](DECISIONS.md): decision log (DEC-037 audit, DEC-038 integration and retraining, DEC-040 normal
+  contact, DEC-041 RSS 2027 direction and the batched gym).
+- [`tasks/plan.md`](tasks/plan.md), [`tasks/todo.md`](tasks/todo.md): RSS 2027 plan, hypotheses H1–H4 and the dated
+  task list.
 - [`FLOW.md`](FLOW.md): execution flows, data routes, frames and verification recipes.
 - [`QUIZME.md`](QUIZME.md): pre-implementation questions for major changes.
 - [`AGENTS.md`](AGENTS.md): instructions and invariants for coding agents.

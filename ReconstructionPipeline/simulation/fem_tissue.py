@@ -8,39 +8,44 @@ Method (Bro-Nielsen & Cotin 1996; Cotin, Delingette & Ayache 1999 "condensation"
   2. Linear elasticity, per-cell Young's modulus from HU (fat: HU < -20 -> E_fat, else E_muscle),
      Poisson ratio nu (default 0.45; nu -> 0.5 locks linear tets, so 0.45 is the documented upper limit).
   3. One-off precompute (GPU, batched Jacobi-PCG, multi-RHS): the full displacement response
-     G[:, s] = K^-1 e_s to a unit inward (-Y_P) force at every free dorsal skin node s.  From it:
-       * C = skin-node compliance (S x S, float64, CPU), C[s,t] = inward displacement of s per N at t,
+     G[:, 3s+j] = K^-1 e_{s,j} to a unit force along each axis j = x, y, z of frame P at every free dorsal
+     skin node s (DEC-040; before, -Y only).  From it:
+       * C = 3-direction skin-node compliance (3S x 3S, float64, CPU), C[3t+j, 3s+i] = displacement i of s per
+         N along j at t.  Its relative asymmetry before symmetrising (Maxwell-Betti) is stored in
+         `timings["compliance_asymmetry"]` as a solver check (2.4e-6 on the sample patient, test_fem_tissue.py),
        * G_lat = the response sampled on the regular lattice (air above the skin gets the value of the
          skin node of its column, bone / empty = 0) so a field is one GEMV and directly grid_sample-able.
+         Stored fp16 (on the GPU by default), 233 MB for the sample patient's L4 ROI.
      Cached on disk (`ReconstructionPipeline/.fem_cache`, gitignored) keyed by a hash of the volume,
      the ROI and all mesh/material parameters.  A uniform modulus scale `e_scale` is applied at run
      time as G / e_scale (exact for linear elasticity), so stiffness randomisation needs no recompute.
-  4. Per query (CPU, small dense algebra):
+  4. Per query (CPU, small dense algebra): frictionless contact along the face normal b = beam (+Y_probe):
        * the probe face (lateral x elevation rectangle, `face_dims_mm`, default 45 x 10) is placed at
-         origin + indentation * b, b = beam (+Y_probe), and sampled every ~1 mm;
-       * each sample's penetration is measured vertically against the sub-voxel skin height map
-         (the env's `skin_height_map`, so the env's probe origin and the FEM gap agree);
-       * samples are distributed to skin nodes with bilinear column weights; contact is a stiff
+         origin + indentation * b and sampled every ~1 mm;
+       * each sample's overlap g_j with the undeformed skin is measured ALONG b (fixed point on the
+         sub-voxel skin height map, the env's `skin_height_map`), and its skin point p_j = q_j - g_j b;
+       * samples are distributed to skin nodes with bilinear column weights at p_j; contact is a stiff
          compliant interface (skin + gel layer, `interface_stiffness_n_per_mm3`, default 0.1 N/mm^3,
          ~15x the tissue's areal stiffness) so partial footprint coverage changes the force smoothly
-         instead of in 4 mm steps.  Per face sample j: lambda_j = k_p a_j (g_j - N_j u)^+ with N_j the
-         bilinear interpolation of skin-node displacement, nodal forces f = N^T lambda >= 0 (no node is
-         pulled), u = C f; solved with an active set over samples;
-       * displacement field u_lat = G_lat[A]^T f_A (GPU, one GEMV) -> `displace` / `warp_to_reference`.
+         instead of in 4 mm steps.  Per face sample j: lambda_j = k_p a_j (g_j - N_j u)^+ with u the
+         normal (along b) skin-node displacement, u = Cb f, Cb[a,c] = b^T C_ac b; nodal forces f >= 0 act
+         along b (no node is pulled, no tangential force); solved with an active set over samples;
+       * displacement field u_lat = sum_c f_c (b . G_lat[c]) (GPU, one GEMV) -> `displace` /
+         `warp_to_reference`.  A tilted probe therefore shears the tissue along its beam.
+       For an untilted probe b = -Y_P and this is identical to the vertical-only model it replaced.
   5. Strain stiffening (APPROXIMATION, documented): linear FEM cannot reproduce the exponential
      force-indentation curve of fat/muscle.  Each nodal contact force of the linear solve is multiplied by
-         phi(u_s) = (exp(beta u_s) - 1) / (beta u_s),   u_s = compression of skin node s (C f)_s
+         phi(u_s) = (exp(beta u_s) - 1) / (beta u_s),   u_s = normal compression of skin node s (Cb f)_s
      (a local, Winkler-like correction), which turns a linear F = k d into the literature law
      F = (k/beta)(exp(beta d) - 1) when the compression is uniform.  A global factor based on the mean
-     compression was rejected: it made F non-monotonic when a lightly loaded node enters contact.  The displacement field is NOT scaled (it is kinematically prescribed
-     by the probe).  beta = 0 disables it.
-  6. `contact_stiffness_n_per_mm` = dF/d(indentation) at the solution (frozen active set), so a 1 kHz
-     loop can extrapolate F = F0 + K (d - d0) without calling the solver.
+     compression was rejected: it made F non-monotonic when a lightly loaded node enters contact.  The
+     displacement field is NOT scaled (it is kinematically prescribed by the probe).  beta = 0 disables it.
+  6. `contact_stiffness_n_per_mm` = dF/d(indentation) at the solution (frozen active set, dg_j/dd = 1), so a
+     1 kHz loop can extrapolate F = F0 + K (d - d0) without calling the solver.
 
-Limitations: small strain, reference-configuration geometry; contact forces act along -Y_P (the
-dominant dorsal skin normal) with the gap measured vertically, so for a tilted probe the reported
-`reaction_force_n` is the component along the probe axis (sum f * cos(tilt)) and there is no
-tangential (friction) force; surface bulging into the face outside the initial penetration region is
+Limitations: small strain, reference-configuration geometry; frictionless (no tangential force, so
+`force_vec_n` = -b F exactly); the contact direction is the face normal, skin points are found along
+it on the undeformed surface; surface bulging into the face outside the initial penetration region is
 ignored; outside the ROI the displacement is zero.
 """
 
@@ -69,7 +74,7 @@ from ReconstructionPipeline.simulation.tet_mesh import (
 )
 from ReconstructionPipeline.simulation.tissue_model import SkinSurface, TissueState, tilt_cosine
 
-_CACHE_VERSION = 3
+_CACHE_VERSION = 4   # 4: three force directions per skin node (DEC-040)
 DEFAULT_CACHE_DIR = os.environ.get(
     "MTP_FEM_CACHE", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".fem_cache")
 )
@@ -210,7 +215,7 @@ class FEMTissueModel:
         bone_hu: float = 250.0,
         pcg_rtol: float = 1e-5,
         pcg_batch: int = 128,
-        field_dtype: torch.dtype = torch.float32,
+        field_dtype: Optional[torch.dtype] = None,
         cache_dir: Optional[str] = DEFAULT_CACHE_DIR,
         device: Optional[torch.device] = None,
         verbose: bool = True,
@@ -230,6 +235,8 @@ class FEMTissueModel:
         self.k_p = float(interface_stiffness_n_per_mm3)
         self.warp_iterations = int(warp_iterations)
         self.max_indent_fraction = float(max_indent_fraction)
+        if field_dtype is None:   # fp16 halves the 3-direction field on the GPU (DEC-040); CPU matmul wants fp32
+            field_dtype = torch.float16 if self.device.type == "cuda" else torch.float32
         self.field_dtype = field_dtype
         self.timings: Dict[str, float] = {}
         self._pcg_rtol = float(pcg_rtol)
@@ -343,7 +350,8 @@ class FEMTissueModel:
         free_skin = np.nonzero(~self.skin_fixed)[0]
         self.free_skin = free_skin
         sk_nodes = m.skin_nodes[free_skin]
-        rhs_rows = dof_to_free[sk_nodes * 3 + 1]
+        # one unit-force RHS per (free skin node t, direction j), ordered 3 t + j (x, y, z of frame P)
+        rhs_rows = dof_to_free[(sk_nodes[:, None] * 3 + np.arange(3)[None, :]).ravel()]
 
         # lattice gather map: lattice node -> mesh node (itself / column skin node above skin / -1)
         NX, NY, NZ = self.NX, self.NY, self.NZ
@@ -364,36 +372,38 @@ class FEMTissueModel:
         src_c = lat_src_zyx.clamp_min(0)
         free_of_node_dof = torch.from_numpy(dof_to_free).to(dev)
 
-        Sf = len(free_skin)
+        Sf3 = 3 * len(free_skin)
         Nlat = NX * NY * NZ
-        G_lat = torch.zeros(Sf, 3 * Nlat, dtype=torch.float32)
-        C = np.zeros((Sf, Sf), dtype=np.float64)
+        G_lat = torch.zeros(Sf3, 3 * Nlat, dtype=torch.float16)
+        C = np.zeros((Sf3, Sf3), dtype=np.float64)
         rows_t = torch.from_numpy(rhs_rows).to(dev)
         t1 = time.perf_counter()
         iters, worst = [], 0.0
         self_batch = max(1, int(self._pcg_batch))
-        for s0 in range(0, Sf, self_batch):
-            sl = slice(s0, min(Sf, s0 + self_batch))
+        for s0 in range(0, Sf3, self_batch):
+            sl = slice(s0, min(Sf3, s0 + self_batch))
             nb = sl.stop - sl.start
             B = torch.zeros(nf, nb, device=dev)
-            B[rows_t[sl], torch.arange(nb, device=dev)] = -1.0      # unit force pushing -Y (into body)
+            B[rows_t[sl], torch.arange(nb, device=dev)] = 1.0       # unit force along +x / +y / +z
             X, it, rel = _batched_pcg(A, diag, B, rtol=self._pcg_rtol, maxit=5000)
             iters.append(it)
             worst = max(worst, rel)
-            # skin compliance: inward (-y) displacement at skin rows
-            C[sl, :] = (-X[rows_t, :]).t().double().cpu().numpy()
+            # skin compliance C[3t+j, 3s+i] = displacement i of skin node s per unit force j at t
+            C[sl, :] = X[rows_t, :].t().double().cpu().numpy()
             # full nodal field (3 comps) -> lattice
             Xp = torch.cat([X, torch.zeros(1, nb, device=dev)], 0)   # last row = zero (fixed dof)
             for c in range(3):
                 fr = free_of_node_dof[src_c * 3 + c]
                 fr = torch.where(valid & (fr >= 0), fr, torch.full_like(fr, nf))
-                G_lat[sl, c * Nlat:(c + 1) * Nlat] = Xp[fr, :].t().cpu()
+                G_lat[sl, c * Nlat:(c + 1) * Nlat] = Xp[fr, :].t().half().cpu()
             del X, B, Xp
         if dev.type == "cuda":
             torch.cuda.synchronize()
         self.timings["pcg_s"] = time.perf_counter() - t1
         self.timings["pcg_iters_max"] = float(max(iters) if iters else 0)
         self.timings["pcg_worst_rel_residual"] = worst
+        # Maxwell-Betti: K symmetric -> C symmetric; the residual asymmetry measures assembly + PCG error
+        self.timings["compliance_asymmetry"] = float(np.linalg.norm(C - C.T) / np.linalg.norm(C))
         self.C_base = 0.5 * (C + C.T)
         del A
         return G_lat
@@ -432,9 +442,21 @@ class FEMTissueModel:
         d = 0.0
         for _ in range(iters):
             q = (o + d * b)[None, :] + ls[:, None] * ex[None, :] + es[:, None] * ez[None, :]
-            g = self.skin_height(q[:, 0], q[:, 2]) - q[:, 1]
-            d -= float(g.max()) / (-b[1])
+            g, _ = self._normal_gap(q, b)
+            d -= float(g.max())
         return d
+
+    def _normal_gap(self, q: np.ndarray, b: np.ndarray, iters: int = 3):
+        """Overlap of the undeformed skin with face samples `q`, measured along the beam b (the face normal):
+        g = t such that q - t b lies on the skin (t > 0: the sample is inside the tissue).  Returns (g, p) with
+        p = q - g b the skin point the sample presses on.  Fixed-point on the height map; exact for flat skin
+        after one step, and it converges for skin slope x tan(tilt) < 1."""
+        cb = -b[1]
+        t = (self.skin_height(q[:, 0], q[:, 2]) - q[:, 1]) / cb
+        for _ in range(iters):
+            p = q - t[:, None] * b[None, :]
+            t = (self.skin_height(p[:, 0], p[:, 2]) - q[:, 1]) / cb
+        return t, q - t[:, None] * b[None, :]
 
     def tissue_thickness(self, probe_pose_P: np.ndarray) -> float:
         """Soft-tissue thickness (mm) along the beam from the skin under the probe centre to the first
@@ -548,12 +570,12 @@ class FEMTissueModel:
         c = o + d * b
         ls, es, da = self._face_samples()
         q = c[None, :] + ls[:, None] * ex[None, :] + es[:, None] * ez[None, :]
-        g = self.skin_height(q[:, 0], q[:, 2]) - q[:, 1]
+        g, q = self._normal_gap(q, b)                            # q <- skin point under each sample
         pen = g > 0
         if not pen.any():
             return out
         q, g = q[pen], g[pen]
-        a_j = da * abs(b[1])                                     # vertical projection of sample area
+        a_j = da                                                 # face-plane area (force is along the normal)
         m = self.mesh
         fi = (q[:, 0] - m.lattice_origin[0]) / self.h
         fk = (q[:, 2] - m.lattice_origin[2]) / self.h
@@ -580,14 +602,18 @@ class FEMTissueModel:
         np.add.at(Nm, (np.repeat(np.arange(ns), 4)[keep], inv), w_f[keep])
         has = Nm.sum(1) > 1e-12
         Nm, g = Nm[has], g[has]
-        # compliance among candidates (fixed skin nodes have zero compliance)
+        # normal compliance among candidates, Cb[a,c] = b^T C_ac b (fixed skin nodes have zero compliance)
         fr = self.skin_to_free[cand]
         Cc = np.zeros((len(cand), len(cand)))
         okf = fr >= 0
         if okf.any():
-            Cc[np.ix_(okf, okf)] = self.C_base[np.ix_(fr[okf], fr[okf])] / self.e_scale
+            r3 = (3 * fr[okf][:, None] + np.arange(3)[None, :]).ravel()
+            n = int(okf.sum())
+            sub = self.C_base[np.ix_(r3, r3)].reshape(n, 3, n, 3)
+            Cc[np.ix_(okf, okf)] = np.einsum("i,aicj,j->ac", b, sub, b) / self.e_scale
         kpa = self.k_p * a_j
-        # Penalty contact per face sample j:  lambda_j = k_p a_j (g_j - N_j u)^+,  f = N^T lambda,  u = C f.
+        # Frictionless penalty contact per face sample j, along the face normal b:
+        #   lambda_j = k_p a_j (g_j - N_j u)^+,  nodal forces f = N^T lambda (along b),  u = b.(nodal disp) = Cb f.
         # On a fixed active sample set A:  (I + N_A^T k N_A C) f = N_A^T k g_A.  Iterate the set until
         # consistent (semi-smooth Newton on a monotone piecewise-linear problem; converges in a few steps).
         act = np.ones(len(g), dtype=bool)
@@ -616,20 +642,20 @@ class FEMTissueModel:
         fw = f * w
         Fw = float(fw.sum())
         phi = Fw / Fs
-        Flin = Fs * (-b[1])
-        Fvec = np.array([0.0, Fw, 0.0])                            # tissue pushes probe outward (+Y)
+        Flin = Fs
+        Fvec = -b * Fw                                             # tissue pushes the probe back along -b
         r = self.skin_ref[ct["cand"]] - ct["c"][None, :]
-        tau = np.cross(r, np.stack([np.zeros_like(fw), fw, np.zeros_like(fw)], 1)).sum(0)
+        tau = np.cross(r, -fw[:, None] * b[None, :]).sum(0)
         return {"F": Flin * phi, "Flin": Flin, "phi": phi, "comp": comp, "Fvec": Fvec, "tau": tau}
 
     def _stiffness(self, ct: Dict[str, Any], F0: float) -> float:
-        """dF/d(indentation) with the active sample set frozen; dg_j/dd = -b_y = cos(tilt)."""
+        """dF/d(indentation) with the active sample set frozen; the normal gap grows 1:1, dg_j/dd = 1."""
         if len(ct["f"]) == 0 or F0 <= 0:
             return 0.0
         NA = ct["Nm"][ct["act"]]
         I = np.eye(len(ct["f"]))
         D = ct["kpa"] * (NA.T @ NA)
-        df = _gen_solve(I + D @ ct["Cc"], ct["kpa"] * (NA.T @ np.full(len(NA), -ct["b"][1])))
+        df = _gen_solve(I + D @ ct["Cc"], ct["kpa"] * (NA.T @ np.ones(len(NA))))
         eps = 1e-3
         return (self._forces(ct, ct["f"] + eps * df)["F"] - F0) / eps
 
@@ -675,8 +701,9 @@ class FEMTissueModel:
         cand = ct["cand"]
         fr = self.skin_to_free[cand]
         use = (fr >= 0) & (f > 0)
-        rows = torch.from_numpy(fr[use]).to(self.device)
-        fw = torch.from_numpy(f[use] / self.e_scale).to(self.device, self.field_dtype)
+        rows = torch.from_numpy((3 * fr[use][:, None] + np.arange(3)[None, :]).ravel()).to(self.device)
+        w3 = (f[use][:, None] * b[None, :]).ravel() / self.e_scale       # nodal force vectors f_c b
+        fw = torch.from_numpy(w3).to(self.device, self.field_dtype)
         u_flat = fw @ self.G_lat.index_select(0, rows)
         u_grid = u_flat.float().view(1, 3, self.NZ, self.NY, self.NX)
         disp = self._make_displacement_fn(u_grid)

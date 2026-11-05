@@ -264,3 +264,78 @@ def test_compare_with_kelvinlet(model, patient):
         print(f"   {'':22s} FEM from first contact (d0={d0:+.1f}): " + " ".join(
             f"F(d0+{d:.0f})={model.force_at(T, d0 + d):5.2f}" for d in (2.0, 4.0, 6.0)) +
             f" | Kelvinlet max_indentation {kel.max_indentation(Tk):.1f} mm, FEM {model.max_indentation(T):.1f} mm")
+
+
+# ---------------------------------------------------------------------------
+# DEC-040: frictionless contact acts along the probe-face normal (the beam), not along -Y_P.
+# ---------------------------------------------------------------------------
+# Forces of the vertical-only contact model (commit 90441a2) at untilted poses, d0 + (1, 3, 6) mm.  For an
+# untilted probe the face normal IS -Y_P, so the normal-contact model must reproduce them.
+UNTILTED_REFERENCE_N = {(0.0, -32.5): [0.143339, 0.522295, 2.441066], (-20.0, -45.0): [0.785281, 3.851626, 11.456255],
+                        (20.0, -32.5): [0.173491, 1.078804, 3.837906], (0.0, -15.0): [0.22578, 1.11357, 4.352248]}
+
+
+def test_untilted_forces_unchanged_by_normal_contact(model):
+    for (x, z), ref in UNTILTED_REFERENCE_N.items():
+        T = model.dorsal_pose(x, z)
+        d0 = model.first_contact_indentation(T)
+        F = [model.force_at(T, d0 + d) for d in (1, 3, 6)]
+        np.testing.assert_allclose(F, ref, rtol=2e-3, err_msg=str((x, z)))
+
+
+@pytest.mark.parametrize("roll_deg", [10.0, -10.0])
+def test_tilted_contact_force_acts_along_probe_axis(model, roll_deg):
+    """A frictionless flat face can only push along its own normal (the beam b): the force on the probe is
+    -b * F, and the reported reaction force is its full magnitude."""
+    T = _tilted(model, *FLAT, np.radians(roll_deg))
+    st = model.solve(T, _force_for(model, T, 4.0, model.first_contact_indentation(T)))
+    b = T[:3, 1] / np.linalg.norm(T[:3, 1])
+    Fv = np.asarray(st.force_vec_n)
+    cos = float(Fv @ -b) / np.linalg.norm(Fv)
+    assert cos > np.cos(np.radians(0.5)), (Fv, b)
+    assert abs(np.linalg.norm(Fv) - st.reaction_force_n) < 1e-6 * max(1.0, st.reaction_force_n)
+
+
+def test_tilted_probe_shears_tissue_along_the_beam(model):
+    """Under a laterally tilted probe the tissue is pushed sideways in the direction of the beam's lateral
+    component: u_x(+tilt) - u_x(-tilt) must have the sign of b_x(+tilt) and be a visible fraction of u_y."""
+    x, z = FLAT
+    ux, uy = {}, {}
+    for roll_deg in (10.0, -10.0):
+        T = _tilted(model, x, z, np.radians(roll_deg))
+        st = model.solve(T, _force_for(model, T, 4.0, model.first_contact_indentation(T)))
+        ys = model.skin_height(x, z) - np.arange(3.0, 12.0, 2.0)
+        P = torch.tensor([[x + dx, y, z] for y in ys for dx in (-6.0, 0.0, 6.0)], dtype=torch.float32, device=DEV)
+        u = (st.displace(P) - P).cpu().numpy()
+        ux[roll_deg], uy[roll_deg] = u[:, 0].mean(), u[:, 1].mean()
+    bx = _tilted(model, x, z, np.radians(10.0))[0, 1]
+    shear = ux[10.0] - ux[-10.0]
+    print(f"\n[FEM] tilt +-10 deg at 4 N: mean u_x {ux[10.0]:+.3f}/{ux[-10.0]:+.3f} mm, u_y {uy[10.0]:+.3f} mm, "
+          f"b_x(+10) {bx:+.3f}")
+    assert np.sign(shear) == np.sign(bx)
+    assert abs(shear) > 0.1 * abs(uy[10.0])
+
+
+def test_compliance_is_reciprocal(model):
+    """Maxwell-Betti: the 3-direction skin compliance from the PCG solves must be symmetric before it is
+    symmetrised (checks assembly + solver, independent of the contact model)."""
+    assert model.timings["compliance_asymmetry"] < 1e-3
+
+
+def test_element_stiffness_patch_test():
+    """Linear tet: rigid motions cost no force, and a uniform strain stores exactly V/2 eps:C:eps."""
+    from ReconstructionPipeline.simulation.fem_tissue import _tet_stiffness
+    rng = np.random.default_rng(1)
+    P = rng.normal(size=(4, 3)) * 4.0
+    E, nu = 15e-3, 0.45
+    K = _tet_stiffness(P, E, nu)
+    W = rng.normal(size=(3, 3))
+    for u in (np.tile([0.3, -0.2, 0.1], 4), (P @ (W - W.T).T).ravel()):   # translation, infinitesimal rotation
+        assert np.abs(K @ u).max() < 1e-12 * np.abs(K).max()
+    A = rng.normal(size=(3, 3)) * 1e-2
+    eps = 0.5 * (A + A.T)
+    u = (P @ A.T).ravel()
+    lam, mu = E * nu / ((1 + nu) * (1 - 2 * nu)), E / (2 * (1 + nu))
+    V = abs(np.linalg.det(np.stack([P[1] - P[0], P[2] - P[0], P[3] - P[0]], 1))) / 6.0
+    energy = V * (0.5 * lam * np.trace(eps) ** 2 + mu * np.sum(eps * eps))
+    assert abs(0.5 * u @ K @ u - energy) < 1e-9 * energy

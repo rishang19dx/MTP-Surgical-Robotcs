@@ -46,6 +46,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-036` | 6-Policy Continuous Flow Matching & Diffusion Action Chunking Trained on L4 Spinal Target | **Accepted** |
 | **Nov 2026** | `DEC-037` | Audit Remediation: GPU FEM Soft Tissue, Inner-Loop Force Control, Honest Metrics & Dead-Code Removal | **Accepted** |
 | **Nov 2026** | `DEC-038` | Integration & Retraining: FEM Default, 1 kHz Force Extrapolation, Frame P = LPS, Fair Benchmark | **Accepted** |
+| **Nov 2026** | `DEC-039` | Slicer B-mode Display Fix and Wayland-Safe Screenshots | **Accepted** |
+| **Nov 2026** | `DEC-040` | FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup | **Accepted** |
 
 ---
 
@@ -612,3 +614,75 @@ A chronological record of all architectural, research, algorithmic, and engineer
   2. **Image geometry matches the simulator.** The spacing is 50/149 mm lateral by 75/199 mm axial (`IMAGE_SIZE = (200, 150)`, `PHYSICAL_SIZE_MM = (75, 50)` in `env_reconstruction.py`; linspace grid in `slice_extractor.py`). The 3D beam-plane model is 50 × 75 mm. It was previously hardcoded at 38 × 60 mm with 0.38/0.375 mm spacing.
   3. **Opt-in viewer snapshots.** When `MTP_VIEWER_SNAPSHOT_DIR` is set, the PyBullet viewer process renders its own debug camera to PNG every `MTP_VIEWER_SNAPSHOT_S` seconds. This runs only in the viewer process, never in the physics loop. Slicer views are captured with Qt `grab()` from inside Slicer (FLOW.md recipe 10).
 * **Consequences / limitations**: The bridge is still not covered by automated tests inside Slicer. The 2026-11-05 run is a hand check: W/L 255/127.5, frames received at the stream rate, physics at 1000 Hz.
+
+
+---
+
+### `DEC-040`: FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup
+* **Date**: November 5, 2026 (branch `audit-fixes`, commits `498ef37`, `255bfd2`)
+* **Context**: The FEM contact (DEC-037/038) measured each face sample's overlap vertically and applied every
+  contact force along −Y_P. The policies tilt the probe (start poses ±10° pitch, ±15° yaw; the orbital raster
+  tilts on purpose). A frictionless flat face can only push along its own normal, the beam b. Measured before the
+  change on case-0004: with the probe rolled 10° at the flat paraspinal site, the force on the probe was
+  `[0, 4.06, 0]` N against a beam of `[−0.17, −0.98, 0]`. About 0.7 N of lateral load and the shear it causes
+  were missing, and the reported force was the vertical sum times cos(tilt).
+* **Grilling outcome (QUIZME F2)** — user decisions on 2026-11-05:
+  1. Fix this limitation first (alternatives offered: nonlinear displacement field, friction, verification tests only).
+  2. Accept 3× precompute and store the field in fp16 to limit VRAM.
+  3. Re-run the full 6-policy benchmark and the PPO mean-action run with the existing checkpoints (no retraining).
+* **Decision**:
+  1. The precompute solves for a unit force along x, y and z at every free skin node (3 × 750 right-hand sides).
+     The skin compliance becomes 3S × 3S. The lattice field `G_lat` has 3S rows and is stored in fp16: 233 MB on
+     the GPU for the sample patient. The cache version is now 4.
+  2. Per query, each face sample's overlap g_j is measured along b: a fixed-point search for the skin point
+     p_j = q_j − g_j b on the height map. The skin nodes are interpolated at p_j. The contact compliance along b
+     is Cb = bᵀ C b per node pair. Nodal forces act along b. The field is u = Σ_c f_c (b · G_c), and the force on
+     the probe is `force_vec_n = −b F`. The contact stiffness uses dg_j/dδ = 1.
+  3. For an untilted probe b = −Y_P, so the new model reproduces the old forces. A regression test pins them to
+     0.2 % at 4 sites × 3 indentations.
+  4. *Alternatives*: keep only the y response and approximate shear with a Poisson factor (rejected: not a
+     solution of the FEM); fp32 field (about 470 MB; rejected by the user for VRAM); friction (needs normal
+     contact first, and a stick/slip state between frames).
+* **Verification (TDD)**:
+  - New tests in `test_fem_tissue.py`:
+    - the force is parallel to −b within 0.5° at ±10° roll (this test failed before the change);
+    - Maxwell–Betti reciprocity: the relative asymmetry of the raw compliance is 2.4e-6;
+    - an element patch test: rigid modes give zero force, and a uniform strain gives exactly V/2 ε:C:ε;
+    - the untilted regression test.
+  - A sanity check that a tilted probe shears the tissue towards b_x **already passed on the old model**: lopsided
+    vertical loading plus the Poisson effect also shear. So that test does not discriminate between the models,
+    and it is not evidence for the fix.
+  - Full suite: 103 passed.
+* **Results**:
+  - Costs, from `test_fem_tissue.py -s`: solve 1.50 ms (was 1.22 ms), peak VRAM 261 MB (was 169 MB), cold
+    precompute about 23 s (was about 6.6 s).
+  - Physics rate (`results/physics_rate_20261105_normal_contact.json`): 1000.0 Hz, p99 1.000 ms, 17 overruns in
+    20,015 ticks, streaming 29.9 Hz.
+  - Benchmark (`results/benchmark_latest.md`, run 20261105_120357; same command, seeds and checkpoints as
+    20261104_160815). Cov@3 (%), before → after:
+
+    | Method | Before | After |
+    | :--- | :---: | :---: |
+    | Raster | 88.1 | 88.1 |
+    | Orbital | 70.2 | 70.1 |
+    | NBV | 83.8 | 83.8 |
+    | PPO (sampled) | 85.2 | 85.0 |
+    | CFM | 78.4 ± 5.7 | 83.7 ± 1.4 |
+    | Diffusion | 69.7 | 71.0 |
+    | PPO mean (`results/ppo_deterministic/benchmark_latest.md`) | 52.7 | 52.6 |
+
+  - The benchmark is deterministic: re-running raster + CFM gave identical numbers. So the CFM shift comes from
+    the physics change, not run-to-run noise. Small changes in the observations at tilted poses send the cloned
+    policy's trajectory elsewhere. With n = 3 and a previous std of 5.7, this is not evidence that CFM improved.
+  - Sampled PPO's force tracking changed from RMSE 0.45 / max 6.1 N to 0.23 / 4.8 N.
+* **Cleanup in the same session** (commit `255bfd2`, with the suite green): functions with no callers, parameters
+  that were accepted but ignored, the stale root PNG and Kinova YAML, and the stock nested `.gitignore` were
+  removed. `compute_confidence_map` no longer accepts `energy_map`, so passing the privileged map now raises
+  `TypeError` (invariant 5); its test was changed first. Historical banners were added to the 2025 design doc,
+  the Slicer MuJoCo plan and the mid-term presentation folder.
+* **Consequences / limitations**:
+  - Still linear, small strain and frictionless.
+  - Skin points are found on the undeformed surface.
+  - The learned checkpoints predate this change.
+  - VRAM grew by about 90 MB.
+

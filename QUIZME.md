@@ -38,7 +38,7 @@ flowchart TD
 
 ### Category A: Physics Core & Multi-Rate Decoupling
 *Ask these if the change touches `pybullet_backend.py`, `unified_server.py`, `physics_rate.py` or the force coupling.*
-1. **Clock Decoupling**: *"The physics loop runs in its own process at 1 kHz and is the only code that calls PyBullet. Does your change add any PyBullet call, lock or blocking queue read on the streaming side, or any wait on the FEM inside the physics tick? How will you show with `--benchmark-seconds` that p99 period stays near the measured 1.137 ms (`results/physics_rate_20261104_idle.json`)?"*
+1. **Clock Decoupling**: *"The physics loop runs in its own process at 1 kHz and is the only code that calls PyBullet. Does your change add any PyBullet call, lock or blocking queue read on the streaming side, or any wait on the FEM inside the physics tick? How will you show with `--benchmark-seconds` that p99 period stays near the measured 1.000–1.137 ms (`results/physics_rate_20261104_idle.json`, `results/physics_rate_20261105_normal_contact.json`)?"*
 2. **Force Extrapolation Validity**: *"Between 30 Hz tissue solutions, the 1 kHz loop applies `F = F0 + K_c(δ − δ0)`. How far can δ drift from δ0 in 33 ms under your change, and when does the first-order extrapolation stop being valid (contact loss, new active set, strain stiffening)?"*
 3. **Rigid vs Tissue Contact**: *"The torso is visual-only; probe–tissue force comes from the tissue model, and PyBullet only handles rigid contacts (table, keep-out fixtures). Does your change reintroduce rigid probe–torso collision, and if so, how do you avoid counting the force twice?"*
 
@@ -66,7 +66,7 @@ flowchart TD
 *Ask these if the change touches PPO, CFM, Diffusion, rewards, the env or the benchmark protocol.*
 1. **Imitation Ceiling**: *"CFM and Diffusion clone a randomised raster expert, and the raster itself reaches 88.1 % Cov@3. How can a cloned policy exceed its expert, and what is your expert's coverage on held-out start poses?"*
 2. **Submodular Reward**: *"The PPO reward is the gain in Cov@3 (monotone submodular in the frames taken). How does your change avoid paying for re-scanning, or for echoes from neighbouring vertebrae (the old `--reward env` issue)?"*
-3. **Stochastic vs Deterministic**: *"Sampled PPO reaches 85.2 % Cov@3, but its mean action only 52.7 % (`results/ppo_deterministic/benchmark_latest.md`). Is the policy relying on noise to explore? How will you evaluate it, and is the comparison with the other methods fair?"*
+3. **Stochastic vs Deterministic**: *"Sampled PPO reaches 85.0 % Cov@3, but its mean action only 52.6 % (`results/ppo_deterministic/benchmark_latest.md`). Is the policy relying on noise to explore? How will you evaluate it, and is the comparison with the other methods fair?"*
 4. **Benchmark Fairness**: *"Does every method still get the same 72-frame budget and the same paired start pose per trial? Does a missing checkpoint still raise an error instead of evaluating a random network?"*
 5. **Generalisation**: *"All training and testing use one patient (L4 of case-0004). What is your held-out evaluation for the claim you want to make?"*
 
@@ -84,7 +84,7 @@ flowchart TD
 ### Category F: Soft Body & Deformable Mechanics
 *Ask these if the change touches `fem_tissue.py`, `tet_mesh.py`, `tissue_model.py`, `kelvinlet_deformation.py` or the admittance controller.*
 1. **Eulerian Reslicing**: *"Deformed B-mode uses backward warping, solving X = x − u(X) by fixed-point iteration and then calling grid_sample. Does your change keep the displacement field on the regular lattice, and how is the inverse-warp round-trip error tested?"*
-2. **Engine Trade-off**: *"The default is the precomputed linear FEM; the Kelvinlet model is the alternative. The FEM is linear and frictionless, and strain stiffening is applied to the force only. What does your change need that this model cannot give (large strain, friction, sliding), and what does that cost in precompute, VRAM and per-solve time against the tested 1.31 ms solve and 177 MB peak VRAM (`test_fem_tissue.py -s`)?"*
+2. **Engine Trade-off**: *"The default is the precomputed linear FEM; the Kelvinlet model is the alternative. The FEM is linear and frictionless (contact along the face normal, DEC-040), and strain stiffening is applied to the force only. What does your change need that this model cannot give (large strain, friction, sliding), and what does that cost in precompute, VRAM and per-solve time against the tested 1.50 ms solve and 261 MB peak VRAM (`test_fem_tissue.py -s`)?"*
 3. **First-Contact Indentation**: *"Indentation is measured from the undeformed skin under the probe centre and may be negative (first contact at −9.0 mm on the midline). Does your controller or metric assume δ ≥ 0?"*
 4. **Deformation-Aware Claim**: *"With the FEM at 4 N, ignoring deformation drops visible precision from 97.2 % to 81.5 % but barely changes Cov@3, whereas with Kelvinlet Cov@3 collapses to 23.1 % (`results/benchmark_latest.md`). Which result does your argument rely on, and does it hold across stiffness and tissue thickness?"*
 

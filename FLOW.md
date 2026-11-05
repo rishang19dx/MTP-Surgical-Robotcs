@@ -110,7 +110,7 @@ flowchart TD
     A["action [dc1, dc2, dyaw, dpitch] in [-1,1]\n(×5 mm, ×10° yaw, ×15° pitch)"] --> Pose["probe origin on the undeformed skin\n(skin_height_map, frame P)"]
     Pose --> FC["first_contact_indentation (FEM; can be < 0)"]
     FC --> Adm["admittance loop: δ in [first contact, max indentation]\nso that F_tissue(δ) ≈ target_force_n (4 N)"]
-    Adm --> Solve["TissueModel.solve(pose, δ)\nFEM: active-set contact on precomputed skin compliance\n→ F, K_c, displacement field, skin mesh"]
+    Adm --> Solve["TissueModel.solve(pose, δ)\nFEM: active-set contact along the face normal b\non the precomputed 3-direction skin compliance (DEC-040)\n→ F (along −b), K_c, displacement field, skin mesh"]
     Solve --> Warp["backward Eulerian warp X = x − u(X) (fixed-point, GPU)\n+ grid_sample of CT and labels at the indented face pose"]
     Warp --> US["ModelBasedUltrasoundSimulator.simulate_bmode\n200×150 px over 75×50 mm"]
     US --> Conf["UltrasoundConfidenceEstimator (B-mode only)"]
@@ -214,13 +214,13 @@ tests them, including the check that the P→PB mapping matches the exported PyB
 ## 8. Verification recipes
 
 ```bash
-# 1. Full test suite (97 tests)
+# 1. Full test suite (103 tests)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 
 # 2. FEM timings and calibration printout
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/test_fem_tissue.py -q -s
 
-# 3. Physics rate with streaming active (compare with results/physics_rate_20261104_idle.json)
+# 3. Physics rate with streaming active (compare with results/physics_rate_20261105_normal_contact.json)
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20
 
 # 4. Heuristic benchmark (no checkpoints)

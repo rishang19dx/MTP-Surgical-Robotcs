@@ -72,8 +72,10 @@ deformed) and the force/indentation trace.*
 1. **Precomputed FEM** (`fem_tissue.py`). The model is a linear tetrahedral FEM of the CT soft tissue around L4
    on a 4 mm lattice. Bone cells and the deep and side faces of the ROI are fixed. Young's modulus comes from HU
    (fat vs muscle), with ν = 0.45. A one-off GPU PCG precompute gives the condensed skin-node compliance and the
-   displacement response sampled on a regular lattice. It is cached in `ReconstructionPipeline/.fem_cache/`
-   (gitignored). At run time, each probe pose solves frictionless contact with an active set over face samples.
+   displacement response to a unit force along x, y and z at every free skin node, sampled on a regular lattice
+   (fp16). It is cached in `ReconstructionPipeline/.fem_cache/` (gitignored). At run time, each probe pose solves
+   frictionless contact with an active set over face samples. The overlap is measured along the beam and the
+   contact forces act along it (the face normal), so a tilted probe also shears the tissue (DEC-040).
    The solve returns the reaction force and torque, the contact stiffness `K_c = dF/dδ`, a displacement field and
    the deformed skin mesh.
 2. **Contact force from first contact** (`env_reconstruction.py`). Indentation δ is measured from the undeformed
@@ -98,8 +100,9 @@ deformed) and the force/indentation trace.*
    `F = F0 + K_c (δ − δ0)`, clipped to `[0, TISSUE_FORCE_MAX_N]`, against the beam. It never waits on the solver.
 
 Measured by `ReconstructionPipeline/tests/test_fem_tissue.py` (printed with `-s`, RTX 2050 laptop): a FEM solve
-takes 1.31 ms, a 200 × 150 warp 0.25 ms, and peak VRAM is 177 MB. On a cold cache the precompute takes 0.9 s of
-assembly plus 5.7 s of PCG. The test asserts solve < 10 ms and VRAM < 300 MB.
+takes 1.50 ms, a 200 × 150 warp 0.25 ms, and peak VRAM is 261 MB (233 MB of it is the fp16 3-direction field). On
+a cold cache the precompute takes 0.3 s of assembly plus 22.1 s of PCG (3 × 750 right-hand sides). The test asserts
+solve < 10 ms and VRAM < 300 MB.
 
 ---
 
@@ -117,7 +120,7 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets --export-totalseg data/sample_totalsegmentator_patient
 #    (without arguments the module only builds a synthetic phantom as a smoke check)
 
-# 3. Tests (97 tests; the FEM tests skip if the sample patient is missing)
+# 3. Tests (103 tests; the FEM tests skip if the sample patient is missing)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -174,7 +177,8 @@ bash scripts/launch_dual_pybullet_slicer.sh --mode raster_l4
 ## Results
 
 The tables below are copied from [`results/benchmark_latest.md`](results/benchmark_latest.md) (run
-`20261104_160815`, raw: [`results/benchmark_20261104_160815.json`](results/benchmark_20261104_160815.json)).
+`20261105_120357`, raw: [`results/benchmark_20261105_120357.json`](results/benchmark_20261105_120357.json)), produced
+after the normal-contact change (DEC-040) with the same command and checkpoints as the 2026-11-04 run.
 
 - **Setup.** One patient, target `vertebrae_L4`, 3 trials, FEM tissue backend, target force 4.0 N. Values are
   mean ± std over trials.
@@ -189,12 +193,12 @@ The tables below are copied from [`results/benchmark_latest.md`](results/benchma
 
 | Method | Cov@2 % | Cov@3 % | Prec@2 % | Prec@3 % | Prec@2 vis % | F@2 | Chamfer mm | F mean N | F RMSE N | F max N | Unsafe | Indent mm | Path mm |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Heuristic_Raster | 80.7 ± 0.3 | 88.1 ± 0.4 | 100.0 ± 0.0 | 100.0 ± 0.0 | 97.4 ± 0.2 | 0.89 ± 0.00 | 1.05 ± 0.01 | 3.98 ± 0.01 | 0.07 ± 0.02 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.1 | 174 ± 9 |
-| Heuristic_Orbital | 62.7 ± 0.2 | 70.2 ± 0.3 | 99.6 ± 0.0 | 100.0 ± 0.0 | 94.5 ± 0.1 | 0.77 ± 0.00 | 1.61 ± 0.02 | 3.97 ± 0.00 | 0.09 ± 0.00 | 4.1 ± 0.0 | 0 ± 0 | 0.7 ± 0.1 | 227 ± 2 |
-| Greedy_NBV | 72.6 ± 1.9 | 83.8 ± 1.1 | 99.8 ± 0.2 | 99.9 ± 0.1 | 97.0 ± 0.4 | 0.84 ± 0.01 | 1.20 ± 0.02 | 3.98 ± 0.01 | 0.10 ± 0.04 | 4.1 ± 0.0 | 0 ± 0 | 1.5 ± 0.3 | 342 ± 7 |
-| Submodular_PPO | 75.5 ± 0.5 | 85.2 ± 0.4 | 99.2 ± 0.2 | 99.9 ± 0.1 | 92.1 ± 0.5 | 0.86 ± 0.00 | 1.14 ± 0.00 | 3.90 ± 0.02 | 0.45 ± 0.16 | 6.1 ± 1.9 | 0 ± 0 | -0.3 ± 0.2 | 271 ± 13 |
-| Flow_Matching_CFM | 70.6 ± 5.8 | 78.4 ± 5.7 | 99.7 ± 0.0 | 100.0 ± 0.1 | 97.1 ± 0.1 | 0.83 ± 0.04 | 1.27 ± 0.15 | 3.99 ± 0.00 | 0.05 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.1 ± 0.3 | 120 ± 11 |
-| Diffusion_Policy | 61.1 ± 4.4 | 69.7 ± 4.1 | 99.7 ± 0.3 | 100.0 ± 0.0 | 96.0 ± 1.8 | 0.76 ± 0.03 | 1.72 ± 0.21 | 3.98 ± 0.01 | 0.07 ± 0.03 | 4.1 ± 0.0 | 0 ± 0 | 1.1 ± 0.4 | 175 ± 21 |
+| Heuristic_Raster | 80.6 ± 0.3 | 88.1 ± 0.4 | 100.0 ± 0.0 | 100.0 ± 0.0 | 97.4 ± 0.2 | 0.89 ± 0.00 | 1.05 ± 0.01 | 3.98 ± 0.01 | 0.07 ± 0.02 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.1 | 174 ± 9 |
+| Heuristic_Orbital | 62.5 ± 0.1 | 70.1 ± 0.2 | 99.6 ± 0.0 | 100.0 ± 0.0 | 94.4 ± 0.1 | 0.77 ± 0.00 | 1.61 ± 0.02 | 3.97 ± 0.00 | 0.09 ± 0.00 | 4.1 ± 0.0 | 0 ± 0 | 0.6 ± 0.1 | 227 ± 2 |
+| Greedy_NBV | 72.3 ± 2.2 | 83.8 ± 1.0 | 99.7 ± 0.4 | 99.9 ± 0.1 | 96.9 ± 0.5 | 0.84 ± 0.02 | 1.20 ± 0.02 | 3.98 ± 0.01 | 0.09 ± 0.04 | 4.1 ± 0.0 | 0 ± 0 | 1.5 ± 0.3 | 342 ± 7 |
+| Submodular_PPO | 74.8 ± 1.5 | 85.0 ± 1.5 | 99.0 ± 0.1 | 99.9 ± 0.1 | 92.5 ± 0.2 | 0.85 ± 0.01 | 1.14 ± 0.04 | 3.93 ± 0.01 | 0.23 ± 0.04 | 4.8 ± 0.7 | 0 ± 0 | -1.2 ± 0.3 | 272 ± 13 |
+| Flow_Matching_CFM | 75.5 ± 1.2 | 83.7 ± 1.4 | 99.8 ± 0.1 | 100.0 ± 0.1 | 97.6 ± 0.9 | 0.86 ± 0.01 | 1.15 ± 0.04 | 3.99 ± 0.00 | 0.04 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.2 ± 0.4 | 123 ± 13 |
+| Diffusion_Policy | 62.2 ± 4.8 | 71.0 ± 4.4 | 99.7 ± 0.2 | 100.0 ± 0.0 | 96.3 ± 2.0 | 0.77 ± 0.04 | 1.63 ± 0.18 | 3.99 ± 0.01 | 0.06 ± 0.03 | 4.1 ± 0.0 | 0 ± 0 | 1.3 ± 0.7 | 178 ± 19 |
 
 ### Soft-body: force sweep
 
@@ -237,21 +241,23 @@ From [`results/benchmark_latest.md`](results/benchmark_latest.md). Same anatomy,
 | Backend / mode | Cov@2 % | Cov@3 % | Prec@2 % | Prec@3 % | Prec@2 vis % | F@2 | Chamfer mm | F mean N | F RMSE N | F max N | Unsafe | Indent mm | Path mm |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | fem / rigid | 81.7 ± 0.2 | 89.0 ± 0.1 | 99.9 ± 0.0 | 100.0 ± 0.0 | 97.3 ± 0.1 | 0.90 ± 0.00 | 1.04 ± 0.00 | 3.98 ± 0.00 | 0.07 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.0 | 164 ± 1 |
-| fem / aware | 80.7 ± 0.3 | 88.1 ± 0.2 | 99.9 ± 0.1 | 100.0 ± 0.0 | 97.2 ± 0.1 | 0.89 ± 0.00 | 1.05 ± 0.00 | 3.98 ± 0.00 | 0.07 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.0 | 164 ± 1 |
-| fem / unaware | 77.2 ± 0.2 | 88.9 ± 0.3 | 84.6 ± 0.2 | 99.7 ± 0.0 | 81.5 ± 0.2 | 0.81 ± 0.00 | 1.49 ± 0.00 | 3.98 ± 0.00 | 0.07 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.0 | 164 ± 1 |
+| fem / aware | 80.6 ± 0.3 | 88.0 ± 0.2 | 99.9 ± 0.1 | 100.0 ± 0.0 | 97.2 ± 0.1 | 0.89 ± 0.00 | 1.05 ± 0.01 | 3.98 ± 0.00 | 0.07 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.0 | 164 ± 1 |
+| fem / unaware | 77.1 ± 0.2 | 88.8 ± 0.4 | 84.6 ± 0.2 | 99.7 ± 0.0 | 81.5 ± 0.2 | 0.81 ± 0.00 | 1.49 ± 0.00 | 3.98 ± 0.00 | 0.07 ± 0.01 | 4.1 ± 0.0 | 0 ± 0 | 0.9 ± 0.0 | 164 ± 1 |
 | kelvinlet / rigid | 81.7 ± 0.2 | 89.0 ± 0.1 | 99.9 ± 0.0 | 100.0 ± 0.0 | 97.3 ± 0.1 | 0.90 ± 0.00 | 1.04 ± 0.00 | 3.98 ± 0.00 | 0.08 ± 0.00 | 4.2 ± 0.0 | 0 ± 0 | 5.9 ± 0.0 | 164 ± 1 |
 | kelvinlet / aware | 81.1 ± 0.3 | 89.0 ± 0.4 | 99.0 ± 0.0 | 100.0 ± 0.0 | 89.3 ± 0.2 | 0.89 ± 0.00 | 1.06 ± 0.00 | 3.98 ± 0.00 | 0.08 ± 0.00 | 4.2 ± 0.0 | 0 ± 0 | 5.9 ± 0.0 | 164 ± 1 |
 | kelvinlet / unaware | 7.6 ± 0.3 | 23.1 ± 0.5 | 19.9 ± 0.1 | 44.2 ± 0.2 | 14.9 ± 0.1 | 0.11 ± 0.00 | 3.80 ± 0.01 | 3.98 ± 0.00 | 0.08 ± 0.00 | 4.2 ± 0.0 | 0 ± 0 | 5.9 ± 0.0 | 164 ± 1 |
 
 ### Physics rate
 
-From [`results/physics_rate_20261104_idle.json`](results/physics_rate_20261104_idle.json). Command:
-`unified_server.py --benchmark-seconds 20`, RTX 2050 laptop, idle (load avg 1.7), FEM backend, physics in its own
-process.
+Command: `unified_server.py --benchmark-seconds 20`, RTX 2050 laptop, FEM backend, physics in its own process.
+Rows from [`results/physics_rate_20261104_idle.json`](results/physics_rate_20261104_idle.json) (idle, load avg 1.7)
+and [`results/physics_rate_20261105_normal_contact.json`](results/physics_rate_20261105_normal_contact.json) (after
+DEC-040, run right after the benchmark, load avg 3.3).
 
-| Achieved | Period p50 | Period p99 | Period max | Tick compute p99 | Overruns / ticks | Resyncs | Streaming loop |
-|---|---|---|---|---|---|---|---|
-| 1000.0 Hz | 1.000 ms | 1.137 ms | 4.21 ms | 0.455 ms | 2 / 20040 | 0 | 29.95 Hz |
+| Run | Achieved | Period p50 | Period p99 | Period max | Tick compute p99 | Overruns / ticks | Resyncs | Streaming loop |
+|---|---|---|---|---|---|---|---|---|
+| 2026-11-04 | 1000.0 Hz | 1.000 ms | 1.137 ms | 4.21 ms | 0.455 ms | 2 / 20040 | 0 | 29.95 Hz |
+| 2026-11-05 (normal contact) | 1000.0 Hz | 1.000 ms | 1.000 ms | 3.75 ms | 0.312 ms | 17 / 20015 | 0 | 29.9 Hz |
 
 ---
 
@@ -264,24 +270,27 @@ process.
   cause false positives in practice, so the precision numbers here are optimistic.
 - **One patient and 3 trials.** All training and testing use the same CT (`case-0004`, L4). There is no held-out
   anatomy, so the learned policies are not shown to generalise to other patients. With 3 trials, differences of a
-  few percent (e.g. PPO 85.2 vs NBV 83.8 Cov@3) are within noise.
+  few percent (e.g. PPO 85.0 vs NBV 83.8 vs CFM 83.7 Cov@3) are within noise.
 - **No learned policy beats the raster.** The elevational raster has the best Cov@3 (88.1 %). Sampled PPO reaches
-  85.2 %, CFM 78.4 % and Diffusion 69.7 %. CFM and Diffusion clone a randomised raster expert, so the expert caps
-  them.
-- **PPO only works stochastically.** With its mean action (`--ppo-deterministic`), PPO drops to 52.7 ± 5.4 % Cov@3
+  85.0 %, CFM 83.7 % and Diffusion 71.0 %. CFM and Diffusion clone a randomised raster expert, so the expert caps
+  them. The cloned policies are sensitive to small physics changes: the normal-contact fix (DEC-040), which
+  leaves the raster at 88.1 %, moved CFM from 78.4 ± 5.7 to 83.7 ± 1.4 % without retraining (the benchmark is
+  deterministic, so this is the physics change, not run-to-run noise; see DEC-040).
+- **PPO only works stochastically.** With its mean action (`--ppo-deterministic`), PPO drops to 52.6 ± 5.8 % Cov@3
   and a 60 mm path. Source: [`results/ppo_deterministic/benchmark_latest.md`](results/ppo_deterministic/benchmark_latest.md),
-  from the same seeds and start poses as the main table. Sampled PPO also has the worst force tracking (RMSE 0.45 N,
-  max 6.1 N), and its mean indentation is −0.3 mm.
+  from the same seeds and start poses as the main table. Sampled PPO also has the worst force tracking (RMSE 0.23 N,
+  max 4.8 N), and its mean indentation is −1.2 mm.
 - **The FEM is linear and frictionless.** It assumes small strain on the reference geometry. Strain stiffening
-  (exponential law) is a per-node correction applied to the force only, not to the displacement field. There is
-  no tangential (friction) force, and for a tilted probe the reported force is the component along the probe axis.
-  Outside the L4 ROI the displacement is zero.
+  (exponential law) is a per-node correction applied to the force only, not to the displacement field. Contact
+  acts along the probe-face normal (DEC-040), but there is no tangential (friction) force, so a sliding probe
+  does not drag the skin. The skin points under the face are found on the undeformed surface. Outside the L4 ROI
+  the displacement is zero. The PPO, CFM and Diffusion checkpoints were trained before DEC-040 and were not
+  retrained.
 - **Force safety is not demonstrated.** "Unsafe" counts frames above 20 N. Under 4 N admittance control no policy
   comes close, so the column is 0 by construction of the controller, not because a policy learned to be safe.
-- **The Slicer bridge is untested inside Slicer.** `slicer_surgical_physics_bridge.py` was refactored (P→RAS
-  transform node, in-place skin buffer, `DeformedSkin` full-vertex protocol), but no automated test runs it inside
-  3D Slicer. It has not been checked end to end in Slicer since the refactor. The server-side message packing is
-  covered by `test_server.py`.
+- **The Slicer bridge has no automated test inside Slicer.** `slicer_surgical_physics_bridge.py` was checked by
+  hand in Slicer 5.12.4 on 2026-11-05 (DEC-039), but no automated test runs it inside 3D Slicer. The server-side
+  message packing is covered by `test_server.py`.
 - **The deformation-unaware penalty is small with the FEM.** At 4 N on this patient the FEM indentation is
   0.9 mm, because the probe first touches the paraspinal ridges. Ignoring the deformation therefore costs FEM
   mainly visible precision (97.2 → 81.5 % Prec@2 vis) and Chamfer distance (1.05 → 1.49 mm), and almost no Cov@3.

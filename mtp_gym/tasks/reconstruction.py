@@ -6,9 +6,13 @@ Observation (image-only, AGENTS.md invariant 5): the core B-mode / pose / force,
     back-projected bone points) max-pooled over a box around the target, like SonoGym's 40^3 voxel observation;
   * "coverage" (1,): the coverage ratio below.
 
-Reward (as env_reconstruction.step): 0.05 x marginal reconstructed area (occupied 1.5 mm voxels x 1.5^2 mm^2)
-- w_path x path - w_rot x rotation - force penalty (w_force (F-12)^2 above 12 N, w_decoupling (2-F) below 2 N),
--10 on a safety violation.  Terminates at `target_coverage`.
+Reward (`reward_mode`, DEC-046):
+  "coverage" (default) = 100 x coverage gain of the target (the single-env PPO's shaped reward,
+             `train_submodular_ppo.shaped_reward`, and the submodular coverage reward of SonoGym)
+  "area"     = 0.05 x marginal reconstructed area (occupied 1.5 mm voxels x 1.5^2 mm^2), env_reconstruction.step's
+             raw reward.  It also pays for bone outside the target, so wandering beats the raster (DEC-046).
+  minus, in both: w_path x path + w_rot x rotation + force penalty (w_force (F-12)^2 above 12 N, w_decoupling
+  (2-F) below 2 N), and 10 on a safety violation.  Terminates at `target_coverage`.
 
 Coverage (reward/termination only): fraction of the patient's US-visible target surface (outermost bone point
 per 1 mm column inside the L4 ROI, `UltrasoundReconstructionEnv._dorsal_visible_surface`) with a
@@ -60,7 +64,10 @@ class ReconstructionTask(Task):
     def __init__(self, target_coverage: float = 0.90, coverage_tol_mm: float = 3.0, voxel_mm: float = 1.5,
                  box_margin_mm: float = 20.0, grid_obs: int = 32, weight_path: float = 0.01,
                  weight_rot: float = 0.05, weight_force: float = 0.02, weight_decoupling: float = 0.05,
-                 min_fusion_force_n: float = 1.0):
+                 min_fusion_force_n: float = 1.0, reward_mode: str = "coverage"):
+        if reward_mode not in ("coverage", "area"):
+            raise ValueError(f"reward_mode must be coverage|area, got {reward_mode}")
+        self.reward_mode = reward_mode
         self.target_coverage = target_coverage
         self.tol = coverage_tol_mm
         self.voxel = voxel_mm
@@ -97,6 +104,7 @@ class ReconstructionTask(Task):
         self.n_targets = torch.tensor([len(self.targets[p]) for p in env.env_patient.tolist()],
                                       dtype=torch.float32, device=dev)
         self.prev_area = torch.zeros(N, device=dev)
+        self.prev_cov = torch.zeros(N, device=dev)
 
     def observation_spaces(self):
         return {"recon_grid": spaces.Box(0.0, 1.0, (1, self.G, self.G, self.G), np.float32),
@@ -106,6 +114,7 @@ class ReconstructionTask(Task):
         self.occ[ids] = False
         self.covered[ids] = False
         self.prev_area[ids] = 0.0
+        self.prev_cov[ids] = 0.0
 
     # ------------------------------------------------------------ fusion
     def _ingest(self, frame) -> None:
@@ -148,6 +157,7 @@ class ReconstructionTask(Task):
     # ------------------------------------------------------------ steps
     def observe(self, frame, first):
         self._ingest(frame)          # the reset acquisition is fused too; prev_area stays 0 (as the single env)
+        self.prev_cov[frame.ids] = self._coverage(frame.ids)   # coverage reward counts gains after the reset frame
         return self._extra(frame.ids), {}
 
     def evaluate(self, frame, step_path, step_rot):
@@ -160,8 +170,10 @@ class ReconstructionTask(Task):
         pen = torch.where(f > 12.0, self.w_force * (f - 12.0) ** 2,
                           torch.where(f < 2.0, self.w_dec * (2.0 - f), torch.zeros_like(f)))
         safety = f > self.env.safety_limit
-        reward = 0.05 * gain - (self.w_path * step_path + self.w_rot * step_rot + pen) - 10.0 * safety.float()
         cov = self._coverage(ids)
+        progress = 100.0 * (cov - self.prev_cov[ids]) if self.reward_mode == "coverage" else 0.05 * gain
+        self.prev_cov[ids] = cov
+        reward = progress - (self.w_path * step_path + self.w_rot * step_rot + pen) - 10.0 * safety.float()
         terminated = cov >= self.target_coverage
         info = {"coverage_ratio": cov, "marginal_gain": gain, "total_area": area}
         return reward, terminated, self._extra(ids), info

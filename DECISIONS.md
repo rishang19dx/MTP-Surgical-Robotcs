@@ -1053,3 +1053,31 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Randomising only the start pose: it was already random, and that is not enough.
   - Removing the pose from the observation: it removes odometry that a real robot has.
 
+### `DEC-046`: Gym Reconstruction Reward = Target Coverage Gain (the area reward rewards wandering)
+* **Date**: November 7, 2026 (branch `audit-fixes`).
+* **Finding.** Laptop PPO runs: 2 training patients (sample, s0015), 300k steps, 32 envs, seed 0.
+  - **Held out** (`results/vec_eval_recon_20261107_214607.md`, deformable eval, 4 patients × 16 episodes):
+
+    | Policy | Coverage |
+    | :--- | ---: |
+    | random | 0.340 |
+    | scripted raster | 0.428 |
+    | PPO trained deformable | 0.105 |
+    | PPO trained rigid | 0.307 |
+
+    Rigid eval: `results/vec_eval_recon_20261107_214814.md`.
+  - **Training patients** (scratch run, same evaluator): PPO 0.72–0.78, random 0.71–0.75, raster 0.90. The
+    policies barely learned; the training return rose from about 176 to 225.
+  - **The reward ranks policies against the metric.** On the sample patient, random actions earn a return of 189 at
+    coverage 0.71, while the raster earns 173 at coverage 0.90.
+  - **Cause.** The gym copied `env_reconstruction.step`'s raw reward, 0.05 × marginal reconstructed AREA. It pays
+    for any bone reconstructed, including outside the L4 target, so wandering is rewarded more than covering the
+    target. The single-env PPO trainer never trained on this term: its `shaped_reward` "coverage" mode uses
+    100 × coverage gain plus the penalties. SonoGym's reconstruction task also uses a submodular coverage reward.
+* **Decision.** `ReconstructionTask(reward_mode="coverage")` is the default: 100 × target-coverage gain plus the
+  same penalties. This also applies to `ForceScanTask`, which inherits it. `"area"` keeps the old reward.
+* **Consequence.** The three reconstruction and force-scan checkpoints trained before this change are void as
+  benchmark results and are retrained. The H1 comparison (trained rigid vs deformable) is not concluded from them.
+  At 300k steps with 2 patients, the PPO baselines are expected to be weak either way; the full study needs the
+  server (more patients, more steps, more seeds).
+

@@ -217,6 +217,7 @@ class UltrasoundVectorEnv(VectorEnv):
         action_scale_pitch_deg: float = 15.0,
         e_scale_range: Optional[Sequence[float]] = None,
         bmode_physics: str = "depth",
+        pose_offset: Optional[Sequence[float]] = None,
         device: Optional[torch.device] = None,
         seed: Optional[int] = None,
     ):
@@ -270,6 +271,11 @@ class UltrasoundVectorEnv(VectorEnv):
                                     dtype=torch.float64, device=dev)
         self.step_count = torch.zeros(N, dtype=torch.long, device=dev)
         self.target_force = torch.full((N,), self.default_target_force, device=dev)
+        # hidden per-episode patient placement offset (DEC-045): observed pose = true pose - offset in (c1, c2, yaw)
+        po = pose_offset if pose_offset is not None else getattr(task, "default_pose_offset", None)
+        self.pose_offset_range = None if po is None else torch.tensor(
+            [float(po[0]), float(po[1]), math.radians(float(po[2])), 0.0], device=dev)
+        self.pose_offset = torch.zeros(N, 4, device=dev)
         self.last_frame: Optional[Frame] = None
 
         self.task = task
@@ -327,6 +333,9 @@ class UltrasoundVectorEnv(VectorEnv):
         self.step_count[ids] = 0
         self.indent_rel[ids] = 0.0
         self.target_force[ids] = self.default_target_force
+        if self.pose_offset_range is not None:
+            u = torch.as_tensor(self._np_rng.uniform(-1.0, 1.0, (len(ids), 4)), dtype=torch.float32, device=self.device)
+            self.pose_offset[ids] = u * self.pose_offset_range
         if self.e_scale_range is not None:
             lo, hi = self.e_scale_range
             base = torch.tensor([self.patients[i].model.e_scale for i in self.env_patient[ids].tolist()],
@@ -372,7 +381,8 @@ class UltrasoundVectorEnv(VectorEnv):
     def _obs(self, frame: Frame, extra: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """Full-batch observation dict; `frame` may cover a subset of envs (reset), then only rows `ids`."""
         n = len(frame.ids)
-        obs = {"bmode": frame.bmode.unsqueeze(1).float(), "probe_pose": frame.pose_params.float(),
+        obs = {"bmode": frame.bmode.unsqueeze(1).float(),
+               "probe_pose": (frame.pose_params - self.pose_offset[frame.ids]).float(),
                "force": frame.force_n.view(n, 1).float()}
         obs.update(extra)
         return obs

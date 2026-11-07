@@ -78,3 +78,26 @@ def test_make_vec_nav(patient):
     envs = gym.make_vec("MTP/Nav-v0", num_envs=2, vectorization_mode="vector_entry_point", patients=[patient], seed=0)
     envs.reset(seed=0)
     envs.step(envs.action_space.sample())
+
+
+def test_goal_not_readable_from_pose(patient):
+    """DEC-045: with the hidden placement offset, a blind policy that drives to the goal's absolute pose as seen
+    in the OBSERVED frame fails, while the privileged oracle (true pose) still succeeds."""
+    env = UltrasoundVectorEnv(N, NavigationTask(), [patient], max_steps=MAX_STEPS, seed=3)
+    goal = env.task.goal[0].clone()
+
+    def blind(e):
+        observed = e.pose - e.pose_offset          # what the policy sees
+        return ((goal - observed) / e.action_scale)[:, :3].clamp(-1, 1)
+
+    sr_blind, _ = _run(env, blind)
+    sr_oracle, _ = _run(env, lambda e: e.task.oracle_action())
+    print(f"\n[nav] blind fixed-pose policy {sr_blind:.3f}, oracle {sr_oracle:.3f}")
+    assert sr_blind < 0.2 and sr_oracle > 0.95
+
+
+def test_other_tasks_observe_true_pose(patient):
+    from mtp_gym.tasks import ReconstructionTask
+    env = UltrasoundVectorEnv(2, ReconstructionTask(), [patient], seed=0)
+    obs, _ = env.reset(seed=0)
+    assert torch.equal(obs["probe_pose"], env.pose)

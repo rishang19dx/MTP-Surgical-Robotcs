@@ -1027,3 +1027,29 @@ A chronological record of all architectural, research, algorithmic, and engineer
     - An un-registered test assertion ("pressing harder never hides bone", added after DEC-042) became false for
       the thin back (−0.011). It was removed rather than loosened. Only the pre-registered P3 is asserted.
 
+### `DEC-045`: Hidden Patient Placement Offset for Navigation (the goal must not be readable from the pose)
+* **Date**: November 7, 2026 (branch `audit-fixes`).
+* **Finding.** `results/vec_eval_nav_20261107_213250.md`: PPO trained on 2 patients (sample, s0015; 300k steps)
+  succeeds in 100 % of episodes on its training patients. Measured with the same evaluator in a scratch run.
+  - On the 4 held-out patients it succeeds in 1.6 % (random 1.6 %, oracle 100 %).
+  - A blind policy succeeds in 100 % on all 4 held-out patients (scratch check). It ignores the image and drives
+    to the mean of the two TRAINING goals in absolute pose.
+  - Cause: every patient is anchored at L4 in frame P (DEC-041 T4), so the transverse L4 goal is nearly the same
+    pose for all patients. Goals span c1 −0.86…−0.08 mm and c2 −35.4…−32.4 mm, inside the 3 mm success radius.
+  - So the task as built did not require the image. PPO did not find the shortcut and overfit to the training
+    images instead, but either way the benchmark measured the wrong thing.
+* **Decision.**
+  - `UltrasoundVectorEnv(pose_offset=(mm_c1, mm_c2, deg_yaw))` draws a hidden per-episode patient placement
+    offset, uniform within ±range.
+  - The observed `probe_pose` is the true pose minus the offset in (c1, c2, yaw). Pitch is unchanged.
+  - The robot therefore still knows its own motion (odometry), but not where the patient lies. Physics, rewards,
+    goals and the oracle use the true pose.
+  - `NavigationTask` defaults to ±15 mm / ±15 mm / ±10°. The other tasks default to no offset, so their runs
+    already queued stay comparable.
+  - The navigation evaluation adds the blind fixed-pose baseline. A valid navigation task must make it fail.
+* **Consequence.** The navigation PPO run above is void as a benchmark result and is retrained under the offset.
+* **Alternatives considered.**
+  - Anchoring patients at a different landmark: the goal would again sit at a fixed pose relative to it.
+  - Randomising only the start pose: it was already random, and that is not enough.
+  - Removing the pose from the observation: it removes odometry that a real robot has.
+

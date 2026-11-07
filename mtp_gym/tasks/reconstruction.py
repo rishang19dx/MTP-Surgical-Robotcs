@@ -108,6 +108,8 @@ class ReconstructionTask(Task):
     def _ingest(self, frame) -> None:
         ids = frame.ids
         has, y = segment_bmode_batch(frame.bmode, frame.confidence, self.seg)
+        # image-only bone visibility (fraction of scanlines with a detected surface), before the force gate
+        self.last_visibility = has.float().mean(1)
         has &= (frame.force_n >= self.min_force)[:, None]
         pts = backproject(has, y, frame.t_backproject, IMAGE_SIZE, PHYSICAL_SIZE_MM).float()   # (n, W, 3)
         # occupancy

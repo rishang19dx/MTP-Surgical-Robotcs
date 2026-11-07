@@ -838,4 +838,33 @@ A chronological record of all architectural, research, algorithmic, and engineer
     succeeds in 100 % of episodes (3.9 steps on average); uniform random actions in 0 %.
   - **Caveat.** With 5 mm / 10° action steps the oracle needs few steps, so this checks the task logic. Whether
     the plane can be found from the image alone is the question for the learned baselines (T10).
+* **Progress, T7 (2026-11-07): `MTP/ForceScan-v0`** (`mtp_gym/tasks/force_scan.py`). It is the reconstruction task
+  plus a commanded force: a 5th action mapped to 1–15 N and tracked by the admittance controller. Reward =
+  reconstruction reward + 2 × image-only bone visibility (fraction of scanlines with a B-mode surface) − 0.05 × F.
+  - **Finding, measured before any tuning.** Thin s0015 vs thick s0014, 9 held poses each, 12 steps; the
+    sensed force equals the commanded force.
+
+    | Force | Scanline visibility, thin | Scanline visibility, thick |
+    | ---: | ---: | ---: |
+    | 1 N | 0.00 | 0.00 |
+    | 2 N | 0.49 | 0.14 |
+    | 4 N | 0.57 | 0.21 |
+    | 8 N | 0.61 | 0.23 |
+    | 15 N | 0.65 | 0.23 |
+
+    Almost all of the effect sits between 1 and 2 N, and it comes from the acoustic-coupling model κ, not from
+    deformation.
+  - **Cause.** In the B-mode model depth costs almost nothing. The fixed TGC (5 dB/cm) nearly cancels the soft-
+    tissue attenuation (0.6 dB/cm/MHz × 5 MHz × 2 = 6 dB/cm), and the electronic noise is added AFTER the TGC.
+    Moving bone about 8 mm closer (T9) therefore does not improve the image. With the reward above, the best force
+    is about 4 N for both backs, so H2 has nothing to detect.
+  - `test_best_force_is_higher_for_the_thick_back` is a strict xfail until the image model is decided. The other
+    tests assert only what holds: the rigid control is force-invariant, and the thick back gains a little
+    visibility.
+  - **Open decision for the user** (QUIZME C3, realism): whether to correct the noise model (receiver noise before
+    the TGC, and depth-dependent resolution beyond the focus) before training. The risk is changing the simulator
+    until a hypothesis passes. The mitigation is to fix the change from physics and literature first and to
+    record the prediction before looking at the result.
+  - The compression sweep (T9) renders without the coupling loss κ, so its visibility numbers are deformation
+    only.
 

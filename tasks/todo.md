@@ -22,7 +22,7 @@ Every task also obeys the AGENTS.md invariants:
 | T9 compression-changes-image gate | 13–14 Nov | done 5 Nov: passes on all 13 patients (`compression_sweep.py`) |
 | T14 fidelity vs nonlinear FEM | 14–19 Nov | |
 | **Checkpoint B** | 20 Nov | |
-| T7 force-scan task | 19–21 Nov | |
+| T7 force-scan task | 19–21 Nov | implemented 7 Nov (`MTP/ForceScan-v0`); H2 landscape fails with the current image model, decision pending |
 | T10 PPO baselines on the 3 tasks | 20–24 Nov | |
 | T11/T12 preliminary H1/H2 runs (server GPU) | 22–26 Nov | |
 | T13 H3 compression bias | 24–26 Nov | |

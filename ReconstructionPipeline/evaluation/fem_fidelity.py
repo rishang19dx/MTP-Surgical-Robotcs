@@ -74,7 +74,7 @@ def main(argv=None):
                 f, loaded, b = contact_nodal_forces(m, T, d)
                 u_lin = ref.linear_solve(f)
                 t0 = time.perf_counter()
-                r = ref.solve(f, load_steps=max(2, math.ceil(F / 2.5)))
+                r = ref.solve(f, load_steps=max(2, math.ceil(F / 2.5)), newton_iters=15)
                 w = f[sk[loaded]] @ b
                 comp = lambda u: float((u[sk[loaded]] @ b) @ w / w.sum())  # noqa: E731
                 near = np.linalg.norm(m.mesh.nodes - (T[:3, 3] + d * b), axis=1) <= 30.0
@@ -83,6 +83,7 @@ def main(argv=None):
                        "compression_linear_mm": comp(u_lin), "compression_nl_mm": comp(r["u"]),
                        "rms_diff_near_mm": float(np.sqrt((du ** 2).mean())), "max_diff_near_mm": float(du.max()),
                        "max_disp_linear_mm": float(np.linalg.norm(u_lin, axis=1).max()),
+                       "converged": bool(r["converged"]), "load_reached": float(r["load_reached"]),
                        "newton": r["history"], "seconds": time.perf_counter() - t0}
                 row["compression_rel_diff"] = (row["compression_nl_mm"] - row["compression_linear_mm"]) \
                     / row["compression_linear_mm"]
@@ -90,7 +91,8 @@ def main(argv=None):
                 print(f"{row['patient']:32s} {site:22s} F={F:4.1f} N  comp lin {row['compression_linear_mm']:6.2f} "
                       f"NL {row['compression_nl_mm']:6.2f} mm ({100 * row['compression_rel_diff']:+5.1f} %)  "
                       f"|du| near rms {row['rms_diff_near_mm']:.2f} max {row['max_diff_near_mm']:.2f} mm  "
-                      f"res {r['history'][-1]['rel_residual']:.1e}  {row['seconds']:.0f}s", flush=True)
+                      f"{'converged' if r['converged'] else 'NOT CONVERGED (load ' + format(r['load_reached'], '.2f') + ')'}"
+                      f"  {row['seconds']:.0f}s", flush=True)
         del ps, m, ref
         gc.collect()
         if dev.type == "cuda":
@@ -108,12 +110,21 @@ def main(argv=None):
     json.dump({"meta": meta, "rows": rows}, open(base + ".json", "w"), indent=2)
     L = [f"# FEM fidelity: linear vs Neo-Hookean reference ({stamp})", "", f"commit `{commit}` · {meta['material']} · "
          f"{meta['comparison']}", "",
-         "| Patient | Site | Linear force (N) | Compression linear (mm) | Compression Neo-Hookean (mm) | Rel. diff | RMS diff ≤30 mm (mm) | Max diff ≤30 mm (mm) |",
-         "| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+         "Rows where the Neo-Hookean solve did not reach the full load are marked and excluded from the summary.", "",
+         "| Patient | Site | Linear force (N) | Compression linear (mm) | Compression Neo-Hookean (mm) | Rel. diff | RMS diff ≤30 mm (mm) | Max diff ≤30 mm (mm) | Converged |",
+         "| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |"]
     for r in rows:
         L.append(f"| {r['patient']} | {r['site']} | {r['linear_force_n']:.0f} | {r['compression_linear_mm']:.2f} | "
                  f"{r['compression_nl_mm']:.2f} | {100 * r['compression_rel_diff']:+.1f} % | {r['rms_diff_near_mm']:.2f} | "
-                 f"{r['max_diff_near_mm']:.2f} |")
+                 f"{r['max_diff_near_mm']:.2f} | {'yes' if r['converged'] else 'NO (load ' + format(r['load_reached'], '.2f') + ')'} |")
+    ok = [r for r in rows if r["converged"]]
+    L += ["", f"Summary over converged rows ({len(ok)} of {len(rows)}): relative compression difference (Neo-Hookean vs "
+          "linear) per linear force level:", "", "| Linear force (N) | n | Median rel. diff | Min | Max |",
+          "| ---: | ---: | ---: | ---: | ---: |"]
+    for F in forces:
+        v = [100 * r["compression_rel_diff"] for r in ok if r["linear_force_n"] == F]
+        if v:
+            L.append(f"| {F:.0f} | {len(v)} | {np.median(v):+.1f} % | {min(v):+.1f} % | {max(v):+.1f} % |")
     open(base + ".md", "w").write("\n".join(L) + "\n")
     print("wrote", base + ".json / .md")
 

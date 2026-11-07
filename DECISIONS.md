@@ -1098,3 +1098,42 @@ A chronological record of all architectural, research, algorithmic, and engineer
   At 300k steps with 2 patients, the PPO baselines are expected to be weak either way; the full study needs the
   server (more patients, more steps, more seeds).
 
+### `DEC-047`: FEM Fidelity Against a Neo-Hookean Reference (task T14, H4) — Result
+* **Date**: November 7, 2026 (branch `audit-fixes`).
+* **Source.** `results/fem_fidelity_20261107_234638.md`. The JSON names commit `264cd66` because the script reads
+  HEAD when it finishes. The solver and study code are those of `42558e9`: the adaptive load stepping, unchanged
+  since then.
+* **Method.**
+  - Reference: compressible Neo-Hookean (finite strain) on the same tet mesh, Dirichlet set, per-cell moduli
+    (shared `e_scale`) and ν = 0.45 (`simulation/fem_nonlinear.py`).
+  - Its linearisation matches the precomputed skin compliance to 1.7e-6 relative (`tests/test_fem_fidelity.py`).
+  - Both models get identical nodal contact forces: the linear contact solution at 2/5/10/15 N, before strain
+    stiffening.
+  - Cases: 3 patients (sample, thin s0015, thick s0014) × 2 sites (paraspinal (−20, −45), midline (0, −32.5)).
+  - Solver: adaptive load stepping. A first run with fixed steps had 8 of 24 solves stall; it was deleted
+    uncited. In this run 22 of 24 converged. Not converged: s0015 paraspinal at 15 N (63 % of the load) and s0014
+    midline at 15 N (95 %). Both are excluded from the summary.
+* **Result.** Compression under the probe, Neo-Hookean vs linear, over converged cases:
+
+  | Linear force | Median | Range |
+  | ---: | ---: | :--- |
+  | 2 N | −1.3 % | −4.9 … +1.8 % |
+  | 5 N | +2.1 % | −9.7 … +27.0 % |
+  | 10 N | −3.5 % | −15.1 … +28.0 % |
+  | 15 N | +5.0 % | −13.3 … +31.1 % |
+
+  - **The error changes sign with anatomy.** On the flat paraspinal sites of the sample and of s0015, the linear
+    model over-predicts compression by 5–15 %. On the sample midline and the thick s0014 paraspinal site it
+    under-predicts by 10–31 % from 5 N up.
+  - RMS displacement difference within 30 mm of the probe: 0.02–0.13 mm at 2 N, up to 2.3 mm at 15 N.
+* **Inference.**
+  - At the gym's working forces (admittance target 4 N; H2 reframed to "minimal force", where the best force was
+    2 N) the linear model is within 5 % of finite-strain elasticity in every case tested. The precomputed model is
+    adequate there.
+  - Above about 5 N it is not: errors of up to about 30 % in either direction.
+  - The paper must not claim fidelity over 2–15 N. Force-dependent results above about 5 N carry this
+    model-error caveat.
+* **Not tested.** Contact re-solved on the nonlinear geometry, the empirical strain-stiffening force factor (φ),
+  and agreement with real tissue (no force or displacement data). This is fidelity to a better model of the same
+  tissue, not to patients.
+

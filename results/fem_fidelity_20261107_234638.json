@@ -1,0 +1,888 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/fem_fidelity.py",
+    "args": {
+      "patients": "../sample_totalsegmentator_patient,sonogym_s0015,sonogym_s0014",
+      "forces": "2,5,10,15",
+      "out_dir": "/home/rishang/Desktop/MTP/results"
+    },
+    "commit": "264cd66",
+    "material": "compressible Neo-Hookean, same E (fat/muscle by HU, shared e_scale) and nu = 0.45",
+    "comparison": "identical nodal contact forces (linear contact solution, before strain stiffening)"
+  },
+  "rows": [
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 2.0,
+      "indentation_mm": 2.093462676220952,
+      "compression_linear_mm": 1.655467072519241,
+      "compression_nl_mm": 1.6126647454436338,
+      "rms_diff_near_mm": 0.0245592335588611,
+      "max_diff_near_mm": 0.11427731242999749,
+      "max_disp_linear_mm": 2.1362546536034714,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 2.0690951072491315e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 4,
+          "rel_residual": 6.793549389380701e-09
+        }
+      ],
+      "seconds": 38.75344165199931,
+      "compression_rel_diff": -0.025855136466394316
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 5.0,
+      "indentation_mm": 4.251207235793117,
+      "compression_linear_mm": 3.4186780756931006,
+      "compression_nl_mm": 3.2164918331180634,
+      "rms_diff_near_mm": 0.11207226784967574,
+      "max_diff_near_mm": 0.6387115876185943,
+      "max_disp_linear_mm": 4.308451631742141,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 9.245253942677245e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 1.1535767302569848e-12
+        }
+      ],
+      "seconds": 44.89223208200201,
+      "compression_rel_diff": -0.05914164425500814
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 10.0,
+      "indentation_mm": 7.4203699368626985,
+      "compression_linear_mm": 6.117513516903927,
+      "compression_nl_mm": 5.466060154783546,
+      "rms_diff_near_mm": 0.3492152783622868,
+      "max_diff_near_mm": 2.054030543977996,
+      "max_disp_linear_mm": 7.494671822696184,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.25,
+          "newton_iters": 5,
+          "rel_residual": 9.480752873179718e-13
+        },
+        {
+          "load": 0.625,
+          "newton_iters": 5,
+          "rel_residual": 1.3024783755764844e-11
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 2.901440547811997e-09
+        }
+      ],
+      "seconds": 66.03027613700033,
+      "compression_rel_diff": -0.10648989337257438
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 15.0,
+      "indentation_mm": 10.535864622470399,
+      "compression_linear_mm": 8.916926528899372,
+      "compression_nl_mm": 7.731284875094388,
+      "rms_diff_near_mm": 0.7216777234952431,
+      "max_diff_near_mm": 4.526231807801626,
+      "max_disp_linear_mm": 10.618146127143188,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.16666666666666666,
+          "newton_iters": 5,
+          "rel_residual": 9.442255091570143e-13
+        },
+        {
+          "load": 0.41666666666666663,
+          "newton_iters": 5,
+          "rel_residual": 9.067976881615983e-12
+        },
+        {
+          "load": 0.7916666666666666,
+          "newton_iters": 6,
+          "rel_residual": 2.0852204948093263e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 6,
+          "rel_residual": 5.668742664436985e-10
+        }
+      ],
+      "seconds": 96.82142351400034,
+      "compression_rel_diff": -0.13296528237194413
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 2.0,
+      "indentation_mm": -2.7612870359771478,
+      "compression_linear_mm": 3.5315566286892435,
+      "compression_nl_mm": 3.54916079183595,
+      "rms_diff_near_mm": 0.13392660305996035,
+      "max_diff_near_mm": 1.7045225774982073,
+      "max_disp_linear_mm": 6.728002703794965,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 6,
+          "rel_residual": 1.2600185196407763e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 7,
+          "rel_residual": 6.16456199213864e-13
+        }
+      ],
+      "seconds": 66.90871712400258,
+      "compression_rel_diff": 0.00498481689453758
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 5.0,
+      "indentation_mm": 0.22565824823323055,
+      "compression_linear_mm": 4.8396049831211,
+      "compression_nl_mm": 5.8507718101486255,
+      "rms_diff_near_mm": 0.5707128545525787,
+      "max_diff_near_mm": 10.053996361421317,
+      "max_disp_linear_mm": 10.336324340169964,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 7,
+          "rel_residual": 8.390897629130801e-13
+        },
+        {
+          "load": 0.75,
+          "newton_iters": 8,
+          "rel_residual": 2.971137569729475e-10
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 10,
+          "rel_residual": 2.0845776562434167e-11
+        }
+      ],
+      "seconds": 138.74964012999772,
+      "compression_rel_diff": 0.20893581822362212
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 10.0,
+      "indentation_mm": 3.580303540089517,
+      "compression_linear_mm": 6.925637070638488,
+      "compression_nl_mm": 8.862577887124313,
+      "rms_diff_near_mm": 1.0355014506331415,
+      "max_diff_near_mm": 10.690185993461496,
+      "max_disp_linear_mm": 14.366681640410484,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.25,
+          "newton_iters": 5,
+          "rel_residual": 9.736600923814684e-09
+        },
+        {
+          "load": 0.625,
+          "newton_iters": 12,
+          "rel_residual": 3.5144079756486133e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 15,
+          "rel_residual": 2.1688940338013726e-13
+        }
+      ],
+      "seconds": 132.98835180899914,
+      "compression_rel_diff": 0.2796769158894512
+    },
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 15.0,
+      "indentation_mm": 6.8435404316514905,
+      "compression_linear_mm": 9.5604178033635,
+      "compression_nl_mm": 12.529752135348513,
+      "rms_diff_near_mm": 1.5812447345391798,
+      "max_diff_near_mm": 13.61685233672439,
+      "max_disp_linear_mm": 18.28369675001665,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.16666666666666666,
+          "newton_iters": 5,
+          "rel_residual": 3.788333350124195e-11
+        },
+        {
+          "load": 0.41666666666666663,
+          "newton_iters": 8,
+          "rel_residual": 1.4143610193309294e-09
+        },
+        {
+          "load": 0.44010416666666663,
+          "newton_iters": 6,
+          "rel_residual": 5.593576325749435e-09
+        },
+        {
+          "load": 0.47526041666666663,
+          "newton_iters": 9,
+          "rel_residual": 3.199834188420571e-13
+        },
+        {
+          "load": 0.5279947916666666,
+          "newton_iters": 8,
+          "rel_residual": 2.9361559074056754e-13
+        },
+        {
+          "load": 0.5675455729166666,
+          "newton_iters": 8,
+          "rel_residual": 3.946640010194373e-11
+        },
+        {
+          "load": 0.6268717447916666,
+          "newton_iters": 11,
+          "rel_residual": 2.450278726961133e-13
+        },
+        {
+          "load": 0.7158610026041666,
+          "newton_iters": 9,
+          "rel_residual": 2.375537901537826e-13
+        },
+        {
+          "load": 0.7826029459635416,
+          "newton_iters": 6,
+          "rel_residual": 1.0794295463893522e-10
+        },
+        {
+          "load": 0.8326594034830729,
+          "newton_iters": 14,
+          "rel_residual": 1.1197706443418402e-11
+        },
+        {
+          "load": 0.9077440897623698,
+          "newton_iters": 7,
+          "rel_residual": 1.7275164237878505e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 7,
+          "rel_residual": 2.3219600564518014e-13
+        }
+      ],
+      "seconds": 623.3068793469974,
+      "compression_rel_diff": 0.3105862518832971
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 2.0,
+      "indentation_mm": 1.4101558754045982,
+      "compression_linear_mm": 1.941674540192348,
+      "compression_nl_mm": 1.8474941401941438,
+      "rms_diff_near_mm": 0.030033290487026534,
+      "max_diff_near_mm": 0.16900938080362418,
+      "max_disp_linear_mm": 2.378055030336552,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 1.9767901859636867e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 9.95205634477504e-13
+        }
+      ],
+      "seconds": 65.48456823900051,
+      "compression_rel_diff": -0.048504730349337784
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 5.0,
+      "indentation_mm": 4.117178896744008,
+      "compression_linear_mm": 4.270332420045776,
+      "compression_nl_mm": 3.854173403194033,
+      "rms_diff_near_mm": 0.15555159508892366,
+      "max_diff_near_mm": 0.9228635080163874,
+      "max_disp_linear_mm": 5.038566631761148,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 2.747848616771146e-10
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 1.306045446262281e-11
+        }
+      ],
+      "seconds": 60.79226593800195,
+      "compression_rel_diff": -0.09745354129767762
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 10.0,
+      "indentation_mm": 8.495120304618467,
+      "compression_linear_mm": 8.291878526263218,
+      "compression_nl_mm": 7.04172281788128,
+      "rms_diff_near_mm": 0.5412411534473442,
+      "max_diff_near_mm": 3.6756817930680947,
+      "max_disp_linear_mm": 9.371107414321495,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.25,
+          "newton_iters": 5,
+          "rel_residual": 4.253364076231738e-09
+        },
+        {
+          "load": 0.625,
+          "newton_iters": 6,
+          "rel_residual": 3.989718247936253e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 6,
+          "rel_residual": 7.016945183406644e-10
+        }
+      ],
+      "seconds": 94.04586072899838,
+      "compression_rel_diff": -0.15076869546777213
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 15.0,
+      "indentation_mm": 12.848242739823036,
+      "compression_linear_mm": 12.360397344188511,
+      "compression_nl_mm": 6.660179138319536,
+      "rms_diff_near_mm": 1.6196259465520886,
+      "max_diff_near_mm": 7.350219439151466,
+      "max_disp_linear_mm": 13.683557369982399,
+      "converged": false,
+      "load_reached": 0.6283365885416666,
+      "newton": [
+        {
+          "load": 0.16666666666666666,
+          "newton_iters": 6,
+          "rel_residual": 1.0020364459486132e-12
+        },
+        {
+          "load": 0.41666666666666663,
+          "newton_iters": 6,
+          "rel_residual": 4.1478996912387445e-13
+        },
+        {
+          "load": 0.6041666666666666,
+          "newton_iters": 6,
+          "rel_residual": 3.85859046645532e-11
+        },
+        {
+          "load": 0.6217447916666666,
+          "newton_iters": 6,
+          "rel_residual": 2.6814182135588615e-13
+        },
+        {
+          "load": 0.6283365885416666,
+          "newton_iters": 6,
+          "rel_residual": 1.6415115513307117e-12
+        },
+        {
+          "load": 0.6283365885416666,
+          "failed_increment": 0.002471923828125,
+          "rel_residual": 0.004221927675064446
+        }
+      ],
+      "seconds": 662.8740741369984,
+      "compression_rel_diff": -0.46116787730525893
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 2.0,
+      "indentation_mm": 0.7609495038086607,
+      "compression_linear_mm": 1.6561875699567068,
+      "compression_nl_mm": 1.586346696054962,
+      "rms_diff_near_mm": 0.02365724177157307,
+      "max_diff_near_mm": 0.17460270638195258,
+      "max_disp_linear_mm": 2.3668649809302327,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 2.0427583300922566e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 1.0327845566601259e-12
+        }
+      ],
+      "seconds": 51.58348097600174,
+      "compression_rel_diff": -0.04216966433552603
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 5.0,
+      "indentation_mm": 2.86098425115415,
+      "compression_linear_mm": 3.3346872526300033,
+      "compression_nl_mm": 3.0835292165703,
+      "rms_diff_near_mm": 0.11049448480547298,
+      "max_diff_near_mm": 0.5130225342244865,
+      "max_disp_linear_mm": 4.177335913575504,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 5.381578645575731e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 5.127957037705956e-13
+        }
+      ],
+      "seconds": 51.40143181199892,
+      "compression_rel_diff": -0.07531681894954916
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 10.0,
+      "indentation_mm": 6.208364947204245,
+      "compression_linear_mm": 6.32488431191664,
+      "compression_nl_mm": 5.605484193853313,
+      "rms_diff_near_mm": 0.38227874497962244,
+      "max_diff_near_mm": 2.0385381690539064,
+      "max_disp_linear_mm": 7.28196172043892,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.25,
+          "newton_iters": 5,
+          "rel_residual": 1.1334732956800976e-12
+        },
+        {
+          "load": 0.625,
+          "newton_iters": 5,
+          "rel_residual": 2.317635210520784e-11
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 5,
+          "rel_residual": 3.232429509098995e-10
+        }
+      ],
+      "seconds": 76.74349242099925,
+      "compression_rel_diff": -0.11374122949694337
+    },
+    {
+      "patient": "sonogym_s0015",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 15.0,
+      "indentation_mm": 9.493989659684303,
+      "compression_linear_mm": 9.338993233188038,
+      "compression_nl_mm": 8.405848395876221,
+      "rms_diff_near_mm": 0.8334788987041448,
+      "max_diff_near_mm": 4.46566733068267,
+      "max_disp_linear_mm": 10.614726874738897,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.16666666666666666,
+          "newton_iters": 5,
+          "rel_residual": 1.244557129965828e-12
+        },
+        {
+          "load": 0.41666666666666663,
+          "newton_iters": 5,
+          "rel_residual": 1.7014296505706935e-11
+        },
+        {
+          "load": 0.7916666666666666,
+          "newton_iters": 6,
+          "rel_residual": 7.240653435393498e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 7,
+          "rel_residual": 7.072970436529209e-10
+        }
+      ],
+      "seconds": 120.27837228600038,
+      "compression_rel_diff": -0.0999192112053036
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 2.0,
+      "indentation_mm": 2.5370951686163608,
+      "compression_linear_mm": 3.5582968524943706,
+      "compression_nl_mm": 3.62379708597437,
+      "rms_diff_near_mm": 0.11250629180636311,
+      "max_diff_near_mm": 0.5718185373082799,
+      "max_disp_linear_mm": 4.875824752672332,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 6.772161393595664e-11
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 6,
+          "rel_residual": 1.1775807224753124e-12
+        }
+      ],
+      "seconds": 160.80336033799904,
+      "compression_rel_diff": 0.018407748480592255
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 5.0,
+      "indentation_mm": 6.901465201488463,
+      "compression_linear_mm": 7.210586682187989,
+      "compression_nl_mm": 9.155874884649455,
+      "rms_diff_near_mm": 0.7885630422819436,
+      "max_diff_near_mm": 7.003867573719258,
+      "max_disp_linear_mm": 9.494935419924312,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 6,
+          "rel_residual": 3.235011605665843e-11
+        },
+        {
+          "load": 0.75,
+          "newton_iters": 7,
+          "rel_residual": 7.60403555570066e-13
+        },
+        {
+          "load": 0.875,
+          "newton_iters": 10,
+          "rel_residual": 1.2685646664074452e-11
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 8,
+          "rel_residual": 6.135094957767971e-13
+        }
+      ],
+      "seconds": 610.2271275729981,
+      "compression_rel_diff": 0.26978223661977885
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 10.0,
+      "indentation_mm": 13.896553248039709,
+      "compression_linear_mm": 13.667759828883206,
+      "compression_nl_mm": 15.996129468789208,
+      "rms_diff_near_mm": 1.413499015533933,
+      "max_diff_near_mm": 10.667518897970083,
+      "max_disp_linear_mm": 16.898799412418345,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.25,
+          "newton_iters": 6,
+          "rel_residual": 1.2216344461910139e-12
+        },
+        {
+          "load": 0.625,
+          "newton_iters": 12,
+          "rel_residual": 6.797233419935269e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 7,
+          "rel_residual": 2.2472961575247354e-09
+        }
+      ],
+      "seconds": 377.60731136400136,
+      "compression_rel_diff": 0.17035488397927562
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "paraspinal (-20, -45)",
+      "linear_force_n": 15.0,
+      "indentation_mm": 20.8663099165351,
+      "compression_linear_mm": 20.277568818419876,
+      "compression_nl_mm": 24.328953512456778,
+      "rms_diff_near_mm": 2.3436681429016017,
+      "max_diff_near_mm": 13.844162085495539,
+      "max_disp_linear_mm": 24.264150525200677,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.16666666666666666,
+          "newton_iters": 6,
+          "rel_residual": 1.2400426598849052e-12
+        },
+        {
+          "load": 0.41666666666666663,
+          "newton_iters": 11,
+          "rel_residual": 5.848733143657752e-13
+        },
+        {
+          "load": 0.6041666666666666,
+          "newton_iters": 11,
+          "rel_residual": 6.009683065334471e-10
+        },
+        {
+          "load": 0.7447916666666666,
+          "newton_iters": 7,
+          "rel_residual": 6.2050495005890784e-12
+        },
+        {
+          "load": 0.7975260416666666,
+          "newton_iters": 9,
+          "rel_residual": 2.65710197611131e-13
+        },
+        {
+          "load": 0.8766276041666666,
+          "newton_iters": 8,
+          "rel_residual": 4.727735826295318e-11
+        },
+        {
+          "load": 0.9359537760416666,
+          "newton_iters": 11,
+          "rel_residual": 2.597887857867116e-13
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 6,
+          "rel_residual": 1.1683360946961242e-09
+        }
+      ],
+      "seconds": 1331.2302028060003,
+      "compression_rel_diff": 0.19979637254919225
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 2.0,
+      "indentation_mm": 1.1550235593276739,
+      "compression_linear_mm": 3.4162602477450403,
+      "compression_nl_mm": 3.4129814294777177,
+      "rms_diff_near_mm": 0.07757664467700684,
+      "max_diff_near_mm": 0.4717765381533397,
+      "max_disp_linear_mm": 5.075665431530017,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 5,
+          "rel_residual": 3.863709504722071e-11
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 6,
+          "rel_residual": 1.1474042638767864e-12
+        }
+      ],
+      "seconds": 119.77983877700171,
+      "compression_rel_diff": -0.000959768293263641
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 5.0,
+      "indentation_mm": 5.917118787689105,
+      "compression_linear_mm": 7.645650577772769,
+      "compression_nl_mm": 8.419629912500907,
+      "rms_diff_near_mm": 0.5757316343478771,
+      "max_diff_near_mm": 9.470802396876524,
+      "max_disp_linear_mm": 10.102994891167109,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.5,
+          "newton_iters": 6,
+          "rel_residual": 1.1574342183071585e-11
+        },
+        {
+          "load": 0.75,
+          "newton_iters": 8,
+          "rel_residual": 3.639880303117713e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 8,
+          "rel_residual": 7.616140055044006e-09
+        }
+      ],
+      "seconds": 285.6097622140005,
+      "compression_rel_diff": 0.10123132450994168
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 10.0,
+      "indentation_mm": 13.269950346581027,
+      "compression_linear_mm": 14.42950259668949,
+      "compression_nl_mm": 14.951897366206609,
+      "rms_diff_near_mm": 1.2105097631966135,
+      "max_diff_near_mm": 15.361023778179941,
+      "max_disp_linear_mm": 17.84655860425234,
+      "converged": true,
+      "load_reached": 1.0,
+      "newton": [
+        {
+          "load": 0.25,
+          "newton_iters": 6,
+          "rel_residual": 1.1158296790521473e-12
+        },
+        {
+          "load": 0.4375,
+          "newton_iters": 7,
+          "rel_residual": 4.299444671925194e-10
+        },
+        {
+          "load": 0.578125,
+          "newton_iters": 8,
+          "rel_residual": 4.84197003667482e-13
+        },
+        {
+          "load": 0.7890625,
+          "newton_iters": 7,
+          "rel_residual": 7.983625404738504e-12
+        },
+        {
+          "load": 1.0,
+          "newton_iters": 6,
+          "rel_residual": 5.214051439468955e-11
+        }
+      ],
+      "seconds": 453.6654655630009,
+      "compression_rel_diff": 0.03620324165830705
+    },
+    {
+      "patient": "sonogym_s0014",
+      "site": "midline (0, -32.5)",
+      "linear_force_n": 15.0,
+      "indentation_mm": 20.42878528336223,
+      "compression_linear_mm": 21.140740231626346,
+      "compression_nl_mm": 19.997467488345652,
+      "rms_diff_near_mm": 1.7402200840251099,
+      "max_diff_near_mm": 8.008891898622403,
+      "max_disp_linear_mm": 25.458677428991628,
+      "converged": false,
+      "load_reached": 0.9471664428710938,
+      "newton": [
+        {
+          "load": 0.16666666666666666,
+          "newton_iters": 5,
+          "rel_residual": 9.921596186171411e-09
+        },
+        {
+          "load": 0.29166666666666663,
+          "newton_iters": 6,
+          "rel_residual": 5.397440792038049e-09
+        },
+        {
+          "load": 0.33854166666666663,
+          "newton_iters": 7,
+          "rel_residual": 6.401079579363139e-11
+        },
+        {
+          "load": 0.40885416666666663,
+          "newton_iters": 8,
+          "rel_residual": 1.1923534406251058e-10
+        },
+        {
+          "load": 0.5143229166666666,
+          "newton_iters": 8,
+          "rel_residual": 3.6828217040742297e-09
+        },
+        {
+          "load": 0.6725260416666666,
+          "newton_iters": 7,
+          "rel_residual": 4.318054933127705e-12
+        },
+        {
+          "load": 0.9098307291666666,
+          "newton_iters": 9,
+          "rel_residual": 2.3885569241724863e-10
+        },
+        {
+          "load": 0.932373046875,
+          "newton_iters": 5,
+          "rel_residual": 7.841793507504699e-10
+        },
+        {
+          "load": 0.940826416015625,
+          "newton_iters": 5,
+          "rel_residual": 1.6541382049949836e-11
+        },
+        {
+          "load": 0.9471664428710938,
+          "newton_iters": 6,
+          "rel_residual": 7.28126201222548e-12
+        },
+        {
+          "load": 0.9471664428710938,
+          "failed_increment": 0.002377510070800782,
+          "rel_residual": 0.01598865536008347
+        }
+      ],
+      "seconds": 2135.1981126969986,
+      "compression_rel_diff": -0.05407912545892638
+    }
+  ]
+}

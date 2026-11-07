@@ -210,9 +210,17 @@ Held-out patients: s0029 0.68 → 0.83, s0006 0.53 → 0.80, s0034 (52 mm fat) 0
 4. A pre-registered negative result: in simulation, extra force beyond coupling does not buy image quality (H2
    reframed).
 
-**Still to produce** (tasks/todo.md):
+**Since added** (DEC-045 to DEC-047, see DECISIONS.md):
 
-- FEM accuracy against a nonlinear reference (T14, H4).
+- **FEM vs Neo-Hookean reference** (`results/fem_fidelity_20261107_234638.md`): within 5 % at 2 N and up to about
+  30 % at 5–15 N. Claim fidelity only at low force.
+- **Navigation** (`results/vec_eval_nav_20261107_223741.md`): after the hidden-offset fix, PPO succeeds in 100 % on
+  its 2 training patients (blind baseline 6 %) and 7.8 % on held-out patients. It learns from the image but does not
+  generalise from 2 patients.
+- **Reconstruction reward.** The area reward rewarded wandering; it is now coverage gain (DEC-046), and the earlier
+  reconstruction and force checkpoints are void.
+
+**Still to produce** (tasks/todo.md):
 - Learned baselines on the three tasks (T10).
 - H1: rigid-trained vs deformable-trained policies.
 - H3: reconstruction bias against force, with and without correction.

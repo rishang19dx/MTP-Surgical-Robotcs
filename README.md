@@ -221,9 +221,10 @@ patients, so the full 9-patient training split needs a larger GPU. No learned-po
 
 **FEM fidelity reference.** `ReconstructionPipeline/simulation/fem_nonlinear.py` is a compressible Neo-Hookean
 (finite-strain) FEM on the same mesh, Dirichlet set and moduli as the precomputed linear model. Its linearisation
-reproduces the precomputed skin compliance to 1.7e-6 relative (`tests/test_fem_fidelity.py`). `evaluation/fem_fidelity.py`
-applies identical contact loads (2–15 N) to both and compares compression and the displacement field. The results
-are pending (task T14).
+reproduces the precomputed skin compliance to 1.7e-6 relative (`tests/test_fem_fidelity.py`). Source:
+[`results/fem_fidelity_20261107_234638.md`](results/fem_fidelity_20261107_234638.md) (DEC-047), 3 patients × 2 sites,
+identical contact loads, 22 of 24 solves converged. The linear model is within 5 % of the Neo-Hookean compression at
+2 N in every case, but differs by up to about 30 % in either direction at 5–15 N (sign depends on anatomy).
 
 - **B-mode.** The default `bmode_physics="depth"` uses per-tissue attenuation and receiver noise amplified by the
   TGC (DEC-042), with a fixed muscle-appropriate TGC preset of 10.9 dB/cm (DEC-043) and perception thresholds tuned
@@ -409,6 +410,9 @@ DEC-040, run right after the benchmark, load avg 3.3).
   (DEC-044, protocol fixed before running; [`results/perception_tuning_20261107_190845.md`](results/perception_tuning_20261107_190845.md))
   raises held-out coverage from 0.318 to 0.428 at Prec@2 0.979. The two fattest held-out backs (52 and 58 mm of
   fat) stay at 0.01–0.07.
+- **The linear FEM is accurate only at low force.** Against a Neo-Hookean reference on the same mesh (DEC-047)
+  compression agrees within 5 % at 2 N but differs by up to about 30 % at 5–15 N. Force-dependent results above
+  about 5 N carry this model error.
 - **Shared moduli come from one calibration.** The common tissue stiffness is the sample patient's fit to a
   literature force curve. It has not yet been compared with a nonlinear FEM or published moduli (task T14).
 - **Other gaps.** The B-mode simulation budget (< 2 ms) is a design target that no test asserts. The server's

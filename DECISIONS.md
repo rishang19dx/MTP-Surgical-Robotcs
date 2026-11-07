@@ -1137,3 +1137,35 @@ A chronological record of all architectural, research, algorithmic, and engineer
   and agreement with real tissue (no force or displacement data). This is fidelity to a better model of the same
   tissue, not to patients.
 
+### `DEC-048`: Re-aim the Paper at Patient Generalisation (primary) and a Soft Target (paraspinal muscle)
+* **Date**: November 8, 2026 (branch `audit-fixes`). The user asked for a hard-reviewer assessment and a plan that
+  maximises the chance of publication.
+* **Self-review findings** (the reasons for the change):
+  1. For a rigid bone target with a tracked probe, deformation does not bias reconstruction: aware vs unaware
+     Cov@3 was 88.0 vs 88.8. The "unaware" back-projection baseline ignores the probe indentation and is true by
+     construction (invariant 6), so the planned H3 is retired.
+  2. The T9 claim "a rigid simulator cannot produce the 6–10 mm echo shift" is overstated. The shift is of the
+     order of the probe indentation (8–14 mm), i.e. largely kinematic. To be quantified (task C1) and corrected
+     in the README and the results doc.
+  3. There is no real-data anchor. Model-error caveats: the supine CT geometry; the fat modulus (11 kPa vs
+     1–2 kPa reported by the literature search, unverified); frictionless and quasi-static contact; a kinematic
+     robot.
+  4. Benchmark immaturity (DEC-045, DEC-046), and thin statistics (1 seed, 2 training patients).
+* **User decisions (2026-11-08).**
+  - Pursue both threads: (A) cross-patient generalisation, primary; (B) the soft target paraspinal muscle
+    ("autochthon") thickness.
+  - The TotalSegmentator v2 download waits for the server.
+  - RSS plus a backup venue.
+* **Rationale.**
+  - Thread A: a gap recognised in the literature (SonoGym's stated limitation; IJRR 2024: 92 % vs 46 % unseen;
+    intercostal RL 2025), with an outcome-robust headline (scaling with patients) and a novel arm (physics
+    augmentation with a non-physical control).
+  - Thread B: a measured quantity that the tissue compression itself changes, inside the existing FEM region.
+* **Alternatives considered.**
+  - Kidney: new scan window and organ modelling, about a week more.
+  - Vessels: large strain and fluid pressure, beyond the linear FEM.
+  - A benchmark-validity-only paper: less likely to be judged an RSS-level contribution.
+* **Plan and gate.** `tasks/plan.md` "Revised direction". Thread B continues only if the muscle boundaries are
+  measurable from the simulated B-mode and the compression at ≤ 5 N exceeds one axial pixel (gate by 16 Nov).
+* **Hypotheses.** H1–H5 are pre-registered in later entries, before their runs.
+

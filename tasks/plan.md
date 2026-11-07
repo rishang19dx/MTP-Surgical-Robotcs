@@ -1,4 +1,83 @@
-# Implementation Plan: SonoGym-parity robotic-ultrasound gym with soft-tissue deformation (RSS 2027)
+# Revised direction (DEC-048, 8 Nov 2026): two threads chosen to maximise the chance of publication
+
+The 8 Nov self-review (hard-reviewer pass) found the original central claim weak. "Deformation changes what
+policies must learn" does not hold for a rigid bone target: with a tracked probe, reconstruction is correct
+whether or not the tissue deforms (aware vs unaware Cov@3 88.0 vs 88.8). H2 (force) failed when pre-registered,
+and H3 as drafted was true by construction. The paper is re-aimed at two gaps that the literature recognises
+and our tools can close. Nothing guarantees acceptance. The design aims to be publishable whatever the outcome:
+every hypothesis is pre-registered, and a negative result still informs.
+
+## Thread A (primary): close the cross-patient generalisation gap of image-based robotic-US policies
+
+**The gap.**
+- SonoGym: side error 2.3 mm on seen patients vs 27.3 mm on a new patient (their stated main limitation).
+- Jiang et al., IJRR 2024: 92 % vs 46 % on unseen patients.
+- Intercostal RL (2025): generalises poorly to unseen rib cages.
+- Ours: navigation 100 % on 2 training patients vs 7.8 % on 4 held-out patients (DEC-045).
+- No work found that uses biomechanical soft-tissue augmentation to improve robot-policy generalisation.
+
+**Hypotheses** (exact predictions and thresholds are pre-registered in DECISIONS before the runs):
+- **H1 Scaling.** Held-out navigation success rises with the number of training patients (1 → 3 on the laptop;
+  1 → 3 → 9 → 30+ on the server).
+- **H2 Physics augmentation.** At a fixed patient count, FEM-based augmentation raises held-out success. The
+  augmentation is a random pre-deformation (superposed FEM fields from random skin loads, within the ≤ 5 N regime
+  where DEC-047 shows the linear model within 5 %) plus stiffness randomisation.
+- **H3 It must be physical.** FEM augmentation beats a non-physical control of matched displacement magnitude
+  (random smooth elastic warps of the CT) and plain imaging randomisation.
+
+**Protocol.**
+- Primary task: navigation. Secondary: reconstruction.
+- Baselines: random, blind (pose only) and oracle on every evaluation.
+- Seeds: 3 (Stage 1 laptop: 1–2), 5 for Stage 2.
+- Metrics: success (< 3 mm / < 5°) plus SonoGym's position and rotation error, for comparability.
+- Data: 13 patients now. The TotalSegmentator v2 dataset (1,228 CTs, 23.6 GB) is filtered on the server for a
+  larger training pool and held-out set.
+
+## Thread B: a soft target where deformation provably matters, paraspinal muscle thickness
+
+**Why this target.**
+- Ultrasound measurement of erector spinae / multifidus thickness is used clinically (rehabilitative US imaging),
+  and probe pressure is a known error source.
+- Unlike bone, the muscle itself is compressed, so the measured quantity changes. This is not a rigid shift that a
+  tracked pose removes.
+- It lies inside the existing L4 FEM region, and TotalSegmentator labels it ("autochthon").
+
+**Hypotheses** (pre-registered):
+- **H4.** Image-measured muscle thickness under-reads by an amount that grows with probe force, in the deformable
+  simulator. The rigid simulator predicts no change; it is the control.
+- **H5.** A force-aware correction (sensed force + patient FEM compliance → predicted compression) reduces the bias
+  on held-out patients.
+- Restricted to 1–5 N (DEC-047). Forces above 5 N are reported only with the model-error caveat. The magnitude is
+  compared with published probe-pressure effects on muscle thickness, once found and verified.
+
+**Gate (by 16 Nov).** Thread B continues only if both hold:
+- the muscle boundaries are measurable from the simulated B-mode (image only);
+- compression at ≤ 5 N exceeds the axial pixel size.
+
+If either fails, Thread B becomes Stage 2 or future work.
+
+## Thread C: fixes from the self-review (this week)
+- Correct the overstated echo-shift claim in the README and the results doc. The shift is of the order of the
+  probe indentation, i.e. largely kinematic. Quantify it with a warp vs no-warp comparison at the same face pose.
+- Retire H3 "unaware back-projection bias" (true by construction).
+- State the caveats:
+  - the supine CT geometry;
+  - the fat modulus (11 kPa vs the 1–2 kPa reported by the literature search, unverified);
+  - the frictionless, quasi-static model with a kinematic robot.
+
+## Schedule
+
+| Dates | Work |
+| :--- | :--- |
+| 8–12 Nov | Thread C fixes. Implement FEM pre-deformation augmentation and the elastic-warp control. Import the autochthon labels (IDs checked as for L4). Pre-register H1–H5. Finish recording the current pipeline results. |
+| 12–16 Nov | Laptop: H1 with 1 vs 2 vs 3 training patients, H2/H3 at 2 patients (navigation). Thread B gate. |
+| 16–24 Nov | Laptop: Thread B measurement study (13 patients, 1–5 N, rigid control). Server runs (9 patients, seeds, TotalSegmentator import) if reachable by about 18 Nov; otherwise Stage 1 uses the laptop results. |
+| 24 Nov – 4 Dec | Stage 1 abstract (6 pages): contributions = gym (system) + generalisation study (A) + soft-target study (B); preliminary results; Stage 2 charter. |
+| Feb – Apr 2027 | Full study (5 seeds, 100 trials, 30+ patients, imitation baseline, release). Backup venue (RA-L/IROS or MICCAI, early-March deadlines to be confirmed) if Stage 1 is rejected on 5 Feb. |
+
+---
+
+# Original plan (5 Nov; partly superseded by DEC-048 above)
 
 Written 2026-11-05. Decision record: DEC-041 in `DECISIONS.md`. Research behind this plan (gitignored scratch, not citable as a
 source of numbers): `.agents/research/sonogym_gap_analysis.md`, `.agents/research/softbody_and_positioning.md`,

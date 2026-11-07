@@ -63,3 +63,4 @@ ReconstructionPipeline/.fem_cache/
 # Generated at server startup from the FEM skin surface
 data/sample_totalsegmentator_patient/meshes/patient_fem_skin.obj
 checkpoints/*.npz
+checkpoints/vec_ppo/*.zip

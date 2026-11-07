@@ -23,7 +23,9 @@ Why a resampling (and not the files as they are):
     connected component of HU > -200 after a small opening; everything else (table, cushions, noise) is set
     to air (-1000 HU), otherwise the skin height map would follow the table.
 
-Label IDs (TotalSegmentator v2 `total` task): sacrum 25, L5 27, L4 28, L3 29, L2 30, L1 31.  L4 = 28 was
+Label IDs (TotalSegmentator v2 `total` task): sacrum 25, L5 27, L4 28, L3 29, L2 30, L1 31; paraspinal muscle
+"autochthon" left 86 / right 87 (DEC-048 Thread B; checked against SonoGym's autochthon_*.stl for s0010, s0014, s0028:
+centroid distance 4-15 voxels, next label >= 24 voxels away).  L4 = 28 was
 checked against SonoGym's own `vertebrae_L4.stl` for all 12 subjects (centroid distance 3-5 voxels; the
 neighbouring labels 27 / 29 are 18-25 voxels away).
 
@@ -49,7 +51,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 SAMPLE_DIR = os.path.join(ROOT, "data", "sample_totalsegmentator_patient")
 HF_REPO = "yunkao/SonoGym_assets_models"
 LABELS = {"sacrum": 25, "vertebrae_L5": 27, "vertebrae_L4": 28, "vertebrae_L3": 29, "vertebrae_L2": 30,
-          "vertebrae_L1": 31}
+          "vertebrae_L1": 31, "autochthon_left": 86, "autochthon_right": 87}
 GRID_X = (-70.0, 70.0)
 GRID_Y = (-50.0, 120.0)
 GRID_Z = (-90.0, 85.0)

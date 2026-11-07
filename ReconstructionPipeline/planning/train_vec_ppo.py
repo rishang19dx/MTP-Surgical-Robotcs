@@ -78,6 +78,8 @@ def main(argv=None):
     ap.add_argument("--deformation", default="aware", choices=["aware", "unaware", "rigid"])
     ap.add_argument("--bmode-physics", default="depth", choices=["depth", "legacy"])
     ap.add_argument("--e-scale-range", default="")
+    ap.add_argument("--augment", default="none", choices=["none", "fem", "warp", "imaging"],
+                    help="training-time augmentation (DEC-048 thread A): fem preload, non-physical warp, imaging")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--n-steps", type=int, default=64)
     ap.add_argument("--batch-size", type=int, default=512)
@@ -92,7 +94,8 @@ def main(argv=None):
     es = tuple(float(v) for v in args.e_scale_range.split(",")) if args.e_scale_range else None
     env = UltrasoundVectorEnv(args.num_envs, make_task(args.task), patients, deformation_mode=args.deformation,
                               bmode_physics=args.bmode_physics, max_steps=args.max_steps or DEFAULT_MAX_STEPS[args.task],
-                              e_scale_range=es, seed=args.seed)
+                              e_scale_range=es, seed=args.seed,
+                              augment=None if args.augment == "none" else args.augment)
     venv = VecMonitor(SB3VecEnv(env))
     venv.seed(args.seed)
     model = PPO("MultiInputPolicy", venv, n_steps=args.n_steps, batch_size=args.batch_size, learning_rate=args.lr,
@@ -102,7 +105,8 @@ def main(argv=None):
     model.learn(total_timesteps=args.timesteps, callback=cb, progress_bar=False)
     wall = time.perf_counter() - t0
 
-    run = f"{args.task}_{args.deformation}_{args.bmode_physics}_s{args.seed}" + (f"_{args.tag}" if args.tag else "")
+    run = f"{args.task}_{args.deformation}_{args.bmode_physics}_s{args.seed}" + \
+        (f"_aug-{args.augment}" if args.augment != "none" else "") + (f"_{args.tag}" if args.tag else "")
     os.makedirs(args.out_dir, exist_ok=True)
     model.save(os.path.join(args.out_dir, run + ".zip"))
     try:

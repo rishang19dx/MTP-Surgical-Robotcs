@@ -36,6 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -184,14 +185,56 @@ class BatchedFEMSolver:
         return torch.where(torch.isfinite(d0), torch.maximum(lim, d0 + 1.0), lim)
 
     @torch.no_grad()
-    def force(self, poses_P, indentations_mm, e_scale=None) -> torch.Tensor:
-        """Batched `FEMTissueModel.force_at` (no field) -> (B,) N."""
-        return self.solve(poses_P, indentations_mm, e_scale=e_scale, field=False, stiffness=False).reaction_force_n
+    def force(self, poses_P, indentations_mm, e_scale=None, preload=None, preload_margin_mm: float = 0.0
+              ) -> torch.Tensor:
+        """Batched `FEMTissueModel.force_at` (no field) -> (B,) N; `preload` as in `solve`."""
+        return self.solve(poses_P, indentations_mm, e_scale=e_scale, field=False, stiffness=False, preload=preload,
+                          preload_margin_mm=preload_margin_mm).reaction_force_n
+
+    def soft_mask(self) -> torch.Tensor:
+        """(NZ, NY, NX) bool: lattice nodes whose displacement responds to any skin force (soft tissue in the ROI;
+        bone, fixed and outside-ROI nodes are False).  Cached."""
+        if not hasattr(self, "_soft_mask"):
+            m = self.model
+            resp = m.G_lat.abs().amax(0).view(3, m.NZ, m.NY, m.NX)
+            self._soft_mask = (resp > 0).any(0)
+        return self._soft_mask
 
     # --------------------------------------------------------------- solve
     @torch.no_grad()
+    def random_preload(self, n: int, rng, force_max_n: float = 5.0, patches: int = 3, radius_mm: float = 15.0,
+                       region=None, max_tilt: float = 0.5) -> torch.Tensor:
+        """Random smooth background skin loads for FEM augmentation (DEC-048 thread A, H2): `patches` Gaussian
+        patches (radius `radius_mm`) centred on free skin nodes inside `region` = (x_lo, x_hi, z_lo, z_hi) (all if
+        None), each pushing along -Y_P tilted by up to `max_tilt` (tangential/normal ratio), total force per env
+        uniform in [0, force_max_n].  Returns (n, 3 Sf) nodal forces [N] at the free skin nodes (frame P)."""
+        pos = self.skin_ref[torch.as_tensor(self.model.free_skin, device=self.dev)].cpu().numpy()   # (Sf,3)
+        ok = np.ones(len(pos), bool)
+        if region is not None:
+            ok = (pos[:, 0] >= region[0]) & (pos[:, 0] <= region[1]) & (pos[:, 2] >= region[2]) & (pos[:, 2] <= region[3])
+        idx_ok = np.nonzero(ok)[0]
+        out = np.zeros((n, len(pos), 3))
+        for i in range(n):
+            total = rng.uniform(0.0, force_max_n)
+            share = rng.dirichlet(np.ones(patches)) * total
+            for k in range(patches):
+                c = pos[rng.choice(idx_ok)]
+                w = np.exp(-0.5 * ((pos[:, 0] - c[0]) ** 2 + (pos[:, 2] - c[2]) ** 2) / radius_mm ** 2)
+                w /= w.sum()
+                t = rng.uniform(-max_tilt, max_tilt, 2)
+                dvec = np.array([t[0], -1.0, t[1]])
+                dvec /= np.linalg.norm(dvec)
+                out[i] += share[k] * w[:, None] * dvec[None, :]
+        return torch.as_tensor(out.reshape(n, -1), dtype=self.dt, device=self.dev)
+
     def solve(self, poses_P, indentations_mm, e_scale=None, field: bool = True,
-              stiffness: bool = True) -> BatchedFEMState:
+              stiffness: bool = True, preload: Optional[torch.Tensor] = None,
+              preload_margin_mm: float = 0.0) -> BatchedFEMState:
+        """`preload` (B, 3 Sf): optional background nodal forces [N] at the free skin nodes (augmentation,
+        DEC-048).  Linear superposition: the background moves the skin by C f / e_scale, which reduces each face
+        sample's overlap along the beam (contact still found on the reference surface, the model's existing
+        approximation), and adds f G_lat / e_scale to the displacement field.  `preload_margin_mm` widens the
+        candidate search so samples that come into contact only because of the preload are considered."""
         m = self.model
         dev, dt = self.dev, self.dt
         T = torch.as_tensor(poses_P, dtype=dt, device=dev)
@@ -212,7 +255,12 @@ class BatchedFEMSolver:
         c = o + d[:, None] * b
         q = (c[:, None, :] + self.ls[None, :, None] * ex[:, None, :] + self.es[None, :, None] * ez[:, None, :])
         g, q = self._normal_gap(q, b)                              # (B,n), (B,n,3)
-        pen = (g > 0) & env_ok[:, None]
+        Wbg = None
+        if preload is not None:
+            Wbg = preload.to(dt) / es_env[:, None]                 # (B, 3Sf)
+            u_bg_skin = Wbg @ self.C                               # (B, 3Sf) skin displacement from the preload
+        margin = float(preload_margin_mm) if preload is not None else 0.0
+        pen = (g > -margin) & env_ok[:, None]
 
         # bilinear distribution of each sample onto the 4 surrounding skin columns
         h = m.h
@@ -255,6 +303,13 @@ class BatchedFEMSolver:
         Nm.scatter_add_(2, slot.view(B, n_s, 4), (wts * keep).to(dt))
         Nm = Nm[..., :K]
         has = Nm.sum(-1) > 1e-12
+        if preload is not None:
+            frb = torch.where(cand_ok, self.skin_to_free[cand.clamp_min(0)], torch.full_like(cand, -1))
+            r3b = 3 * frb.clamp_min(0)[..., None] + torch.arange(3, device=dev)              # (B,K,3)
+            ub = (u_bg_skin.gather(1, r3b.reshape(B, -1)).view(B, K, 3) * b[:, None, :]).sum(-1)
+            ub = torch.where(frb >= 0, ub, torch.zeros_like(ub))   # preload displacement along the beam
+            g = g - (Nm @ ub[..., None])[..., 0]
+            pen = pen & (g > 0)
         base = pen & has                                           # samples taking part (CPU: pen, then has)
         g = torch.where(base, g, torch.zeros_like(g))
 
@@ -300,7 +355,7 @@ class BatchedFEMSolver:
 
         u_grid = None
         if field:
-            u_grid = self._field(f, fr, b, es_env)
+            u_grid = self._field(f, fr, b, es_env, Wbg)
 
         z = torch.zeros_like(Fs)
         return BatchedFEMState(
@@ -330,7 +385,7 @@ class BatchedFEMSolver:
         tau = torch.cross(r, -fw[..., None] * b[:, None, :], dim=-1).sum(1)
         return {"F": Fs * phi, "Flin": Fs, "phi": phi, "comp": comp, "Fvec": -b * Fw[:, None], "tau": tau}
 
-    def _field(self, f, fr, b, es_env):
+    def _field(self, f, fr, b, es_env, Wbg=None):
         """u_lat = sum_c f_c (b . G_lat[c]) / e_scale for every env, as one dense GEMM."""
         m = self.model
         B = f.shape[0]
@@ -340,5 +395,7 @@ class BatchedFEMSolver:
         idx = torch.where(use[..., None], 3 * fr.clamp_min(0)[..., None] + torch.arange(3, device=self.dev),
                           torch.full_like(fr, 3 * self.Sf)[..., None].expand(-1, -1, 3))
         W.scatter_add_(1, idx.reshape(B, -1), w3.reshape(B, -1))
+        if Wbg is not None:
+            W[:, :-1] += Wbg
         u = W[:, :-1].to(m.G_lat.dtype) @ m.G_lat                                          # (B, 3 N_lat)
         return u.float().view(B, 3, m.NZ, m.NY, m.NX)

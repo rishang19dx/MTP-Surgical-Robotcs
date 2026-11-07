@@ -1169,3 +1169,68 @@ A chronological record of all architectural, research, algorithmic, and engineer
   measurable from the simulated B-mode and the compression at ≤ 5 N exceeds one axial pixel (gate by 16 Nov).
 * **Hypotheses.** H1–H5 are pre-registered in later entries, before their runs.
 
+### `DEC-049`: Thread A Laptop Study — PRE-REGISTERED (runs start after this commit)
+* **Date**: November 8, 2026. Committed before any of the runs below.
+* **Augmentation implemented.**
+  - `BatchedFEMSolver.solve(preload=...)`: linear superposition of random background skin loads. The preload
+    moves the skin by C f / e_scale, which reduces the probe overlap, and adds f G_lat / e_scale to the field.
+  - `random_preload`: 3 Gaussian patches of radius 15 mm, inward with ±0.5 tangential tilt, total force uniform
+    in 0–5 N (the regime where DEC-047 puts the linear FEM within 5 %).
+  - `UltrasoundVectorEnv(augment=...)`:
+    - `fem` = that preload, physical, in both contact and image;
+    - `warp` = the non-physical control, a smooth random field (4³ control grid, trilinear) confined to soft
+      tissue and RMS-matched to a freshly drawn FEM preload field, image only;
+    - `imaging` = per-episode gain ±6 dB and TGC slope ±2 dB/cm.
+  - Tests: `test_augmentation.py`.
+* **Runs.** All navigation runs: 300k steps, 32 envs, depth B-mode, hidden offset (DEC-045), shared moduli,
+  coverage-independent. Patients: sample = case-0004; s0015, s0010 from the train split.
+
+  | Run | Training patients | Augmentation | Seeds |
+  | :--- | :--- | :--- | :--- |
+  | N1 | {sample} | none | 0 |
+  | N2 | {sample, s0015} | none | 0 (exists: `nav_aware_depth_s0_laptop2p_offset`), 1 |
+  | N3 | {sample, s0015, s0010} | none | 0 |
+  | N2+fem | {sample, s0015} | fem | 0, 1 |
+  | N2+warp | {sample, s0015} | warp | 0 |
+  | N2+imaging | {sample, s0015} | imaging | 0 |
+
+* **Evaluation.** `eval_vec_policies.py --task nav --patients test --episodes 16`: 4 held-out patients × 16
+  episodes = 64 episodes per policy. Reported: success, final position and yaw error (SonoGym's metrics), and the
+  random, blind and oracle baselines.
+* **Predictions.**
+  - **H1:** held-out success N1 ≤ N2 ≤ N3, and N3 − N1 ≥ 5 percentage points.
+  - **H2:** N2+fem > N2 on held-out success, mean over seeds 0 and 1.
+  - **H3:** N2+fem > N2+warp and N2+fem > N2+imaging.
+  - A difference smaller than the binomial 95 % interval of 64 episodes (about ±12 points near 10 %) is reported
+    as "no detectable difference", not as support.
+* **Status.** These are preliminary (1–2 seeds, ≤ 3 training patients). The confirmatory study is the server run
+  (9 and 30+ patients, 3–5 seeds), which will get its own pre-registration.
+
+### `DEC-050`: Thread B Muscle-Thickness Study — PRE-REGISTERED (detector v2 frozen)
+* **Date**: November 8, 2026. Committed before the full run.
+* **Labels.** autochthon left / right = TotalSegmentator v2 labels 86 / 87, checked against SonoGym's STLs for
+  s0010, s0014 and s0028. The importer re-exports them; the CTs are byte-identical, so the FEM caches stay valid.
+* **Method.** `ReconstructionPipeline/evaluation/muscle_compression_study.py`:
+  - patients: 12 SonoGym subjects;
+  - poses: 6 paraspinal (x ±20 mm, z ∈ {−45, −32.5, −20} mm);
+  - forces: 1, 2, 3, 4, 5 N, plus 8 and 10 N reported with the DEC-047 caveat;
+  - legacy B-mode with a fixed speckle seed;
+  - ground-truth thickness from the FEM-warped label, used as a metric only.
+* **Detector history (disclosed).**
+  - v1 (fascia search from 2 mm) gave a median |error| of 9–10 mm on s0015 (train) and s0029 (TEST). s0029 was
+    seen in this smoke test before the split rule for detector development was set. Its v1 numbers are not
+    reported, and it was not used for v2.
+  - v2 (search from 5 mm, below the skin ring-down; ±10 mm lateral averaging) was developed on the train patients
+    s0015 and s0010 only: |error| 4.9 and 6.4 mm at ≤ 2 N. Frozen here.
+* **Criteria.**
+  - **Gate:** (i) median detection ≥ 0.5 and median |image − GT| < 3 mm at ≤ 2 N; (ii) median GT compression
+    1 → 5 N > 0.377 mm.
+  - **H4:** the median slope of image thickness against F over 1–5 N is below 0.
+  - **H5:** a force-linear correction, fitted on the train patients against the uncompressed reference, reduces
+    the median |error| on the test patients.
+* **Expected.** From the train-patient smoke test, gate (i) is likely to FAIL with v2.
+  - The cause is a realism gap: in the CT-derived B-mode the fat/muscle interface is barely echogenic
+    (R ≈ 0.05), while real fascia is a thin, strongly echogenic collagen layer that CT does not resolve.
+  - If the gate fails, Thread B moves to Stage 2, with the fascia modelling as the stated reason. It is not
+    rescued by further detector tuning.
+

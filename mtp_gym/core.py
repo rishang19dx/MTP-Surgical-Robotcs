@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from gymnasium import spaces
 from gymnasium.vector import VectorEnv
 
@@ -218,6 +219,8 @@ class UltrasoundVectorEnv(VectorEnv):
         e_scale_range: Optional[Sequence[float]] = None,
         bmode_physics: str = "depth",
         pose_offset: Optional[Sequence[float]] = None,
+        augment: Optional[str] = None,
+        augment_force_n: float = 5.0,
         device: Optional[torch.device] = None,
         seed: Optional[int] = None,
     ):
@@ -276,6 +279,18 @@ class UltrasoundVectorEnv(VectorEnv):
         self.pose_offset_range = None if po is None else torch.tensor(
             [float(po[0]), float(po[1]), math.radians(float(po[2])), 0.0], device=dev)
         self.pose_offset = torch.zeros(N, 4, device=dev)
+        # Training-time augmentation (DEC-048 thread A): "fem" = random physical skin preload (contact + image),
+        # "warp" = non-physical smooth random warp RMS-matched to an FEM preload field (image only), "imaging" =
+        # random gain / TGC slope per episode.  None = off.
+        if augment not in (None, "fem", "warp", "imaging"):
+            raise ValueError(f"augment must be None|fem|warp|imaging, got {augment}")
+        self.augment, self.augment_force_n = augment, float(augment_force_n)
+        self.preload_margin_mm = 10.0
+        sf = {len(p.model.free_skin) for p in self.patients}
+        self.preload = torch.zeros(N, 3 * max(sf), dtype=torch.float64, device=dev)
+        self.u_warp = {}
+        self.img_gain_db = torch.zeros(N, device=dev)
+        self.img_slope_db_cm = torch.zeros(N, device=dev)
         self.last_frame: Optional[Frame] = None
 
         self.task = task
@@ -343,10 +358,42 @@ class UltrasoundVectorEnv(VectorEnv):
             mult = torch.as_tensor(np.exp(self._np_rng.uniform(np.log(lo), np.log(hi), len(ids))),
                                    dtype=torch.float64, device=self.device)
             self.e_scale[ids] = base * mult
+        if self.augment is not None:
+            self._sample_augmentation(ids)
         self.task.reset(ids)
         frame = self._acquire(ids, approach=True)
         extra, info = self.task.observe(frame, first=True)
         return self._obs(frame, extra), info
+
+    def _sample_augmentation(self, ids: torch.Tensor) -> None:
+        rng = self._np_rng
+        if self.augment == "imaging":
+            n = len(ids)
+            self.img_gain_db[ids] = torch.as_tensor(rng.uniform(-6.0, 6.0, n), dtype=torch.float32, device=self.device)
+            self.img_slope_db_cm[ids] = torch.as_tensor(rng.uniform(-2.0, 2.0, n), dtype=torch.float32,
+                                                        device=self.device)
+            return
+        pat = self.env_patient[ids]
+        for p_idx in pat.unique().tolist():
+            g = ids[(pat == p_idx).nonzero()[:, 0]]
+            ps = self.patients[p_idx]
+            region = (ps.c1_bounds[0] - 15.0, ps.c1_bounds[1] + 15.0, ps.c2_bounds[0] - 15.0, ps.c2_bounds[1] + 15.0)
+            pre = ps.solver.random_preload(len(g), rng, self.augment_force_n, region=region)
+            if self.augment == "fem":
+                self.preload[g, :pre.shape[1]] = pre.to(self.preload.dtype)
+                continue
+            # "warp": image-only smooth random field with the RMS of this FEM preload's field over soft tissue
+            m = ps.model
+            u_fem = ((pre / self.e_scale[g][:, None]).to(m.G_lat.dtype) @ m.G_lat).float().view(len(g), 3, m.NZ, m.NY, m.NX)
+            mask = ps.solver.soft_mask().float()
+            rms = (((u_fem ** 2).sum(1) * mask).flatten(1).sum(1) / mask.sum().clamp_min(1)).sqrt()
+            noise = torch.as_tensor(rng.standard_normal((len(g), 3, 4, 4, 4)), dtype=torch.float32, device=self.device)
+            w = F.interpolate(noise, size=(m.NZ, m.NY, m.NX), mode="trilinear", align_corners=True) * mask
+            w_rms = (((w ** 2).sum(1)).flatten(1).sum(1) / mask.sum().clamp_min(1)).sqrt().clamp_min(1e-9)
+            w = w * (rms / w_rms)[:, None, None, None, None]
+            if p_idx not in self.u_warp:
+                self.u_warp[p_idx] = torch.zeros(self.num_envs, 3, m.NZ, m.NY, m.NX, device=self.device)
+            self.u_warp[p_idx][g] = w
 
     def step(self, actions):
         a = torch.as_tensor(actions, dtype=torch.float32, device=self.device).clamp(-1.0, 1.0)
@@ -388,7 +435,7 @@ class UltrasoundVectorEnv(VectorEnv):
         return obs
 
     # ---------------------------------------------------------- simulation
-    def _regulate(self, ps: PatientSim, t_skin, rel, target, es, iters):
+    def _regulate(self, ps: PatientSim, t_skin, rel, target, es, iters, preload=None):
         """Batched `regulate_force`: admittance along the beam within [first contact, max indentation]."""
         s = ps.solver
         d_fc = s.first_contact(t_skin)
@@ -396,7 +443,7 @@ class UltrasoundVectorEnv(VectorEnv):
         d_max = torch.maximum(s.max_indentation(t_skin, first_contact=d_fc), d_fc)
         d = torch.minimum(torch.maximum(d_fc + rel, d_fc), d_max)
         for _ in range(iters):
-            f = s.force(t_skin, d, e_scale=es)
+            f = s.force(t_skin, d, e_scale=es, preload=preload, preload_margin_mm=self.preload_margin_mm)
             step = (self.k_adm * (target.double() - f)).clamp(-self.adm_max_step, self.adm_max_step)
             d = torch.minimum(torch.maximum(d + step, d_fc), d_max)
         return d, d_fc
@@ -422,14 +469,20 @@ class UltrasoundVectorEnv(VectorEnv):
             rel = torch.zeros(len(g), dtype=torch.float64, device=dev) if approach else self.indent_rel[g]
             it = self.approach_iters if approach else self.adm_iters
             es = self.e_scale[g]
-            d, d_fc = self._regulate(ps, t_skin, rel, self.target_force[g], es, it)
+            pre = None
+            if self.augment == "fem" and self.deformation_mode != "rigid":
+                pre = self.preload[g, :3 * len(ps.model.free_skin)]
+            d, d_fc = self._regulate(ps, t_skin, rel, self.target_force[g], es, it, pre)
             self.indent_rel[g] = (d - d_fc).double()
             if self.deformation_mode == "rigid":
                 f = ps.solver.force(t_skin, d, e_scale=es)
                 t_img = t_skin
                 sl = ps.ct.extract_slices(t_img, interpolation="bilinear")
             else:
-                st = ps.solver.solve(t_skin, d, e_scale=es, stiffness=False)
+                st = ps.solver.solve(t_skin, d, e_scale=es, stiffness=False, preload=pre,
+                                     preload_margin_mm=self.preload_margin_mm)
+                if self.augment == "warp":
+                    st.u_grid = st.u_grid + self.u_warp[p_idx][g]
                 f = st.reaction_force_n
                 t_img = st.probe_face_poses(t_skin)
                 sl = ps.ct.extract_slices(t_img, interpolation="bilinear", batched_warp_fn=st.warp_to_reference)
@@ -444,6 +497,10 @@ class UltrasoundVectorEnv(VectorEnv):
         tilt = torch.arccos(cos_t.clamp(-1.0, 1.0))
         kappa, status = self._coupling(f32, tilt)
         bmode = self.us_sim.simulate_bmode(slices)["bmode"]
+        if self.augment == "imaging":   # random overall gain / TGC slope (log-compressed display domain)
+            depth_cm = torch.arange(h, device=dev, dtype=torch.float32).view(1, -1, 1) * PHYSICAL_SIZE_MM[0] / (h - 1) / 10.0
+            shift_db = self.img_gain_db[ids][:, None, None] + self.img_slope_db_cm[ids][:, None, None] * depth_cm
+            bmode = (bmode + shift_db / self.us_sim.dynamic_range_db).clamp(0.0, 1.0)
         loss_db = -20.0 * torch.log10(kappa.clamp_min(1e-3))
         shifted = (bmode - (loss_db / self.us_sim.dynamic_range_db)[:, None, None]).clamp(0.0, 1.0)
         bmode = torch.where((loss_db > 1e-3)[:, None, None], shifted, bmode)

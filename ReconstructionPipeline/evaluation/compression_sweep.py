@@ -74,7 +74,9 @@ def indentation_for_force(ps: PatientSim, T: torch.Tensor, F: torch.Tensor, iter
 
 
 @torch.no_grad()
-def sweep_patient(ps: PatientSim, forces, seed: int):
+def sweep_patient(ps: PatientSim, forces, seed: int, warp: bool = True):
+    """warp=False: the probe face is placed at the same indented pose, but the CT is sliced WITHOUT the FEM warp
+    (rigid tissue): echo changes are then pure probe kinematics (DEC-048 thread C)."""
     dev = ps.device
     poses = np.stack(ps.model.window_poses(ps.c1_bounds, ps.c2_bounds))                       # (9,4,4)
     nP, nF = len(poses), len(forces)
@@ -82,7 +84,7 @@ def sweep_patient(ps: PatientSim, forces, seed: int):
     Ft = torch.as_tensor(np.tile(forces, nP), dtype=torch.float64, device=dev)
     d, d0 = indentation_for_force(ps, T, Ft)
     st = ps.solver.solve(T, d, stiffness=False)
-    sl = ps.ct.extract_slices(st.probe_face_poses(T), batched_warp_fn=st.warp_to_reference)
+    sl = ps.ct.extract_slices(st.probe_face_poses(T), batched_warp_fn=st.warp_to_reference if warp else None)
     sim = ModelBasedUltrasoundSimulator(device=dev, axial_resolution_mm=AXIAL_MM,
                                         lateral_resolution_mm=PHYSICAL_SIZE_MM[1] / (IMAGE_SIZE[1] - 1))
     gen = torch.Generator(device=dev)

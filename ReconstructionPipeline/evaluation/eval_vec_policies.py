@@ -153,11 +153,16 @@ def main(argv=None):
     L = [f"# Vector-env evaluation: {args.task} ({stamp})", "", f"commit `{commit}` · {meta['gpu']} · patients "
          f"`{args.patients}` · {args.episodes} episodes per patient · eval deformation `{args.deformation}` · B-mode "
          f"`{args.bmode_physics}` · seed {args.seed}", "",
-         f"| Policy | Mean {key} | Mean force (N) | Mean return |", "| :--- | ---: | ---: | ---: |"]
+         f"| Policy | Mean {key} | Mean force (N) | Mean return |" + (" Final pos. error (mm) | Final yaw error (deg) |"
+                                                                    if args.task == "nav" else ""),
+         "| :--- | ---: | ---: | ---: |" + (" ---: | ---: |" if args.task == "nav" else "")]
     for pol in policies:
         rs = [r for r in rows if r["policy"] == pol]
-        L.append(f"| {pol} | {np.mean([r[key] for r in rs]):.3f} | {np.mean([r['force_mean'] for r in rs]):.2f} | "
-                 f"{np.mean([r['return'] for r in rs]):.2f} |")
+        line = (f"| {pol} | {np.mean([r[key] for r in rs]):.3f} | {np.mean([r['force_mean'] for r in rs]):.2f} | "
+                f"{np.mean([r['return'] for r in rs]):.2f} |")
+        if args.task == "nav":   # SonoGym reports final position / rotation error for navigation
+            line += f" {np.mean([r['dist'] for r in rs]):.1f} | {np.mean([r['yaw_err'] for r in rs]):.1f} |"
+        L.append(line)
     L += ["", "| Patient | Policy | " + key + " | force (N) | return |", "| :--- | :--- | ---: | ---: | ---: |"]
     for r in rows:
         L.append(f"| {r['patient']} | {r['policy']} | {r[key]:.3f} | {r['force_mean']:.2f} | {r['return']:.2f} |")

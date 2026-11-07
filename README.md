@@ -455,6 +455,8 @@ MTP/
   contact, DEC-041 RSS 2027 direction and the batched gym).
 - [`tasks/plan.md`](tasks/plan.md), [`tasks/todo.md`](tasks/todo.md): RSS 2027 plan, hypotheses H1–H4 and the dated
   task list.
+- [`Docs/RSS2027_RESULTS_AND_INFERENCES.md`](Docs/RSS2027_RESULTS_AND_INFERENCES.md): every RSS 2027 result so far
+  with its source file, and what it does and does not support.
 - [`FLOW.md`](FLOW.md): execution flows, data routes, frames and verification recipes.
 - [`QUIZME.md`](QUIZME.md): pre-implementation questions for major changes.
 - [`AGENTS.md`](AGENTS.md): instructions and invariants for coding agents.

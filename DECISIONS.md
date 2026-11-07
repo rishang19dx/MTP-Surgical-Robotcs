@@ -868,3 +868,38 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - The compression sweep (T9) renders without the coupling loss κ, so its visibility numbers are deformation
     only.
 
+### `DEC-042`: Depth-Dependent B-mode Physics for the Gym — PRE-REGISTERED Before Implementation
+* **Date**: November 7, 2026 (branch `audit-fixes`). This entry is committed BEFORE the code change and BEFORE any
+  run, so the prediction cannot be fitted to the result.
+* **Context**: DEC-041 progress T7. In the current B-mode model the image barely degrades with depth:
+  - one soft-tissue attenuation, 0.6 dB/cm/MHz;
+  - a fixed TGC of 5 dB/cm;
+  - electronic noise added after the TGC.
+
+  So compressing tissue does not improve the image, and the force-scan task has the same best force for thin and
+  thick backs.
+
+  User decision 2026-11-07: fix the physics from literature and pre-register the prediction (QUIZME C3).
+* **Changes (gym only).** They are opt-in on `ModelBasedUltrasoundSimulator`. The single-env defaults stay
+  unchanged, so `results/benchmark_latest.md` remains reproducible. No other parameter is changed or tuned, and
+  the reward weights stay at w_vis = 2, w_fc = 0.05 / N.
+  1. **Per-tissue attenuation.** Fat (HU < −20, the FEM's fat threshold) 0.48 dB/cm/MHz, other soft tissue
+     (muscle) 1.09 dB/cm/MHz. Bone is unchanged at 20. Source: tissue table in arXiv 1710.05065 (fat 0.48,
+     muscle 1.09). Stanford RAD225 notes give muscle ≈ 1, soft tissue ≈ 0.5.
+  2. **Receiver noise before the TGC.** A Rayleigh noise floor is added at the receiver input, so the TGC amplifies
+     it with depth. Its amplitude is not tuned. It is set so that the average soft-tissue scatter (0.54 dB/cm/MHz)
+     falls to SNR = 1 at the textbook maximum imaging depth of about 500 wavelengths:
+     - λ = 1.54 / f mm, so D = 154 mm at 5 MHz;
+     - n0 = scatter_amplitude × 10^(−2 · 0.54 · f · D[cm] / 20).
+
+     The existing post-TGC floor (0.002) stays as the display noise.
+  3. Depth-dependent beam width is NOT added: no reliable parameter was found.
+* **Pre-registered predictions.** Same protocol as `test_vec_force_scan.py`: thin s0015 vs thick s0014, 9 held
+  poses each, `aware` mode.
+  - **P1 (H2 landscape).** The force maximising mean (2 × scanline visibility − 0.05 × F) over
+    F ∈ {2, 4, 8, 12, 15} N is larger for the thick back than for the thin back.
+  - **P2.** Thick-back scanline visibility rises by more than 0.10 from 4 N to 12 N.
+  - **P3 (control).** In `rigid` mode visibility changes by less than 0.03 between 4 and 12 N, for both backs.
+  - Whatever the outcome, it is reported here and in the README. If P1 fails, H2 is reframed as "minimal force
+    for coupling and field of view" (the user's fallback option), and the simulator is not changed again for H2.
+

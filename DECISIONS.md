@@ -936,3 +936,21 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Two bookkeeping tests (`test_vec_reconstruction.py`) are pinned to `bmode_physics="legacy"`: they test the
     reward and parity code, not the image model.
 
+### `DEC-043`: Muscle-Appropriate Fixed TGC Preset for the Gym B-mode
+* **Date**: November 7, 2026 (branch `audit-fixes`). User decision.
+* **Context**: DEC-042 introduced per-tissue attenuation (muscle 1.09 dB/cm/MHz). The fixed TGC (5 dB/cm, capped at
+  40 dB) had been chosen for the legacy single attenuation of 0.6 dB/cm/MHz. Under the new physics it leaves muscle
+  about 6 dB/cm under-compensated, and it stops compensating at 3.7 cm. A scanner operator would choose a preset
+  suited to the tissue.
+* **Decision.** `depth_physics()` uses a fixed TGC of 2 × α_muscle × f = 10.9 dB/cm at 5 MHz. The gain cap covers
+  the image depth: 10.9 dB/cm × 7.5 cm ≈ 82 dB.
+  - It is the same for every patient and frame and independent of the tissue actually present (invariant 5:
+    "a fixed TGC, independent of the tissue").
+  - The receiver noise n0 (DEC-042) is unchanged, so the noise floor now rises with depth exactly as the gain
+    does. Muscle scatter then reaches SNR ≈ 1 at about 7.6 cm, consistent with the 500-wavelength anchor scaled to
+    muscle.
+* **Not done.** The segmenter is not retuned. Its precision and recall against the ground-truth surface are
+  measured (metric only) and reported, and retuning would be a separate decision.
+* **Scope rule (stated in DEC-042).** This change is made for realism, not to revisit H2. The DEC-042 outcome
+  stands. If the strict-xfail H2 test flips, that is recorded, not claimed as support for H2.
+

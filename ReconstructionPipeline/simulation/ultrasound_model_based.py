@@ -146,11 +146,18 @@ class ModelBasedUltrasoundSimulator:
         return float(scatter_amplitude * 10.0 ** (-2.0 * alpha_avg_db * frequency_mhz * depth_cm / 20.0))
 
     @classmethod
-    def depth_physics(cls, frequency_mhz: float = 5.0, **kwargs) -> "ModelBasedUltrasoundSimulator":
+    def depth_physics(cls, frequency_mhz: float = 5.0, image_depth_mm: float = 75.0,
+                      **kwargs) -> "ModelBasedUltrasoundSimulator":
         """Simulator with the DEC-042 depth-dependent physics: fat 0.48 / muscle 1.09 dB/cm/MHz (arXiv 1710.05065)
-        and receiver noise before the TGC anchored at 500-wavelength penetration."""
+        and receiver noise before the TGC anchored at 500-wavelength penetration; plus the DEC-043 fixed
+        muscle-appropriate TGC preset: slope 2 x alpha_muscle x f dB/cm (10.9 dB/cm at 5 MHz), capped at the image
+        depth.  The preset is fixed (the same for every patient and frame), independent of the tissue present."""
+        alpha_fat, alpha_muscle = 0.48, 1.09
         scatter = kwargs.get("scatter_amplitude", 0.008)
-        return cls(frequency_mhz=frequency_mhz, alpha_fat_db=0.48, alpha_muscle_db=1.09,
+        tgc = 2.0 * alpha_muscle * frequency_mhz
+        kwargs.setdefault("tgc_db_per_cm", tgc)
+        kwargs.setdefault("tgc_max_db", tgc * image_depth_mm / 10.0)
+        return cls(frequency_mhz=frequency_mhz, alpha_fat_db=alpha_fat, alpha_muscle_db=alpha_muscle,
                    receiver_noise_amplitude=cls.receiver_noise_from_penetration(frequency_mhz, scatter), **kwargs)
 
     def _gauss_1d(self, sigma_px: float, ksize: Optional[int]) -> torch.Tensor:

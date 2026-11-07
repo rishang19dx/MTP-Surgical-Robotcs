@@ -56,16 +56,17 @@ def test_force_changes_visibility_only_with_deformation(patients):
     v_def = {f: _hold(patients, "aware", f)[0] for f in (4.0, 12.0)}
     v_rig = {f: _hold(patients, "rigid", f)[0] for f in (4.0, 12.0)}
     print(f"\n[force] visibility thin/thick  aware 4N {v_def[4.0]}  12N {v_def[12.0]}  |  rigid 4N {v_rig[4.0]}  12N {v_rig[12.0]}")
-    assert v_def[12.0][1] - v_def[4.0][1] > 0.02          # thick back: pressing harder reveals a little more bone
-    # (measured 2026-11-07: 0.205 -> 0.241; the effect is small because the image barely degrades with depth,
-    #  see DEC-041 progress T7)
+    for p in (0, 1):
+        assert v_def[12.0][p] >= v_def[4.0][p]             # with deformation, pressing harder never hides bone
+    # Pre-registered P2 (DEC-042: thick-back gain > 0.10 from 4 to 12 N) FAILED: measured 0.128 -> 0.149.
     for p in (0, 1):
         assert abs(v_rig[12.0][p] - v_rig[4.0][p]) < 0.03   # rigid control: force cannot change the image
 
 
-@pytest.mark.xfail(strict=True, reason="DEC-041 progress T7 (2026-11-07): with the current B-mode model the image "
-                   "barely degrades with depth (fixed TGC cancels attenuation; noise added after TGC), so the best force "
-                   "is ~4 N for both backs. Kept as a visible expected failure until the image model is decided.")
+@pytest.mark.xfail(strict=True, reason="Pre-registered prediction P1 of DEC-042 FAILED (2026-11-07): with the "
+                   "legacy B-mode the best force was 4 N for both backs; with the literature depth physics (per-tissue "
+                   "attenuation, receiver noise before TGC) it is 2 N for both. H2 is reframed (DEC-042 outcome). "
+                   "Kept as a strict xfail so that any later change that flips it is noticed.")
 def test_best_force_is_higher_for_the_thick_back(patients):
     """H2 sanity on the reward landscape (not a learned result): the force maximising the image term minus the
     force cost is larger for the thick back than for the thin back."""

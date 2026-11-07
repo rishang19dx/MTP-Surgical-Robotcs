@@ -216,6 +216,7 @@ class UltrasoundVectorEnv(VectorEnv):
         action_scale_yaw_deg: float = 10.0,
         action_scale_pitch_deg: float = 15.0,
         e_scale_range: Optional[Sequence[float]] = None,
+        bmode_physics: str = "depth",
         device: Optional[torch.device] = None,
         seed: Optional[int] = None,
     ):
@@ -246,9 +247,15 @@ class UltrasoundVectorEnv(VectorEnv):
         self.bounds = bounds[self.env_patient]                                   # (N,4) c1lo c1hi c2lo c2hi
 
         h, w = IMAGE_SIZE
-        self.us_sim = ModelBasedUltrasoundSimulator(
-            device=self.device, axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (h - 1),
-            lateral_resolution_mm=PHYSICAL_SIZE_MM[1] / (w - 1), seed=seed)
+        if bmode_physics not in ("depth", "legacy"):
+            raise ValueError(f"bmode_physics must be depth|legacy, got {bmode_physics}")
+        self.bmode_physics = bmode_physics
+        sim_kw = dict(device=self.device, axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (h - 1),
+                      lateral_resolution_mm=PHYSICAL_SIZE_MM[1] / (w - 1), seed=seed)
+        # "depth" (default, DEC-042): per-tissue attenuation + receiver noise before the TGC; "legacy" = the
+        # single-env simulator (env_reconstruction), used for parity tests
+        self.us_sim = (ModelBasedUltrasoundSimulator.depth_physics(**sim_kw) if bmode_physics == "depth"
+                       else ModelBasedUltrasoundSimulator(**sim_kw))
         self.conf = UltrasoundConfidenceEstimator(device=self.device,
                                                   axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (h - 1))
         self._np_rng = np.random.default_rng(seed)

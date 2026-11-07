@@ -52,7 +52,8 @@ def test_batched_segmenter_equals_numpy(patient):
 
 
 def test_raster_reaches_coverage_and_reward_is_area(patient):
-    env = UltrasoundVectorEnv(2, ReconstructionTask(target_coverage=1.01), [patient], max_steps=500, seed=2)
+    env = UltrasoundVectorEnv(2, ReconstructionTask(target_coverage=1.01), [patient], max_steps=500, seed=2,
+                              bmode_physics="legacy")   # bookkeeping test; the image model is not under test
     start, acts = _lawnmower(env)
     obs, _ = env.reset(seed=2, options={"init_pose": start})
     cov_hist, gains = [], []
@@ -107,7 +108,8 @@ def test_raster_coverage_matches_single_env(patient):
                                                                   num_sweep_lines=3, points_per_line=24)
     single = UltrasoundReconstructionEnv(patient_data=patient.data, tissue_model=patient.model, device=DEV, seed=5,
                                          max_steps=200, target_coverage=1.01)
-    vec = UltrasoundVectorEnv(1, ReconstructionTask(target_coverage=1.01), [patient], max_steps=200, seed=5)
+    vec = UltrasoundVectorEnv(1, ReconstructionTask(target_coverage=1.01), [patient], max_steps=200, seed=5,
+                              bmode_physics="legacy")   # same B-mode model as the single env
     single.reset(options={"init_pose": traj[0]})
     vec.reset(seed=5, options={"init_pose": traj[0]})
     scale = np.array([5.0, 5.0, np.radians(10.0), np.radians(15.0)])

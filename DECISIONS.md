@@ -902,4 +902,37 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - **P3 (control).** In `rigid` mode visibility changes by less than 0.03 between 4 and 12 N, for both backs.
   - Whatever the outcome, it is reported here and in the README. If P1 fails, H2 is reframed as "minimal force
     for coupling and field of view" (the user's fallback option), and the simulator is not changed again for H2.
+* **Outcome (2026-11-07, after implementation; protocol unchanged, `test_vec_force_scan.py`).**
+  - Implementation: `ModelBasedUltrasoundSimulator.depth_physics()`. The receiver noise is n0 = 5.56e-7 from the
+    formula. `UltrasoundVectorEnv(bmode_physics="depth")` is the gym default; `"legacy"` is the single-env model.
+  - **P1 FAILED.** The best force is 2 N for both backs. Image reward (2 × visibility − 0.05 F) at
+    F = 2/4/8/12/15 N:
+
+    | Back | 2 N | 4 N | 8 N | 12 N | 15 N |
+    | :--- | ---: | ---: | ---: | ---: | ---: |
+    | thin | 0.227 | 0.149 | 0.020 | −0.115 | −0.344 |
+    | thick | 0.088 | 0.056 | −0.134 | −0.302 | −0.471 |
+
+  - **P2 FAILED.** Thick-back visibility 0.128 → 0.149 from 4 to 12 N (thin: 0.175 → 0.243).
+  - **P3 HELD.** The rigid control is identical at 4 and 12 N.
+  - **Consequence, as pre-registered.** H2 is reframed as "policies learn the minimal force for acoustic coupling
+    and field of view". The simulator is not changed again for H2. `test_best_force_is_higher_for_the_thick_back`
+    stays a strict xfail.
+  - **Side effect on reconstruction.** Benchmark raster, 72 frames, 4 envs, vector env; coverage legacy → depth
+    (measured with a scratch script, to be regenerated into `results/` before citing):
+
+    | Patient | Legacy | Depth |
+    | :--- | ---: | ---: |
+    | sample | 0.895 | 0.565 |
+    | s0015 (thin) | 0.917 | 0.341 |
+    | s0014 (thick) | 0.241 | 0.126 |
+
+    The muscular thin back loses most.
+  - **Confound, stated and not fixed (pre-registration: no other parameter tuned).** Two settings were made under
+    the legacy model. The fixed TGC (5 dB/cm) matched the old 0.6 dB/cm/MHz, but muscle at 1.09 needs about
+    11 dB/cm round trip at 5 MHz. The segmenter's ridge threshold (0.75) was tuned on legacy images. Choosing a
+    tissue-appropriate fixed TGC preset (still independent of the actual tissue, invariant 5) and re-checking the
+    segmenter is a separate decision for the user, and must not be used to rescue H2.
+  - Two bookkeeping tests (`test_vec_reconstruction.py`) are pinned to `bmode_physics="legacy"`: they test the
+    reward and parity code, not the image model.
 

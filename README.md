@@ -133,7 +133,7 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients
 ./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample
 
-# 4. Tests (138 tests + 1 expected failure; FEM tests skip without the sample patient, multi-patient tests without data/patients)
+# 4. Tests (138 tests + 1 strict expected failure; FEM tests skip without the sample patient, multi-patient tests without data/patients)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -202,6 +202,8 @@ obs, info = envs.reset(seed=0)            # dict of torch tensors on the GPU: bm
 obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
 ```
 
+- **B-mode.** The default `bmode_physics="depth"` (DEC-042) uses per-tissue attenuation and receiver noise
+  amplified by the TGC. `"legacy"` is the single-env model.
 - **Environments.** `MTP/FreeScan-v0` has no reward and measures simulation cost. `MTP/Recon-v0` is bone-surface
   reconstruction with a 4-DoF action, the same reward as the single env and a 32³ reconstruction grid observation.
   `MTP/Nav-v0` is navigation to the transverse L4 plane. It has a 3-DoF action and an image-only observation; the
@@ -370,11 +372,15 @@ DEC-040, run right after the benchmark, load avg 3.3).
   - The Kelvinlet backend is not batched.
   - All throughput numbers come from a 4 GB laptop GPU, which holds only a few patients' FEM fields (about 400 MB
     each) at once.
-- **Force barely improves the simulated image beyond acoustic coupling.** Thin s0015 / thick s0014, 9 held poses
-  each: scanline bone visibility at 2 / 4 / 15 N is 0.49 / 0.57 / 0.65 (thin) and 0.14 / 0.21 / 0.23 (thick). The
-  fixed TGC nearly cancels attenuation, and the noise is added after the TGC, so depth does not degrade the image.
-  The force-scan task therefore has the same best force (about 4 N) for thin and thick backs (DEC-041, T7;
-  `test_vec_force_scan.py` keeps this as a strict expected failure).
+- **Force does not buy image quality in the simulator (pre-registered test failed).** DEC-042 added literature
+  depth physics to the gym B-mode: fat 0.48 / muscle 1.09 dB/cm/MHz, and receiver noise before the TGC anchored at
+  500-wavelength penetration. The prediction was committed before the run: the best contact force is higher for
+  a thick back than a thin one. It failed: the best force is 2 N for both (4 N with the legacy model). H2 is
+  reframed as "minimal force for coupling and field of view".
+- **The gym B-mode is much harder than the single env's.** With the depth physics, benchmark-raster coverage
+  falls from 0.895 to 0.565 on the sample patient, and from 0.917 to 0.341 on a muscular back. The fixed 5 dB/cm
+  TGC and the segmenter threshold were set under the legacy model and were not retuned (DEC-042). These numbers
+  come from a scratch run and still need regenerating into `results/`.
 - **Shared moduli come from one calibration.** The common tissue stiffness is the sample patient's fit to a
   literature force curve. It has not yet been compared with a nonlinear FEM or published moduli (task T14).
 - **Other gaps.** The B-mode simulation budget (< 2 ms) is a design target that no test asserts. The server's

@@ -132,3 +132,28 @@ def test_perception_preset_follows_bmode_model(patient):
     assert d.conf.shadow_threshold == pd["confidence"]["shadow_threshold"]
     assert d.task.seg.min_confidence == pd["segmenter"]["min_confidence"]
     assert l.conf.shadow_threshold == 0.70 and l.task.seg.min_confidence == 0.20
+
+
+def test_coverage_reward_ranks_raster_above_random(patient):
+    """DEC-046: with the default coverage reward the scripted raster earns more than random actions, consistent with
+    its higher coverage (the old area reward ranked them the other way)."""
+    from ReconstructionPipeline.planning.heuristic_planner import HeuristicScanPlanner
+    traj = HeuristicScanPlanner.generate_linear_raster_trajectory(x_range=(-15.0, 15.0), z_range=(-52.0, -12.0),
+                                                                  num_sweep_lines=3, points_per_line=24)
+    scale = torch.tensor([5.0, 5.0, np.radians(10.0), np.radians(15.0)], device=DEV)
+
+    def episode(policy):
+        env = UltrasoundVectorEnv(8, ReconstructionTask(target_coverage=1.01), [patient], max_steps=72, seed=7)
+        env.reset(seed=7)
+        ret = torch.zeros(8, device=DEV)
+        rng = np.random.default_rng(0)
+        for t in range(72):
+            a = (((torch.as_tensor(traj[t], device=DEV) - env.pose) / scale).clamp(-1, 1) if policy == "raster"
+                 else torch.as_tensor(rng.uniform(-1, 1, (8, 4)), dtype=torch.float32, device=DEV))
+            _, r, _, _, info = env.step(a)
+            ret += r
+        return float(ret.mean()), float(info["coverage_ratio"].mean())
+
+    (r_ras, c_ras), (r_rnd, c_rnd) = episode("raster"), episode("random")
+    print(f"\n[recon] return/coverage raster {r_ras:.1f}/{c_ras:.3f}, random {r_rnd:.1f}/{c_rnd:.3f}")
+    assert c_ras > c_rnd and r_ras > r_rnd

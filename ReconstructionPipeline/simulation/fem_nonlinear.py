@@ -10,7 +10,7 @@ with mu, lam from the same per-cell Young's modulus (fat / muscle by HU, x e_sca
 (checked in tests/test_fem_fidelity.py against the precomputed skin compliance), so the two models differ only by
 finite-strain geometry and material nonlinearity.
 
-Solver: external nodal forces applied in load steps; per step Newton iterations with the tangent assembled from
+Solver: external nodal forces applied in adaptive load increments (halved on failure); per increment Newton iterations with the tangent assembled from
 per-element 12x12 Hessians (torch.func, vectorised over tets) and solved by a sparse direct solver on the free dofs;
 backtracking line search on the total potential energy keeping every J > 0.
 
@@ -96,32 +96,54 @@ class NeoHookeanReference:
         K = sps.coo_matrix((He.reshape(-1).numpy(), (self.rows, self.cols)), shape=(self.n, self.n)).tocsr()
         return g, K
 
-    def solve(self, f_nodes: np.ndarray, load_steps: int = 5, newton_iters: int = 25, tol: float = 1e-8
-              ) -> Dict[str, object]:
-        """f_nodes (Nn,3) N -> displacement (Nn,3) mm and convergence info."""
+    def _newton(self, u: torch.Tensor, f: torch.Tensor, iters: int, tol: float):
+        fi = self.fidx
+        fnorm = float(f.norm()) or 1.0
+        res = float("inf")
+        for it in range(iters):
+            g, K = self.gradient_and_tangent(u, f)
+            gf = g.numpy()[fi]
+            res = float(np.linalg.norm(gf)) / fnorm
+            if not np.isfinite(res):
+                return u, it + 1, res
+            if res < tol:
+                return u, it + 1, res
+            du = np.zeros(self.n)
+            du[fi] = spla.spsolve(K[fi][:, fi].tocsc(), -gf)
+            du = torch.as_tensor(du)
+            e0, a = self.energy(u, f), 1.0
+            while a > 1e-6 and not (self.energy(u + a * du, f) <= e0 + 1e-12 * abs(e0)):
+                a *= 0.5
+            if a <= 1e-6:                      # no descent: this load increment is too large
+                return u, it + 1, res
+            u = u + a * du
+        return u, iters, res
+
+    def solve(self, f_nodes: np.ndarray, load_steps: int = 5, newton_iters: int = 25, tol: float = 1e-8,
+              min_increment: float = 1.0 / 512) -> Dict[str, object]:
+        """f_nodes (Nn,3) N -> displacement (Nn,3) mm.  Adaptive load stepping: start with increments of
+        1/load_steps; an increment whose Newton iteration does not reach `tol` (or stalls in the line search) is
+        undone and halved; after a success the increment grows by 1.5x.  `converged` is False if the increment
+        falls below `min_increment` before the full load is reached."""
         f_full = torch.as_tensor(np.asarray(f_nodes, dtype=np.float64).reshape(-1))
         f_full[torch.as_tensor(~self.free)] = 0.0
         u = torch.zeros(self.n, dtype=torch.float64)
-        fi = self.fidx
-        hist = []
-        for s in range(1, load_steps + 1):
-            f = f_full * (s / load_steps)
-            fnorm = float(f.norm()) or 1.0
-            for it in range(newton_iters):
-                g, K = self.gradient_and_tangent(u, f)
-                gf = g.numpy()[fi]
-                res = float(np.linalg.norm(gf)) / fnorm
-                if res < tol:
+        lam, dlam = 0.0, 1.0 / load_steps
+        hist, converged = [], True
+        while lam < 1.0 - 1e-12:
+            step = min(dlam, 1.0 - lam)
+            u_try, it, res = self._newton(u, f_full * (lam + step), newton_iters, tol)
+            if res < tol:
+                u, lam = u_try, lam + step
+                hist.append({"load": lam, "newton_iters": it, "rel_residual": res})
+                dlam = min(1.0, step * 1.5)
+            else:
+                dlam = step / 2.0
+                if dlam < min_increment:
+                    converged = False
+                    hist.append({"load": lam, "failed_increment": step, "rel_residual": res})
                     break
-                du = np.zeros(self.n)
-                du[fi] = spla.spsolve(K[fi][:, fi].tocsc(), -gf)
-                du = torch.as_tensor(du)
-                e0, a = self.energy(u, f), 1.0
-                while a > 1e-6 and not (self.energy(u + a * du, f) <= e0 + 1e-12 * abs(e0)):
-                    a *= 0.5
-                u = u + a * du
-            hist.append({"step": s, "newton_iters": it + 1, "rel_residual": res})
-        return {"u": u.view(-1, 3).numpy(), "history": hist}
+        return {"u": u.view(-1, 3).numpy(), "history": hist, "converged": converged, "load_reached": lam}
 
     def linear_solve(self, f_nodes: np.ndarray) -> np.ndarray:
         """K(u=0)^-1 f: the linearisation of this energy (must equal the precomputed linear model)."""

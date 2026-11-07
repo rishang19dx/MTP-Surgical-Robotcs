@@ -12,6 +12,9 @@ Reward: progress toward the goal, r = (dist_prev - dist) / 1 mm + (ang_prev - an
 + `success_bonus` on success, minus the same force penalty as the reconstruction task.
 Success: dist < `success_mm` and |yaw error| < `success_deg`; the episode terminates on success.
 Start pose: uniform over the per-patient scan window, yaw uniform in +-`start_yaw_deg`, pitch 0.
+Hidden patient placement (DEC-045): by default the env draws a per-episode offset of +-15 mm (c1, c2) and +-10 deg
+(yaw) and observes the pose relative to it.  Without it every patient's goal is nearly the same absolute pose (all
+patients are anchored at L4), and a blind policy driving to a fixed pose succeeds on held-out patients.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from mtp_gym.tasks.reconstruction import target_surface
 
 class NavigationTask(Task):
     action_dim = 3
+    default_pose_offset = (15.0, 15.0, 10.0)   # DEC-045: the goal must not be readable from the pose
 
     def __init__(self, success_mm: float = 3.0, success_deg: float = 5.0, angle_weight: float = 0.5,
                  success_bonus: float = 10.0, start_yaw_deg: float = 30.0, weight_force: float = 0.02,

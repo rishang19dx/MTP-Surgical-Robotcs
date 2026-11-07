@@ -1027,3 +1027,74 @@ A chronological record of all architectural, research, algorithmic, and engineer
     - An un-registered test assertion ("pressing harder never hides bone", added after DEC-042) became false for
       the thin back (−0.011). It was removed rather than loosened. Only the pre-registered P3 is asserted.
 
+### `DEC-045`: Hidden Patient Placement Offset for Navigation (the goal must not be readable from the pose)
+* **Date**: November 7, 2026 (branch `audit-fixes`).
+* **Finding.** `results/vec_eval_nav_20261107_213250.md`: PPO trained on 2 patients (sample, s0015; 300k steps)
+  succeeds in 100 % of episodes on its training patients. Measured with the same evaluator in a scratch run.
+  - On the 4 held-out patients it succeeds in 1.6 % (random 1.6 %, oracle 100 %).
+  - A blind policy succeeds in 100 % on all 4 held-out patients (scratch check). It ignores the image and drives
+    to the mean of the two TRAINING goals in absolute pose.
+  - Cause: every patient is anchored at L4 in frame P (DEC-041 T4), so the transverse L4 goal is nearly the same
+    pose for all patients. Goals span c1 −0.86…−0.08 mm and c2 −35.4…−32.4 mm, inside the 3 mm success radius.
+  - So the task as built did not require the image. PPO did not find the shortcut and overfit to the training
+    images instead, but either way the benchmark measured the wrong thing.
+* **Decision.**
+  - `UltrasoundVectorEnv(pose_offset=(mm_c1, mm_c2, deg_yaw))` draws a hidden per-episode patient placement
+    offset, uniform within ±range.
+  - The observed `probe_pose` is the true pose minus the offset in (c1, c2, yaw). Pitch is unchanged.
+  - The robot therefore still knows its own motion (odometry), but not where the patient lies. Physics, rewards,
+    goals and the oracle use the true pose.
+  - `NavigationTask` defaults to ±15 mm / ±15 mm / ±10°. The other tasks default to no offset, so their runs
+    already queued stay comparable.
+  - The navigation evaluation adds the blind fixed-pose baseline. A valid navigation task must make it fail.
+* **Consequence.** The navigation PPO run above is void as a benchmark result and is retrained under the offset.
+* **Alternatives considered.**
+  - Anchoring patients at a different landmark: the goal would again sit at a fixed pose relative to it.
+  - Randomising only the start pose: it was already random, and that is not enough.
+  - Removing the pose from the observation: it removes odometry that a real robot has.
+
+* **Outcome (2026-11-07).** Navigation PPO retrained under the offset: 2 patients (sample, s0015), 300k steps,
+  32 envs, seed 0, 53 min on the RTX 2050. Held-out patients: `results/vec_eval_nav_20261107_223741.md`, 4 × 16
+  episodes. Training patients: same evaluator, scratch run.
+
+  | Policy | Success, train patients | Success, held-out patients |
+  | :--- | ---: | ---: |
+  | random | 0.031 | 0.016 |
+  | blind | 0.062 | 0.031 |
+  | oracle | 1.000 | 1.000 |
+  | PPO | 1.000 | 0.078 |
+
+  - **On its training patients PPO navigates from the image.** The offset makes the blind baseline fail, so the
+    100 % cannot come from the pose.
+  - **It does not transfer to unseen anatomy.** With 2 training patients the policy overfits. This is the same
+    cross-patient gap SonoGym reports, and the full 9-patient training split (server GPU) is the next test.
+  - Preliminary: 1 seed, 2 training patients.
+
+### `DEC-046`: Gym Reconstruction Reward = Target Coverage Gain (the area reward rewards wandering)
+* **Date**: November 7, 2026 (branch `audit-fixes`).
+* **Finding.** Laptop PPO runs: 2 training patients (sample, s0015), 300k steps, 32 envs, seed 0.
+  - **Held out** (`results/vec_eval_recon_20261107_214607.md`, deformable eval, 4 patients × 16 episodes):
+
+    | Policy | Coverage |
+    | :--- | ---: |
+    | random | 0.340 |
+    | scripted raster | 0.428 |
+    | PPO trained deformable | 0.105 |
+    | PPO trained rigid | 0.307 |
+
+    Rigid eval: `results/vec_eval_recon_20261107_214814.md`.
+  - **Training patients** (scratch run, same evaluator): PPO 0.72–0.78, random 0.71–0.75, raster 0.90. The
+    policies barely learned; the training return rose from about 176 to 225.
+  - **The reward ranks policies against the metric.** On the sample patient, random actions earn a return of 189 at
+    coverage 0.71, while the raster earns 173 at coverage 0.90.
+  - **Cause.** The gym copied `env_reconstruction.step`'s raw reward, 0.05 × marginal reconstructed AREA. It pays
+    for any bone reconstructed, including outside the L4 target, so wandering is rewarded more than covering the
+    target. The single-env PPO trainer never trained on this term: its `shaped_reward` "coverage" mode uses
+    100 × coverage gain plus the penalties. SonoGym's reconstruction task also uses a submodular coverage reward.
+* **Decision.** `ReconstructionTask(reward_mode="coverage")` is the default: 100 × target-coverage gain plus the
+  same penalties. This also applies to `ForceScanTask`, which inherits it. `"area"` keeps the old reward.
+* **Consequence.** The three reconstruction and force-scan checkpoints trained before this change are void as
+  benchmark results and are retrained. The H1 comparison (trained rigid vs deformable) is not concluded from them.
+  At 300k steps with 2 patients, the PPO baselines are expected to be weak either way; the full study needs the
+  server (more patients, more steps, more seeds).
+

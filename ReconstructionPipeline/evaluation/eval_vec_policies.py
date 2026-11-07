@@ -9,7 +9,9 @@ seeded: the same starts for every policy).  Policies:
   random   uniform actions in [-1, 1]
   scripted recon / force: the benchmark raster (3 sweep lines x 24 waypoints, followed one waypoint per step from
            the random start, as `benchmark_runner.follow`); force task at a constant 4 N
-  oracle   nav only: privileged goal-seeking expert (upper bound, uses the label-defined goal)
+  oracle   nav only: privileged goal-seeking expert (upper bound, uses the label-defined goal and the true pose)
+  blind    nav only: drives to the patient's goal pose as seen in the OBSERVED pose frame, ignoring the image
+           (DEC-045: must fail when the hidden placement offset is on; if it succeeds the task is solvable blind)
   ppo:<file> one entry per --ppo checkpoint (deterministic actions)
 Metrics (at each env's first episode end):
   recon / force: coverage@3 (task coverage), mean sensed force, episode return; force task also mean commanded
@@ -68,6 +70,9 @@ def run_policy(env: UltrasoundVectorEnv, venv: SB3VecEnv, task_name: str, policy
             a = scripted_action(env, task_name, t)
         elif policy == "oracle":
             a = env.task.oracle_action().cpu().numpy()
+        elif policy == "blind":
+            observed = env.pose - env.pose_offset
+            a = ((env.task.goal - observed) / env.action_scale)[:, :3].clamp(-1, 1).cpu().numpy()
         else:
             a, _ = model.predict(obs_sb, deterministic=True)
         obs, r, term, trunc, info = env.step(a)
@@ -114,7 +119,7 @@ def main(argv=None):
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     from stable_baselines3 import PPO
     models = {f"ppo:{os.path.basename(p)}": PPO.load(p, device=dev) for p in args.ppo}
-    policies = ["random", "scripted"] if args.task != "nav" else ["random", "oracle"]
+    policies = ["random", "scripted"] if args.task != "nav" else ["random", "blind", "oracle"]
     policies += list(models)
     rows = []
     for pdir in patient_dirs(args.patients):

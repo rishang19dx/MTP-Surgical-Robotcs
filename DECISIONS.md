@@ -953,4 +953,23 @@ A chronological record of all architectural, research, algorithmic, and engineer
   measured (metric only) and reported, and retuning would be a separate decision.
 * **Scope rule (stated in DEC-042).** This change is made for realism, not to revisit H2. The DEC-042 outcome
   stands. If the strict-xfail H2 test flips, that is recorded, not claimed as support for H2.
+* **Outcome (2026-11-07).** Source: `results/bmode_physics_compare_20261107_190506.md`, commit `7818454`, RTX 2050,
+  benchmark raster, 4 envs per patient.
+  - **Mean Cov@3 over 13 patients:** legacy 0.659, depth physics (DEC-042 + DEC-043) 0.376.
+  - **Patients with ≤ 33 mm of paraspinal fat keep their coverage:** 0.44–0.89 (sample 0.873, s0015 0.890,
+    s0010 0.873).
+  - **Patients with ≥ 42 mm collapse to 0.00–0.07:** s0024, s0038, s0028, s0034, s0030, s0014.
+  - **Correlation.** Spearman ρ = −0.79 (p = 0.002, n = 12 SonoGym subjects) between paraspinal fat
+    (`meta.json` `qa.paraspinal20_fat_mm`) and depth-physics coverage. Computed from the results JSON and the
+    meta files with a scratch snippet; to be added to the script before citing.
+  - **Precision.** Prec@2 stays at 0.98–1.00 wherever points exist.
+  - **Mechanism (inspected on s0015 vs s0014 images, scratch figure).** The muscle preset (10.9 dB/cm) over-gains
+    fat, which attenuates 4.8 dB/cm round trip. Deep fat becomes bright: mean brightness at 45–75 mm is 0.28
+    legacy vs 0.71 depth. Nothing saturates, and the bone is still visible with a dark shadow. The IMAGE-ONLY
+    confidence map, however, treats the bright tissue as energy-consuming reflectors. Confidence at the bone falls
+    to about 0.05, below the segmenter's 0.20 gate, so the bone is rejected. The collapse is therefore partly a
+    perception artefact (confidence map), not only physics.
+  - **Clinical direction.** Image quality falling with BMI matches clinical experience (e.g. the Leipzig probe
+    study reports liver and kidney image quality declining with BMI), but the size of this effect is not
+    validated.
 

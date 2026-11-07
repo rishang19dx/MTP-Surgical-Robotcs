@@ -202,8 +202,9 @@ obs, info = envs.reset(seed=0)            # dict of torch tensors on the GPU: bm
 obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
 ```
 
-- **B-mode.** The default `bmode_physics="depth"` (DEC-042) uses per-tissue attenuation and receiver noise
-  amplified by the TGC. `"legacy"` is the single-env model.
+- **B-mode.** The default `bmode_physics="depth"` uses per-tissue attenuation and receiver noise amplified by the
+  TGC (DEC-042), with a fixed muscle-appropriate TGC preset of 10.9 dB/cm (DEC-043). `"legacy"` is the single-env
+  model.
 - **Environments.** `MTP/FreeScan-v0` has no reward and measures simulation cost. `MTP/Recon-v0` is bone-surface
   reconstruction with a 4-DoF action, the same reward as the single env and a 32³ reconstruction grid observation.
   `MTP/Nav-v0` is navigation to the transverse L4 plane. It has a 3-DoF action and an image-only observation; the
@@ -377,10 +378,11 @@ DEC-040, run right after the benchmark, load avg 3.3).
   500-wavelength penetration. The prediction was committed before the run: the best contact force is higher for
   a thick back than a thin one. It failed: the best force is 2 N for both (4 N with the legacy model). H2 is
   reframed as "minimal force for coupling and field of view".
-- **The gym B-mode is much harder than the single env's.** With the depth physics, benchmark-raster coverage
-  falls from 0.895 to 0.565 on the sample patient, and from 0.917 to 0.341 on a muscular back. The fixed 5 dB/cm
-  TGC and the segmenter threshold were set under the legacy model and were not retuned (DEC-042). These numbers
-  come from a scratch run and still need regenerating into `results/`.
+- **With the depth physics and the fixed muscle TGC preset (DEC-043), fatty backs collapse.** Source:
+  [`results/bmode_physics_compare_20261107_190506.md`](results/bmode_physics_compare_20261107_190506.md). Mean
+  benchmark-raster coverage over 13 patients is 0.659 legacy vs 0.376 depth. Backs with ≤ 33 mm of paraspinal fat
+  keep 0.44–0.89; backs with ≥ 42 mm fall to 0.00–0.07. The cause is partly perception: the over-gained fat
+  lowers the image-only confidence below the segmenter's gate.
 - **Shared moduli come from one calibration.** The common tissue stiffness is the sample patient's fit to a
   literature force curve. It has not yet been compared with a nonlinear FEM or published moduli (task T14).
 - **Other gaps.** The B-mode simulation budget (< 2 ms) is a design target that no test asserts. The server's

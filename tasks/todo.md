@@ -20,11 +20,11 @@ Every task also obeys the AGENTS.md invariants:
 | **Checkpoint A** | 13 Nov | |
 | T6 navigation task | 12–15 Nov | done 7 Nov (`MTP/Nav-v0`; oracle 100 %, random 0 %) |
 | T9 compression-changes-image gate | 13–14 Nov | done 5 Nov: passes on all 13 patients (`compression_sweep.py`) |
-| T14 fidelity vs nonlinear FEM | 14–19 Nov | |
+| T14 fidelity vs nonlinear FEM | 14–19 Nov | Neo-Hookean reference built 7 Nov (linearisation matches to 1.7e-6); study running |
 | **Checkpoint B** | 20 Nov | |
 | T7 force-scan task | 19–21 Nov | implemented 7 Nov (`MTP/ForceScan-v0`); pre-registered H2 prediction failed under DEC-042 depth physics; H2 reframed |
-| T10 PPO baselines on the 3 tasks | 20–24 Nov | |
-| T11/T12 preliminary H1/H2 runs (server GPU) | 22–26 Nov | |
+| T10 PPO baselines on the 3 tasks | 20–24 Nov | SB3 adapter + train/eval scripts done 7 Nov; laptop runs (2 patients, 300k steps) running |
+| T11/T12 preliminary H1/H2 runs (server GPU) | 22–26 Nov | H2 pre-registered and failed (DEC-042), reframed; H1 rigid-trained recon run queued on the laptop |
 | T13 H3 compression bias | 24–26 Nov | |
 | T15 Stage 1 abstract | 26 Nov–3 Dec | |
 | **Checkpoint C / submit** | 2–4 Dec | |

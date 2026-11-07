@@ -973,3 +973,32 @@ A chronological record of all architectural, research, algorithmic, and engineer
     study reports liver and kidney image quality declining with BMI), but the size of this effect is not
     validated.
 
+### `DEC-044`: Re-tune Image-Only Perception for the Depth B-mode on the Training Split — PROTOCOL FIXED BEFORE RUNNING
+* **Date**: November 7, 2026 (branch `audit-fixes`). User decision: re-tune perception on the training patients
+  only and evaluate on the held-out patients. This entry is committed before the search runs.
+* **Why.** DEC-043: under the depth physics, the confidence-map and segmenter thresholds, tuned on legacy images,
+  gate out visible bone in over-gained fatty backs. The physics stays fixed. Only image-only perception
+  parameters change.
+* **Data.** For every patient, one benchmark-raster episode (72 frames, vector env, `aware`, depth physics,
+  seed 0) is recorded once: the B-mode, the back-projection pose and the force. Perception is post-processing
+  of the B-mode, so all candidates are scored on identical frames.
+  - Train = `data/splits.json` "train" (9 patients).
+  - Test = "test" (4 patients). The test frames are not touched until one configuration is chosen.
+* **Search grid** (54 configurations, nothing else changes):
+  - confidence `shadow_threshold` ∈ {0.70, 0.80, 0.90};
+  - confidence `attenuation_decay_rate` ∈ {1.6, 0.8, 0.4};
+  - segmenter `intensity_threshold` ∈ {0.75, 0.85};
+  - segmenter `min_confidence` ∈ {0.20, 0.10, 0.05}.
+
+  The current defaults (0.70, 1.6, 0.75, 0.20) are one point of the grid.
+* **Metrics.**
+  - Cov@3: fraction of the US-visible L4 target with a back-projected point within 3 mm (the task's raw-point
+    coverage).
+  - Prec@2: fraction of back-projected points within 2 mm of any bone surface. Frames with force below 1 N are
+    excluded.
+* **Selection rule.** Maximise the mean train Cov@3, subject to mean train Prec@2 ≥ 0.95 AND every train
+  patient's Prec@2 ≥ 0.90 (a patient with no points counts as satisfying it). Ties within 0.005 Cov@3 go to the
+  configuration closest to the defaults (fewest changed values).
+* **Reported.** Test Cov@3 and Prec@2 for the defaults and for the selected configuration, per patient and as a
+  mean, whatever they are.
+

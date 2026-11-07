@@ -8,9 +8,9 @@
 import gymnasium as gym
 
 from mtp_gym.core import PatientSim, UltrasoundVectorEnv, load_patient
-from mtp_gym.tasks import FreeScanTask, ReconstructionTask, Task
+from mtp_gym.tasks import FreeScanTask, ForceScanTask, NavigationTask, ReconstructionTask, Task
 
-__all__ = ["UltrasoundVectorEnv", "PatientSim", "load_patient", "Task", "FreeScanTask", "ReconstructionTask"]
+__all__ = ["UltrasoundVectorEnv", "PatientSim", "load_patient", "Task", "FreeScanTask", "ReconstructionTask", "NavigationTask", "ForceScanTask"]
 
 
 def _make_free_scan(num_envs: int = 1, **kwargs):
@@ -21,8 +21,17 @@ def _make_recon(num_envs: int = 1, task_kwargs=None, **kwargs):
     return UltrasoundVectorEnv(num_envs, ReconstructionTask(**(task_kwargs or {})), **kwargs)
 
 
+def _make_nav(num_envs: int = 1, task_kwargs=None, **kwargs):
+    return UltrasoundVectorEnv(num_envs, NavigationTask(**(task_kwargs or {})), **kwargs)
+
+
+def _make_force_scan(num_envs: int = 1, task_kwargs=None, **kwargs):
+    return UltrasoundVectorEnv(num_envs, ForceScanTask(**(task_kwargs or {})), **kwargs)
+
+
 def _register():
-    for env_id, fn in (("MTP/FreeScan-v0", _make_free_scan), ("MTP/Recon-v0", _make_recon)):
+    for env_id, fn in (("MTP/FreeScan-v0", _make_free_scan), ("MTP/Recon-v0", _make_recon),
+                       ("MTP/Nav-v0", _make_nav), ("MTP/ForceScan-v0", _make_force_scan)):
         if env_id not in gym.registry:
             gym.register(id=env_id, vector_entry_point=fn)
 

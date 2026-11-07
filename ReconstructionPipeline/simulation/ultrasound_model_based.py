@@ -62,6 +62,10 @@ class ModelBasedUltrasoundSimulator:
         psf_sigma_axial: Optional[float] = None,
         psf_sigma_lateral: Optional[float] = None,
         kernel_size: Optional[int] = None,
+        alpha_fat_db: Optional[float] = None,
+        alpha_muscle_db: Optional[float] = None,
+        fat_hu_threshold: float = -20.0,
+        receiver_noise_amplitude: Optional[float] = None,
     ):
         """
         Args:
@@ -83,6 +87,12 @@ class ModelBasedUltrasoundSimulator:
             spatial_resolution_mm: DEPRECATED alias that sets both axial and lateral spacing.
             psf_sigma_axial / psf_sigma_lateral: DEPRECATED PSF sigmas in pixels (override the mm values).
             kernel_size: DEPRECATED fixed PSF kernel size (now derived from the sigmas, 3 sigma).
+            alpha_fat_db / alpha_muscle_db: per-tissue soft-tissue attenuation [dB/(cm*MHz)] (DEC-042). When both
+                are given, soft tissue with HU < `fat_hu_threshold` uses the fat value and the rest the muscle value;
+                otherwise `alpha_soft_tissue_db` is used everywhere (legacy, the single-env default).
+            receiver_noise_amplitude: Rayleigh noise added at the receiver INPUT, i.e. amplified by the TGC with
+                depth (DEC-042).  None = legacy (only the post-TGC `noise_amplitude`).  See
+                `receiver_noise_from_penetration` for the literature-anchored value.
         """
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -101,6 +111,10 @@ class ModelBasedUltrasoundSimulator:
         self.specular_exponent = float(specular_exponent)
 
         self.alpha_soft_tissue_db = float(alpha_soft_tissue_db)
+        self.alpha_fat_db = None if alpha_fat_db is None else float(alpha_fat_db)
+        self.alpha_muscle_db = None if alpha_muscle_db is None else float(alpha_muscle_db)
+        self.fat_hu_threshold = float(fat_hu_threshold)
+        self.receiver_noise_amplitude = None if receiver_noise_amplitude is None else float(receiver_noise_amplitude)
         self.alpha_bone_db = float(alpha_bone_db)
         self.tgc_db_per_cm = float(tgc_db_per_cm)
         self.tgc_max_db = float(tgc_max_db)
@@ -121,6 +135,30 @@ class ModelBasedUltrasoundSimulator:
         if seed is not None:
             self.generator = torch.Generator(device=self.device)
             self.generator.manual_seed(int(seed))
+
+    @staticmethod
+    def receiver_noise_from_penetration(frequency_mhz: float = 5.0, scatter_amplitude: float = 0.008,
+                                        alpha_avg_db: float = 0.54, wavelengths: float = 500.0) -> float:
+        """Receiver-input noise amplitude at which average soft-tissue scatter reaches SNR = 1 at the textbook
+        maximum imaging depth of ~`wavelengths` wavelengths (DEC-042): D = wavelengths x 1.54/f mm,
+        n0 = scatter x 10^(-2 alpha f D[cm] / 20).  5 MHz -> D = 154 mm, n0 = 5.56e-7 for scatter 0.008."""
+        depth_cm = wavelengths * 1.54 / frequency_mhz / 10.0
+        return float(scatter_amplitude * 10.0 ** (-2.0 * alpha_avg_db * frequency_mhz * depth_cm / 20.0))
+
+    @classmethod
+    def depth_physics(cls, frequency_mhz: float = 5.0, image_depth_mm: float = 75.0,
+                      **kwargs) -> "ModelBasedUltrasoundSimulator":
+        """Simulator with the DEC-042 depth-dependent physics: fat 0.48 / muscle 1.09 dB/cm/MHz (arXiv 1710.05065)
+        and receiver noise before the TGC anchored at 500-wavelength penetration; plus the DEC-043 fixed
+        muscle-appropriate TGC preset: slope 2 x alpha_muscle x f dB/cm (10.9 dB/cm at 5 MHz), capped at the image
+        depth.  The preset is fixed (the same for every patient and frame), independent of the tissue present."""
+        alpha_fat, alpha_muscle = 0.48, 1.09
+        scatter = kwargs.get("scatter_amplitude", 0.008)
+        tgc = 2.0 * alpha_muscle * frequency_mhz
+        kwargs.setdefault("tgc_db_per_cm", tgc)
+        kwargs.setdefault("tgc_max_db", tgc * image_depth_mm / 10.0)
+        return cls(frequency_mhz=frequency_mhz, alpha_fat_db=alpha_fat, alpha_muscle_db=alpha_muscle,
+                   receiver_noise_amplitude=cls.receiver_noise_from_penetration(frequency_mhz, scatter), **kwargs)
 
     def _gauss_1d(self, sigma_px: float, ksize: Optional[int]) -> torch.Tensor:
         """Peak-normalised 1D Gaussian (a single-pixel reflector keeps its amplitude)."""
@@ -193,9 +231,11 @@ class ModelBasedUltrasoundSimulator:
 
         # 4. Round-trip amplitude attenuation in nepers, integrated over physical depth (exclusive of the
         #    current pixel so a reflector is not attenuated by the medium beneath it).
-        alpha_np_per_cm = DB_TO_NEPER * self.frequency * (
-            self.alpha_soft_tissue_db * (1.0 - bone_f) + self.alpha_bone_db * bone_f
-        )
+        if self.alpha_fat_db is not None and self.alpha_muscle_db is not None:
+            alpha_soft = torch.where(ct < self.fat_hu_threshold, self.alpha_fat_db, self.alpha_muscle_db)
+        else:
+            alpha_soft = self.alpha_soft_tissue_db
+        alpha_np_per_cm = DB_TO_NEPER * self.frequency * (alpha_soft * (1.0 - bone_f) + self.alpha_bone_db * bone_f)
         path_np = 2.0 * alpha_np_per_cm * self.delta_y_cm
         att_np = torch.cumsum(path_np, dim=1) - path_np
         # Interface transmission losses (round trip amplitude factor 1 - R^2), exclusive of current pixel
@@ -235,7 +275,10 @@ class ModelBasedUltrasoundSimulator:
         b_env = torch.sqrt(conv[:, 1] ** 2 + conv[:, 2] ** 2)
 
         # 9. Envelope (incoherent sum) and log compression to a fixed dynamic range
-        noise_env = self.noise_amplitude * torch.sqrt(noise[:, 0] ** 2 + noise[:, 1] ** 2)
+        noise_amp = self.noise_amplitude
+        if self.receiver_noise_amplitude is not None:   # receiver-input noise is amplified by the TGC (DEC-042)
+            noise_amp = noise_amp + self.receiver_noise_amplitude * tgc_gain
+        noise_env = noise_amp * torch.sqrt(noise[:, 0] ** 2 + noise[:, 1] ** 2)
         envelope = r_conv + b_env + noise_env
         db = 20.0 * torch.log10(envelope / self.reference_amplitude + 1e-12)
         bmode = torch.clamp(1.0 + db / self.dynamic_range_db, 0.0, 1.0)

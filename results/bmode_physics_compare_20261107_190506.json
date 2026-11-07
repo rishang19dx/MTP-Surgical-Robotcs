@@ -1,0 +1,211 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/bmode_physics_compare.py",
+    "args": {
+      "patients": "all",
+      "envs": 4,
+      "seed": 0,
+      "out_dir": "/home/rishang/Desktop/MTP/results"
+    },
+    "commit": "7818454",
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "depth_physics": "DEC-042 (fat 0.48 / muscle 1.09 dB/cm/MHz, receiver noise before TGC) + DEC-043 (fixed TGC 10.9 dB/cm, cap 81.75 dB)"
+  },
+  "rows": [
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "legacy": {
+        "coverage3": 0.8945008516311646,
+        "coverage3_std": 0.0009912257082760334,
+        "precision2": 0.9989155958437398,
+        "points_per_frame": 99.24305555555557
+      },
+      "depth": {
+        "coverage3": 0.8726838231086731,
+        "coverage3_std": 0.0018901891307905316,
+        "precision2": 0.998928569677278,
+        "points_per_frame": 81.02430555555556
+      }
+    },
+    {
+      "patient": "sonogym_s0015",
+      "legacy": {
+        "coverage3": 0.9170312881469727,
+        "coverage3_std": 0.0028427126817405224,
+        "precision2": 1.0,
+        "points_per_frame": 92.7326388888889
+      },
+      "depth": {
+        "coverage3": 0.8901562690734863,
+        "coverage3_std": 0.0014234986156225204,
+        "precision2": 1.0,
+        "points_per_frame": 77.49305555555554
+      }
+    },
+    {
+      "patient": "sonogym_s0010",
+      "legacy": {
+        "coverage3": 0.910381555557251,
+        "coverage3_std": 0.0010867338860407472,
+        "precision2": 0.9990237134136198,
+        "points_per_frame": 85.35763888888889
+      },
+      "depth": {
+        "coverage3": 0.8731144666671753,
+        "coverage3_std": 0.0018822711426764727,
+        "precision2": 1.0,
+        "points_per_frame": 55.03125
+      }
+    },
+    {
+      "patient": "sonogym_s0012",
+      "legacy": {
+        "coverage3": 0.8110766410827637,
+        "coverage3_std": 0.008024157956242561,
+        "precision2": 0.9385265211326292,
+        "points_per_frame": 65.86111111111111
+      },
+      "depth": {
+        "coverage3": 0.4359903335571289,
+        "coverage3_std": 0.01720750331878662,
+        "precision2": 0.9767485632838115,
+        "points_per_frame": 13.291666666666668
+      }
+    },
+    {
+      "patient": "sonogym_s0038",
+      "legacy": {
+        "coverage3": 0.7669423818588257,
+        "coverage3_std": 0.00023104724823497236,
+        "precision2": 0.9937662292004155,
+        "points_per_frame": 86.89236111111111
+      },
+      "depth": {
+        "coverage3": 0.06670224666595459,
+        "coverage3_std": 0.011525406502187252,
+        "precision2": 1.0,
+        "points_per_frame": 8.458333333333332
+      }
+    },
+    {
+      "patient": "sonogym_s0024",
+      "legacy": {
+        "coverage3": 0.16257748007774353,
+        "coverage3_std": 0.0011764520313590765,
+        "precision2": 1.0,
+        "points_per_frame": 27.21527777777778
+      },
+      "depth": {
+        "coverage3": 0.0,
+        "coverage3_std": 0.0,
+        "precision2": NaN,
+        "points_per_frame": 0.0
+      }
+    },
+    {
+      "patient": "sonogym_s0004",
+      "legacy": {
+        "coverage3": 0.7988942861557007,
+        "coverage3_std": 0.0025392163079231977,
+        "precision2": 0.9942038324184324,
+        "points_per_frame": 80.875
+      },
+      "depth": {
+        "coverage3": 0.421389102935791,
+        "coverage3_std": 0.026453187689185143,
+        "precision2": 0.9978943892854611,
+        "points_per_frame": 13.243055555555557
+      }
+    },
+    {
+      "patient": "sonogym_s0028",
+      "legacy": {
+        "coverage3": 0.9659308791160583,
+        "coverage3_std": 0.0004798471927642822,
+        "precision2": 1.0,
+        "points_per_frame": 83.73611111111111
+      },
+      "depth": {
+        "coverage3": 0.005998080130666494,
+        "coverage3_std": 0.008726743049919605,
+        "precision2": 1.0,
+        "points_per_frame": 2.638888888888889
+      }
+    },
+    {
+      "patient": "sonogym_s0014",
+      "legacy": {
+        "coverage3": 0.24082231521606445,
+        "coverage3_std": 0.0,
+        "precision2": 1.0,
+        "points_per_frame": 24.55902777777778
+      },
+      "depth": {
+        "coverage3": 0.03616005927324295,
+        "coverage3_std": 0.009828262031078339,
+        "precision2": 1.0,
+        "points_per_frame": 1.722222222222222
+      }
+    },
+    {
+      "patient": "sonogym_s0029",
+      "legacy": {
+        "coverage3": 0.8392544388771057,
+        "coverage3_std": 0.0004118168435525149,
+        "precision2": 1.0,
+        "points_per_frame": 85.91666666666666
+      },
+      "depth": {
+        "coverage3": 0.6891380548477173,
+        "coverage3_std": 0.0065811919048428535,
+        "precision2": 1.0,
+        "points_per_frame": 44.34027777777778
+      }
+    },
+    {
+      "patient": "sonogym_s0006",
+      "legacy": {
+        "coverage3": 0.8067691326141357,
+        "coverage3_std": 0.00223612692207098,
+        "precision2": 0.9994177854523647,
+        "points_per_frame": 71.56597222222223
+      },
+      "depth": {
+        "coverage3": 0.5318230986595154,
+        "coverage3_std": 0.007306485902518034,
+        "precision2": 1.0,
+        "points_per_frame": 32.37152777777777
+      }
+    },
+    {
+      "patient": "sonogym_s0034",
+      "legacy": {
+        "coverage3": 0.3750932216644287,
+        "coverage3_std": 0.0010545984841883183,
+        "precision2": 0.9930549870845777,
+        "points_per_frame": 15.493055555555554
+      },
+      "depth": {
+        "coverage3": 0.0,
+        "coverage3_std": 0.0,
+        "precision2": NaN,
+        "points_per_frame": 0.0
+      }
+    },
+    {
+      "patient": "sonogym_s0030",
+      "legacy": {
+        "coverage3": 0.08303886651992798,
+        "coverage3_std": 0.0014569287886843085,
+        "precision2": 1.0,
+        "points_per_frame": 11.715277777777779
+      },
+      "depth": {
+        "coverage3": 0.058657243847846985,
+        "coverage3_std": 0.0,
+        "precision2": 1.0,
+        "points_per_frame": 2.482638888888889
+      }
+    }
+  ]
+}

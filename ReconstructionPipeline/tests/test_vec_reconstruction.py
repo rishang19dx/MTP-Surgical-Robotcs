@@ -52,7 +52,8 @@ def test_batched_segmenter_equals_numpy(patient):
 
 
 def test_raster_reaches_coverage_and_reward_is_area(patient):
-    env = UltrasoundVectorEnv(2, ReconstructionTask(target_coverage=1.01), [patient], max_steps=500, seed=2)
+    env = UltrasoundVectorEnv(2, ReconstructionTask(target_coverage=1.01), [patient], max_steps=500, seed=2,
+                              bmode_physics="legacy")   # bookkeeping test; the image model is not under test
     start, acts = _lawnmower(env)
     obs, _ = env.reset(seed=2, options={"init_pose": start})
     cov_hist, gains = [], []
@@ -107,7 +108,8 @@ def test_raster_coverage_matches_single_env(patient):
                                                                   num_sweep_lines=3, points_per_line=24)
     single = UltrasoundReconstructionEnv(patient_data=patient.data, tissue_model=patient.model, device=DEV, seed=5,
                                          max_steps=200, target_coverage=1.01)
-    vec = UltrasoundVectorEnv(1, ReconstructionTask(target_coverage=1.01), [patient], max_steps=200, seed=5)
+    vec = UltrasoundVectorEnv(1, ReconstructionTask(target_coverage=1.01), [patient], max_steps=200, seed=5,
+                              bmode_physics="legacy")   # same B-mode model as the single env
     single.reset(options={"init_pose": traj[0]})
     vec.reset(seed=5, options={"init_pose": traj[0]})
     scale = np.array([5.0, 5.0, np.radians(10.0), np.radians(15.0)])
@@ -119,3 +121,14 @@ def test_raster_coverage_matches_single_env(patient):
     cs, cv = info_s["coverage_ratio"], float(info_v["coverage_ratio"][0])
     print(f"\n[recon] raster coverage single {cs:.3f} vs vector {cv:.3f}")
     assert abs(cs - cv) < 0.05
+
+
+def test_perception_preset_follows_bmode_model(patient):
+    """DEC-044: the depth B-mode uses the perception preset tuned on the train split; legacy keeps the defaults."""
+    from mtp_gym.perception import PERCEPTION_PRESETS
+    d = UltrasoundVectorEnv(1, ReconstructionTask(), [patient], bmode_physics="depth", seed=0)
+    l = UltrasoundVectorEnv(1, ReconstructionTask(), [patient], bmode_physics="legacy", seed=0)
+    pd = PERCEPTION_PRESETS["depth"]
+    assert d.conf.shadow_threshold == pd["confidence"]["shadow_threshold"]
+    assert d.task.seg.min_confidence == pd["segmenter"]["min_confidence"]
+    assert l.conf.shadow_threshold == 0.70 and l.task.seg.min_confidence == 0.20

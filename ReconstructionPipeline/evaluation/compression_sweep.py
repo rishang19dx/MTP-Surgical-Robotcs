@@ -28,6 +28,7 @@ The fixed seed removes it from the comparison but it is not a model of decorrela
 from __future__ import annotations
 
 import argparse
+import gc
 import datetime as _dt
 import json
 import os
@@ -171,6 +172,7 @@ def main(argv=None):
               f"> 1px)  indent@max {s['indent_past_contact_mm_mean_per_force'][-1]:5.1f}"
               f"  gate {'PASS' if s['gate_pass'] else 'FAIL'}", flush=True)
         del ps
+        gc.collect()
         if dev.type == "cuda":
             torch.cuda.empty_cache()
     try:

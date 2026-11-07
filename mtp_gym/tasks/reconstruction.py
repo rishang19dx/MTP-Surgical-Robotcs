@@ -74,6 +74,9 @@ class ReconstructionTask(Task):
     def bind(self, env) -> None:
         super().bind(env)
         dev = env.device
+        # segmenter thresholds matched to the env's B-mode model (mtp_gym.perception.PERCEPTION_PRESETS, DEC-044)
+        self.seg = BoneSurfaceSegmenter(axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (IMAGE_SIZE[0] - 1),
+                                        **env.perception_preset["segmenter"])
         self.targets: List[torch.Tensor] = []
         lo_all, hi_all = [], []
         for ps in env.patients:
@@ -108,6 +111,8 @@ class ReconstructionTask(Task):
     def _ingest(self, frame) -> None:
         ids = frame.ids
         has, y = segment_bmode_batch(frame.bmode, frame.confidence, self.seg)
+        # image-only bone visibility (fraction of scanlines with a detected surface), before the force gate
+        self.last_visibility = has.float().mean(1)
         has &= (frame.force_n >= self.min_force)[:, None]
         pts = backproject(has, y, frame.t_backproject, IMAGE_SIZE, PHYSICAL_SIZE_MM).float()   # (n, W, 3)
         # occupancy

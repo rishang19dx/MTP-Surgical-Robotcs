@@ -133,7 +133,7 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients
 ./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample
 
-# 4. Tests (132 tests; FEM tests skip without the sample patient, multi-patient tests without data/patients)
+# 4. Tests (145 tests + 1 strict expected failure, about 2 min; FEM tests skip without the sample patient, multi-patient tests without data/patients)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -202,9 +202,38 @@ obs, info = envs.reset(seed=0)            # dict of torch tensors on the GPU: bm
 obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
 ```
 
+**Training and evaluating policies.** `mtp_gym.wrappers.SB3VecEnv` adapts the GPU env to Stable-Baselines3. It gives
+a uint8 half-resolution B-mode for SB3's CNN, a pooled 16³ reconstruction grid, and terminal observations and
+time-limit flags in SB3's format.
+
+```bash
+# PPO on one task (recon | nav | force), patients from data/splits.json names, deformation condition for training
+./.venv/bin/python ReconstructionPipeline/planning/train_vec_ppo.py --task recon --timesteps 300000 --num-envs 32 \
+    --patients ../sample_totalsegmentator_patient,sonogym_s0015 --deformation aware --seed 0   # --deformation rigid for H1
+# Per-patient evaluation against random, the scripted raster (recon / force) or the privileged oracle (nav);
+# writes results/vec_eval_<task>_<stamp>.*
+./.venv/bin/python ReconstructionPipeline/evaluation/eval_vec_policies.py --task recon --patients test --episodes 16 \
+    --ppo checkpoints/vec_ppo/recon_aware_depth_s0_laptop2p.zip
+```
+
+On the 4 GB laptop GPU, training runs at about 230 env-steps/s with 32 envs. It holds the FEM fields of 2–3
+patients, so the full 9-patient training split needs a larger GPU. No learned-policy result is reported yet.
+
+**FEM fidelity reference.** `ReconstructionPipeline/simulation/fem_nonlinear.py` is a compressible Neo-Hookean
+(finite-strain) FEM on the same mesh, Dirichlet set and moduli as the precomputed linear model. Its linearisation
+reproduces the precomputed skin compliance to 1.7e-6 relative (`tests/test_fem_fidelity.py`). `evaluation/fem_fidelity.py`
+applies identical contact loads (2–15 N) to both and compares compression and the displacement field. The results
+are pending (task T14).
+
+- **B-mode.** The default `bmode_physics="depth"` uses per-tissue attenuation and receiver noise amplified by the
+  TGC (DEC-042), with a fixed muscle-appropriate TGC preset of 10.9 dB/cm (DEC-043) and perception thresholds tuned
+  on the training patients (DEC-044). `"legacy"` is the single-env model with its default perception.
 - **Environments.** `MTP/FreeScan-v0` has no reward and measures simulation cost. `MTP/Recon-v0` is bone-surface
   reconstruction with a 4-DoF action, the same reward as the single env and a 32³ reconstruction grid observation.
-  Navigation and a force-regulated scan task are planned (`tasks/todo.md`). Autoreset happens in the same step,
+  `MTP/Nav-v0` is navigation to the transverse L4 plane. It has a 3-DoF action and an image-only observation; the
+  goal comes from the labels and is used for the reward only. `MTP/ForceScan-v0` adds a commanded contact force
+  (1–15 N) to the reconstruction task. Its reward adds image-only bone visibility and subtracts a force cost. See the
+  limitation below on how little the current image model rewards force. Autoreset happens in the same step,
   with `info["final_obs"]`.
 - **Patients.** `data/splits.json` holds the fixed train/held-out split: 9 train, 4 test, stratified by soft-tissue
   thickness. All patients share the same tissue moduli (`PatientSim(stiffness="shared")`), so force depends on
@@ -367,6 +396,19 @@ DEC-040, run right after the benchmark, load avg 3.3).
   - The Kelvinlet backend is not batched.
   - All throughput numbers come from a 4 GB laptop GPU, which holds only a few patients' FEM fields (about 400 MB
     each) at once.
+- **Force does not buy image quality in the simulator (pre-registered test failed).** DEC-042 added literature
+  depth physics to the gym B-mode: fat 0.48 / muscle 1.09 dB/cm/MHz, and receiver noise before the TGC anchored at
+  500-wavelength penetration. The prediction was committed before the run: the best contact force is higher for
+  a thick back than a thin one. It failed: the best force is 2 N for both (4 N with the legacy model). H2 is
+  reframed as "minimal force for coupling and field of view".
+- **With the depth physics and the fixed muscle TGC preset (DEC-043), fatty backs collapse.** Source:
+  [`results/bmode_physics_compare_20261107_190506.md`](results/bmode_physics_compare_20261107_190506.md). Mean
+  benchmark-raster coverage over 13 patients is 0.659 legacy vs 0.376 depth. Backs with ≤ 33 mm of paraspinal fat
+  keep 0.44–0.89; backs with ≥ 42 mm fall to 0.00–0.07. The cause is partly perception: the over-gained fat
+  lowers the image-only confidence below the segmenter's gate. Re-tuning perception on the 9 training patients
+  (DEC-044, protocol fixed before running; [`results/perception_tuning_20261107_190845.md`](results/perception_tuning_20261107_190845.md))
+  raises held-out coverage from 0.318 to 0.428 at Prec@2 0.979. The two fattest held-out backs (52 and 58 mm of
+  fat) stay at 0.01–0.07.
 - **Shared moduli come from one calibration.** The common tissue stiffness is the sample patient's fit to a
   literature force curve. It has not yet been compared with a nonlinear FEM or published moduli (task T14).
 - **Other gaps.** The B-mode simulation budget (< 2 ms) is a design target that no test asserts. The server's
@@ -385,8 +427,9 @@ MTP/
 ├── tasks/plan.md, tasks/todo.md         # RSS 2027 plan, hypotheses and dated task list (DEC-041)
 ├── mtp_gym/                            # GPU-batched Gymnasium VectorEnv (training path, no PyBullet)
 │   ├── core.py                         # UltrasoundVectorEnv, PatientSim, batched force control and imaging
-│   ├── perception.py                   # batched B-mode bone segmentation + back-projection
-│   └── tasks/                          # base.py (task contract), reconstruction.py
+│   ├── perception.py                   # batched B-mode bone segmentation + back-projection, perception presets
+│   ├── wrappers.py                     # Stable-Baselines3 VecEnv adapter
+│   └── tasks/                          # base.py (task contract), reconstruction.py, navigation.py, force_scan.py
 ├── data/splits.json                    # fixed train/held-out patient split
 ├── data/patients/sonogym_<id>/         # imported SonoGym subjects (CT gitignored, meta.json tracked)
 ├── data/sample_totalsegmentator_patient/
@@ -412,6 +455,7 @@ MTP/
 │   ├── simulation/
 │   │   ├── fem_tissue.py, tet_mesh.py  # GPU FEM tissue model (default)
 │   │   ├── fem_batched.py              # the same FEM solved for N probe queries at once
+│   │   ├── fem_nonlinear.py            # Neo-Hookean finite-strain reference on the same mesh (offline, T14)
 │   │   ├── tissue_model.py             # TissueModel contract + Kelvinlet backend
 │   │   ├── kelvinlet_deformation.py    # regularised Kelvinlet kernel (de Goes & James 2017)
 │   │   ├── slice_extractor.py          # grid_sample reslicing
@@ -421,10 +465,13 @@ MTP/
 │   ├── registration/icp_registration.py
 │   ├── planning/                       # env_reconstruction.py, heuristic_planner.py, start_pose.py,
 │   │                                   # pointnet_encoder.py, train_submodular_ppo.py,
-│   │                                   # train_diffusion_policy.py, diffusion_policy.py, flow_matching_policy.py
-│   ├── evaluation/benchmark_runner.py, throughput_benchmark.py, compression_sweep.py
+│   │                                   # train_diffusion_policy.py, diffusion_policy.py, flow_matching_policy.py,
+│   │                                   # train_vec_ppo.py (PPO on the batched gym)
+│   ├── evaluation/                     # benchmark_runner.py (single env), throughput_benchmark.py,
+│   │                                   # compression_sweep.py, bmode_physics_compare.py, tune_perception.py,
+│   │                                   # fem_fidelity.py, eval_vec_policies.py
 │   ├── scripts/record_soft_body_demonstrations.py
-│   └── tests/                          # 17 test modules
+│   └── tests/                          # 21 test modules
 ├── Docs/                               # design notes, remote deployment guide, presentation sources (historical)
 ├── LiteratureSurvey/, Notes/
 └── .agents/                            # local agent scratch, gitignored
@@ -436,6 +483,8 @@ MTP/
   contact, DEC-041 RSS 2027 direction and the batched gym).
 - [`tasks/plan.md`](tasks/plan.md), [`tasks/todo.md`](tasks/todo.md): RSS 2027 plan, hypotheses H1–H4 and the dated
   task list.
+- [`Docs/RSS2027_RESULTS_AND_INFERENCES.md`](Docs/RSS2027_RESULTS_AND_INFERENCES.md): every RSS 2027 result so far
+  with its source file, and what it does and does not support.
 - [`FLOW.md`](FLOW.md): execution flows, data routes, frames and verification recipes.
 - [`QUIZME.md`](QUIZME.md): pre-implementation questions for major changes.
 - [`AGENTS.md`](AGENTS.md): instructions and invariants for coding agents.

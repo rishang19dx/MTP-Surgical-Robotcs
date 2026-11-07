@@ -60,7 +60,7 @@ def record(pdir: str, dev, seed: int = 0):
     bm, T, F = [], [], []
     for t in traj:
         a = np.clip((t - env.pose.cpu().numpy()) / SCALE, -1, 1).astype(np.float32)
-        env.step(a[None])
+        env.step(a)
         fr = env.last_frame
         bm.append(fr.bmode[0].clone())
         T.append(fr.t_backproject[0].clone())

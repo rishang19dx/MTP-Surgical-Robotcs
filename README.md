@@ -133,7 +133,7 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients
 ./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample
 
-# 4. Tests (132 tests; FEM tests skip without the sample patient, multi-patient tests without data/patients)
+# 4. Tests (136 tests; FEM tests skip without the sample patient, multi-patient tests without data/patients)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -204,7 +204,9 @@ obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
 
 - **Environments.** `MTP/FreeScan-v0` has no reward and measures simulation cost. `MTP/Recon-v0` is bone-surface
   reconstruction with a 4-DoF action, the same reward as the single env and a 32³ reconstruction grid observation.
-  Navigation and a force-regulated scan task are planned (`tasks/todo.md`). Autoreset happens in the same step,
+  `MTP/Nav-v0` is navigation to the transverse L4 plane. It has a 3-DoF action and an image-only observation; the
+  goal comes from the labels and is used for the reward only. A force-regulated scan task is planned
+  (`tasks/todo.md`). Autoreset happens in the same step,
   with `info["final_obs"]`.
 - **Patients.** `data/splits.json` holds the fixed train/held-out split: 9 train, 4 test, stratified by soft-tissue
   thickness. All patients share the same tissue moduli (`PatientSim(stiffness="shared")`), so force depends on
@@ -386,7 +388,7 @@ MTP/
 ├── mtp_gym/                            # GPU-batched Gymnasium VectorEnv (training path, no PyBullet)
 │   ├── core.py                         # UltrasoundVectorEnv, PatientSim, batched force control and imaging
 │   ├── perception.py                   # batched B-mode bone segmentation + back-projection
-│   └── tasks/                          # base.py (task contract), reconstruction.py
+│   └── tasks/                          # base.py (task contract), reconstruction.py, navigation.py
 ├── data/splits.json                    # fixed train/held-out patient split
 ├── data/patients/sonogym_<id>/         # imported SonoGym subjects (CT gitignored, meta.json tracked)
 ├── data/sample_totalsegmentator_patient/
@@ -424,7 +426,7 @@ MTP/
 │   │                                   # train_diffusion_policy.py, diffusion_policy.py, flow_matching_policy.py
 │   ├── evaluation/benchmark_runner.py, throughput_benchmark.py, compression_sweep.py
 │   ├── scripts/record_soft_body_demonstrations.py
-│   └── tests/                          # 17 test modules
+│   └── tests/                          # 18 test modules
 ├── Docs/                               # design notes, remote deployment guide, presentation sources (historical)
 ├── LiteratureSurvey/, Notes/
 └── .agents/                            # local agent scratch, gitignored

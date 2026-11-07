@@ -825,4 +825,17 @@ A chronological record of all architectural, research, algorithmic, and engineer
     `results/throughput_20261105_235332.*`.
 
   `results/patients_fem_20261105_225601.json` records no commit; it was produced from the tree of `bbea34f`.
+* **Progress, T6 (2026-11-07): `MTP/Nav-v0`** (`mtp_gym/tasks/navigation.py`).
+  - **Goal** (user decision 2026-11-07): the transverse L4 plane. The probe sits over the (x, z) centroid of the
+    US-visible dorsal L4 surface, with yaw 0 and pitch 0. The goal is taken from the labels and used for the
+    reward and success test only; it is never observed.
+  - **Action.** 3-DoF [dc1, dc2, dyaw].
+  - **Reward.** Progress in mm plus 0.5 × progress in degrees, +10 on success, and the reconstruction task's
+    force penalty.
+  - **Success.** < 3 mm and < 5°.
+  - **Start.** Uniform over the window, yaw ±30°.
+  - **Test** (`test_vec_navigation.py`, printed, sample patient, 64 episodes, 40 steps): the privileged oracle
+    succeeds in 100 % of episodes (3.9 steps on average); uniform random actions in 0 %.
+  - **Caveat.** With 5 mm / 10° action steps the oracle needs few steps, so this checks the task logic. Whether
+    the plane can be found from the image alone is the question for the learned baselines (T10).
 

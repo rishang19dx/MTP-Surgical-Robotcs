@@ -18,7 +18,7 @@ Every task also obeys the AGENTS.md invariants:
 | T4 multi-patient assets (SonoGym cases + varied BMI) | 6–12 Nov | done 5 Nov: 12 SonoGym subjects + sample, split in `data/splits.json`, shared moduli; own varied-BMI picks still to add |
 | T5 reconstruction task on VectorEnv | 10–12 Nov | done 5 Nov (`MTP/Recon-v0`) |
 | **Checkpoint A** | 13 Nov | |
-| T6 navigation task | 12–15 Nov | |
+| T6 navigation task | 12–15 Nov | done 7 Nov (`MTP/Nav-v0`; oracle 100 %, random 0 %) |
 | T9 compression-changes-image gate | 13–14 Nov | done 5 Nov: passes on all 13 patients (`compression_sweep.py`) |
 | T14 fidelity vs nonlinear FEM | 14–19 Nov | |
 | **Checkpoint B** | 20 Nov | |
@@ -117,7 +117,7 @@ observation built from B-mode segmentation (not ground truth, unlike SonoGym). R
 **Depends on:** T3, T4.
 **Files:** `mtp_gym/tasks/reconstruction.py`, a test.
 
-### T6: Navigation-to-plane task (M)
+### T6: Navigation-to-plane task (M) — DONE 2026-11-07 (`mtp_gym/tasks/navigation.py`, `test_vec_navigation.py`)
 **Description:** SonoGym-style navigation: the observation is the B-mode image, the action is 3-DoF tangential, the
 reward is the decrease in pose distance to a target standard plane, and success is < 3 mm and < 5°. Targets are defined
 per patient from TotalSegmentator vertebra labels. Labels are used only for the reward and goal, never for observations.

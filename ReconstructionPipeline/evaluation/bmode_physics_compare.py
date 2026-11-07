@@ -17,6 +17,7 @@ Writes results/bmode_physics_compare_<stamp>.json and .md.
 from __future__ import annotations
 
 import argparse
+import gc
 import datetime as _dt
 import json
 import os
@@ -95,6 +96,7 @@ def main(argv=None):
               f"prec@2 legacy {row['legacy']['precision2']:.3f} depth {row['depth']['precision2']:.3f} | pts/frame "
               f"{row['legacy']['points_per_frame']:.1f} / {row['depth']['points_per_frame']:.1f}", flush=True)
         del ps, tree
+        gc.collect()          # envs hold the PatientSim through task/env reference cycles
         if dev.type == "cuda":
             torch.cuda.empty_cache()
     try:

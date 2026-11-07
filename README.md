@@ -133,7 +133,7 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients
 ./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample
 
-# 4. Tests (139 tests + 1 strict expected failure; FEM tests skip without the sample patient, multi-patient tests without data/patients)
+# 4. Tests (145 tests + 1 strict expected failure, about 2 min; FEM tests skip without the sample patient, multi-patient tests without data/patients)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -201,6 +201,29 @@ envs = gym.make_vec("MTP/Recon-v0", num_envs=64, vectorization_mode="vector_entr
 obs, info = envs.reset(seed=0)            # dict of torch tensors on the GPU: bmode, probe_pose, force, recon_grid, coverage
 obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
 ```
+
+**Training and evaluating policies.** `mtp_gym.wrappers.SB3VecEnv` adapts the GPU env to Stable-Baselines3. It gives
+a uint8 half-resolution B-mode for SB3's CNN, a pooled 16³ reconstruction grid, and terminal observations and
+time-limit flags in SB3's format.
+
+```bash
+# PPO on one task (recon | nav | force), patients from data/splits.json names, deformation condition for training
+./.venv/bin/python ReconstructionPipeline/planning/train_vec_ppo.py --task recon --timesteps 300000 --num-envs 32 \
+    --patients ../sample_totalsegmentator_patient,sonogym_s0015 --deformation aware --seed 0   # --deformation rigid for H1
+# Per-patient evaluation against random, the scripted raster (recon / force) or the privileged oracle (nav);
+# writes results/vec_eval_<task>_<stamp>.*
+./.venv/bin/python ReconstructionPipeline/evaluation/eval_vec_policies.py --task recon --patients test --episodes 16 \
+    --ppo checkpoints/vec_ppo/recon_aware_depth_s0_laptop2p.zip
+```
+
+On the 4 GB laptop GPU, training runs at about 230 env-steps/s with 32 envs. It holds the FEM fields of 2–3
+patients, so the full 9-patient training split needs a larger GPU. No learned-policy result is reported yet.
+
+**FEM fidelity reference.** `ReconstructionPipeline/simulation/fem_nonlinear.py` is a compressible Neo-Hookean
+(finite-strain) FEM on the same mesh, Dirichlet set and moduli as the precomputed linear model. Its linearisation
+reproduces the precomputed skin compliance to 1.7e-6 relative (`tests/test_fem_fidelity.py`). `evaluation/fem_fidelity.py`
+applies identical contact loads (2–15 N) to both and compares compression and the displacement field. The results
+are pending (task T14).
 
 - **B-mode.** The default `bmode_physics="depth"` uses per-tissue attenuation and receiver noise amplified by the
   TGC (DEC-042), with a fixed muscle-appropriate TGC preset of 10.9 dB/cm (DEC-043) and perception thresholds tuned
@@ -404,7 +427,8 @@ MTP/
 ├── tasks/plan.md, tasks/todo.md         # RSS 2027 plan, hypotheses and dated task list (DEC-041)
 ├── mtp_gym/                            # GPU-batched Gymnasium VectorEnv (training path, no PyBullet)
 │   ├── core.py                         # UltrasoundVectorEnv, PatientSim, batched force control and imaging
-│   ├── perception.py                   # batched B-mode bone segmentation + back-projection
+│   ├── perception.py                   # batched B-mode bone segmentation + back-projection, perception presets
+│   ├── wrappers.py                     # Stable-Baselines3 VecEnv adapter
 │   └── tasks/                          # base.py (task contract), reconstruction.py, navigation.py, force_scan.py
 ├── data/splits.json                    # fixed train/held-out patient split
 ├── data/patients/sonogym_<id>/         # imported SonoGym subjects (CT gitignored, meta.json tracked)
@@ -431,6 +455,7 @@ MTP/
 │   ├── simulation/
 │   │   ├── fem_tissue.py, tet_mesh.py  # GPU FEM tissue model (default)
 │   │   ├── fem_batched.py              # the same FEM solved for N probe queries at once
+│   │   ├── fem_nonlinear.py            # Neo-Hookean finite-strain reference on the same mesh (offline, T14)
 │   │   ├── tissue_model.py             # TissueModel contract + Kelvinlet backend
 │   │   ├── kelvinlet_deformation.py    # regularised Kelvinlet kernel (de Goes & James 2017)
 │   │   ├── slice_extractor.py          # grid_sample reslicing
@@ -440,10 +465,13 @@ MTP/
 │   ├── registration/icp_registration.py
 │   ├── planning/                       # env_reconstruction.py, heuristic_planner.py, start_pose.py,
 │   │                                   # pointnet_encoder.py, train_submodular_ppo.py,
-│   │                                   # train_diffusion_policy.py, diffusion_policy.py, flow_matching_policy.py
-│   ├── evaluation/benchmark_runner.py, throughput_benchmark.py, compression_sweep.py
+│   │                                   # train_diffusion_policy.py, diffusion_policy.py, flow_matching_policy.py,
+│   │                                   # train_vec_ppo.py (PPO on the batched gym)
+│   ├── evaluation/                     # benchmark_runner.py (single env), throughput_benchmark.py,
+│   │                                   # compression_sweep.py, bmode_physics_compare.py, tune_perception.py,
+│   │                                   # fem_fidelity.py, eval_vec_policies.py
 │   ├── scripts/record_soft_body_demonstrations.py
-│   └── tests/                          # 19 test modules
+│   └── tests/                          # 21 test modules
 ├── Docs/                               # design notes, remote deployment guide, presentation sources (historical)
 ├── LiteratureSurvey/, Notes/
 └── .agents/                            # local agent scratch, gitignored

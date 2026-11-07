@@ -26,6 +26,16 @@ import torch.nn.functional as F
 from ReconstructionPipeline.reconstruction.bone_segmentation import BoneSurfaceSegmenter
 
 
+# Image-only perception parameters per B-mode model.  "legacy" = the library defaults (single env).  "depth" =
+# selected by the DEC-044 protocol on the 9 training patients only
+# (results/perception_tuning_20261107_190845.json, "selected"); 3 of the 4 values sit on the edge of the search grid.
+PERCEPTION_PRESETS = {
+    "legacy": {"confidence": {}, "segmenter": {}},
+    "depth": {"confidence": {"shadow_threshold": 0.90, "attenuation_decay_rate": 0.4},
+              "segmenter": {"intensity_threshold": 0.75, "min_confidence": 0.05}},
+}
+
+
 def _uniform_filter_lateral(img: torch.Tensor, size: int) -> torch.Tensor:
     """scipy.ndimage.uniform_filter1d(axis=1 of (H, W), mode='nearest') on (B, H, W)."""
     left = size // 2

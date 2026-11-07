@@ -133,7 +133,7 @@ python3.10 -m venv .venv
 ./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients
 ./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample
 
-# 4. Tests (138 tests + 1 strict expected failure; FEM tests skip without the sample patient, multi-patient tests without data/patients)
+# 4. Tests (139 tests + 1 strict expected failure; FEM tests skip without the sample patient, multi-patient tests without data/patients)
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q
 ```
 
@@ -203,8 +203,8 @@ obs, reward, terminated, truncated, info = envs.step(envs.action_space.sample())
 ```
 
 - **B-mode.** The default `bmode_physics="depth"` uses per-tissue attenuation and receiver noise amplified by the
-  TGC (DEC-042), with a fixed muscle-appropriate TGC preset of 10.9 dB/cm (DEC-043). `"legacy"` is the single-env
-  model.
+  TGC (DEC-042), with a fixed muscle-appropriate TGC preset of 10.9 dB/cm (DEC-043) and perception thresholds tuned
+  on the training patients (DEC-044). `"legacy"` is the single-env model with its default perception.
 - **Environments.** `MTP/FreeScan-v0` has no reward and measures simulation cost. `MTP/Recon-v0` is bone-surface
   reconstruction with a 4-DoF action, the same reward as the single env and a 32³ reconstruction grid observation.
   `MTP/Nav-v0` is navigation to the transverse L4 plane. It has a 3-DoF action and an image-only observation; the
@@ -382,7 +382,10 @@ DEC-040, run right after the benchmark, load avg 3.3).
   [`results/bmode_physics_compare_20261107_190506.md`](results/bmode_physics_compare_20261107_190506.md). Mean
   benchmark-raster coverage over 13 patients is 0.659 legacy vs 0.376 depth. Backs with ≤ 33 mm of paraspinal fat
   keep 0.44–0.89; backs with ≥ 42 mm fall to 0.00–0.07. The cause is partly perception: the over-gained fat
-  lowers the image-only confidence below the segmenter's gate.
+  lowers the image-only confidence below the segmenter's gate. Re-tuning perception on the 9 training patients
+  (DEC-044, protocol fixed before running; [`results/perception_tuning_20261107_190845.md`](results/perception_tuning_20261107_190845.md))
+  raises held-out coverage from 0.318 to 0.428 at Prec@2 0.979. The two fattest held-out backs (52 and 58 mm of
+  fat) stay at 0.01–0.07.
 - **Shared moduli come from one calibration.** The common tissue stiffness is the sample patient's fit to a
   literature force curve. It has not yet been compared with a nonlinear FEM or published moduli (task T14).
 - **Other gaps.** The B-mode simulation budget (< 2 ms) is a design target that no test asserts. The server's

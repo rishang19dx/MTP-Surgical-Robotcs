@@ -1,0 +1,3350 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/tune_perception.py",
+    "commit": "9a5b1d0",
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "protocol": "DEC-044",
+    "train": [
+      "../sample_totalsegmentator_patient",
+      "sonogym_s0015",
+      "sonogym_s0010",
+      "sonogym_s0012",
+      "sonogym_s0038",
+      "sonogym_s0024",
+      "sonogym_s0004",
+      "sonogym_s0028",
+      "sonogym_s0014"
+    ],
+    "test": [
+      "sonogym_s0029",
+      "sonogym_s0006",
+      "sonogym_s0034",
+      "sonogym_s0030"
+    ],
+    "grid": {
+      "shadow_threshold": [
+        0.7,
+        0.8,
+        0.9
+      ],
+      "attenuation_decay_rate": [
+        1.6,
+        0.8,
+        0.4
+      ],
+      "intensity_threshold": [
+        0.75,
+        0.85
+      ],
+      "min_confidence": [
+        0.2,
+        0.1,
+        0.05
+      ]
+    },
+    "defaults": {
+      "shadow_threshold": 0.7,
+      "attenuation_decay_rate": 1.6,
+      "intensity_threshold": 0.75,
+      "min_confidence": 0.2
+    }
+  },
+  "selected": {
+    "shadow_threshold": 0.9,
+    "attenuation_decay_rate": 0.4,
+    "intensity_threshold": 0.75,
+    "min_confidence": 0.05
+  },
+  "table": [
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.40340726745731753,
+      "train_prec2": 0.9975850759084808,
+      "train_min_prec2": 0.9823834196891191,
+      "feasible": true,
+      "changed": 0,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8726838015540944,
+          "prec2": 0.9993144815766923,
+          "points": 5835
+        },
+        "sonogym_s0015": {
+          "cov3": 0.8925,
+          "prec2": 1.0,
+          "points": 5594
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8713398402839396,
+          "prec2": 1.0,
+          "points": 3969
+        },
+        "sonogym_s0012": {
+          "cov3": 0.42857142857142855,
+          "prec2": 0.9823834196891191,
+          "points": 965
+        },
+        "sonogym_s0038": {
+          "cov3": 0.08271077908217717,
+          "prec2": 1.0,
+          "points": 627
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": NaN,
+          "points": 0
+        },
+        "sonogym_s0004": {
+          "cov3": 0.45473393227366965,
+          "prec2": 0.9989827060020345,
+          "points": 983
+        },
+        "sonogym_s0028": {
+          "cov3": 0.0009596928982725527,
+          "prec2": 1.0,
+          "points": 186
+        },
+        "sonogym_s0014": {
+          "cov3": 0.027165932452276064,
+          "prec2": 1.0,
+          "points": 132
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.4476932608618251,
+      "train_prec2": 0.9940845904685973,
+      "train_min_prec2": 0.9771689497716894,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8786610878661087,
+          "prec2": 0.9986033519553073,
+          "points": 7160
+        },
+        "sonogym_s0015": {
+          "cov3": 0.91625,
+          "prec2": 1.0,
+          "points": 6616
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8873114463176575,
+          "prec2": 0.9994136043784206,
+          "points": 5116
+        },
+        "sonogym_s0012": {
+          "cov3": 0.549344375431332,
+          "prec2": 0.9792638672887507,
+          "points": 1929
+        },
+        "sonogym_s0038": {
+          "cov3": 0.11953041622198506,
+          "prec2": 1.0,
+          "points": 1049
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": NaN,
+          "points": 0
+        },
+        "sonogym_s0004": {
+          "cov3": 0.5977885279889427,
+          "prec2": 0.99822695035461,
+          "points": 1692
+        },
+        "sonogym_s0028": {
+          "cov3": 0.03262955854126679,
+          "prec2": 1.0,
+          "points": 503
+        },
+        "sonogym_s0014": {
+          "cov3": 0.04772393538913363,
+          "prec2": 0.9771689497716894,
+          "points": 219
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.5049080306960497,
+      "train_prec2": 0.9942558528424682,
+      "train_min_prec2": 0.9748667174409749,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.881649731022116,
+          "prec2": 0.9958032786885246,
+          "points": 7625
+        },
+        "sonogym_s0015": {
+          "cov3": 0.9175,
+          "prec2": 1.0,
+          "points": 6852
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8890860692102928,
+          "prec2": 0.9987566607460036,
+          "points": 5630
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6169772256728778,
+          "prec2": 0.9748667174409749,
+          "points": 2626
+        },
+        "sonogym_s0038": {
+          "cov3": 0.17556029882604055,
+          "prec2": 1.0,
+          "points": 1402
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": 1.0,
+          "points": 6
+        },
+        "sonogym_s0004": {
+          "cov3": 0.6731167933655839,
+          "prec2": 0.9973262032085561,
+          "points": 2244
+        },
+        "sonogym_s0028": {
+          "cov3": 0.3330134357005758,
+          "prec2": 1.0,
+          "points": 848
+        },
+        "sonogym_s0014": {
+          "cov3": 0.05726872246696035,
+          "prec2": 0.981549815498155,
+          "points": 271
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.4047566411096349,
+      "train_prec2": 0.9977382512873734,
+      "train_min_prec2": 0.9835315645013724,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8756724447101016,
+          "prec2": 0.9993415637860082,
+          "points": 6075
+        },
+        "sonogym_s0015": {
+          "cov3": 0.89375,
+          "prec2": 1.0,
+          "points": 5706
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8589174800354925,
+          "prec2": 1.0,
+          "points": 3269
+        },
+        "sonogym_s0012": {
+          "cov3": 0.4527260179434092,
+          "prec2": 0.9835315645013724,
+          "points": 1093
+        },
+        "sonogym_s0038": {
+          "cov3": 0.0832443970117396,
+          "prec2": 1.0,
+          "points": 627
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": NaN,
+          "points": 0
+        },
+        "sonogym_s0004": {
+          "cov3": 0.47753973738769867,
+          "prec2": 0.9990328820116054,
+          "points": 1034
+        },
+        "sonogym_s0028": {
+          "cov3": 0.0009596928982725527,
+          "prec2": 1.0,
+          "points": 190
+        },
+        "sonogym_s0014": {
+          "cov3": 0.0,
+          "prec2": 1.0,
+          "points": 37
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.4590720935945125,
+      "train_prec2": 0.9974041874857265,
+      "train_min_prec2": 0.9799253034547152,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8840406455469217,
+          "prec2": 0.9983680130558955,
+          "points": 7353
+        },
+        "sonogym_s0015": {
+          "cov3": 0.91625,
+          "prec2": 1.0,
+          "points": 6728
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 1.0,
+          "points": 4454
+        },
+        "sonogym_s0012": {
+          "cov3": 0.5921325051759835,
+          "prec2": 0.9799253034547152,
+          "points": 2142
+        },
+        "sonogym_s0038": {
+          "cov3": 0.1200640341515475,
+          "prec2": 1.0,
+          "points": 1074
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": 1.0,
+          "points": 5
+        },
+        "sonogym_s0004": {
+          "cov3": 0.6323427781617139,
+          "prec2": 0.9983443708609272,
+          "points": 1812
+        },
+        "sonogym_s0028": {
+          "cov3": 0.05854126679462572,
+          "prec2": 1.0,
+          "points": 528
+        },
+        "sonogym_s0014": {
+          "cov3": 0.020558002936857563,
+          "prec2": 1.0,
+          "points": 110
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.511121014991323,
+      "train_prec2": 0.9966211748334948,
+      "train_min_prec2": 0.9767844767844768,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9961285327138986,
+          "points": 7749
+        },
+        "sonogym_s0015": {
+          "cov3": 0.919375,
+          "prec2": 1.0,
+          "points": 6972
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9112688553682342,
+          "prec2": 0.9996003197442046,
+          "points": 5004
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6528640441683919,
+          "prec2": 0.9767844767844768,
+          "points": 2886
+        },
+        "sonogym_s0038": {
+          "cov3": 0.1824973319103522,
+          "prec2": 1.0,
+          "points": 1440
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": 1.0,
+          "points": 7
+        },
+        "sonogym_s0004": {
+          "cov3": 0.6841741534208707,
+          "prec2": 0.9970772442588727,
+          "points": 2395
+        },
+        "sonogym_s0028": {
+          "cov3": 0.33397312859884837,
+          "prec2": 1.0,
+          "points": 883
+        },
+        "sonogym_s0014": {
+          "cov3": 0.03010279001468429,
+          "prec2": 1.0,
+          "points": 148
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.4858939889441917,
+      "train_prec2": 0.9941267112132396,
+      "train_min_prec2": 0.9758032526775089,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.995788365359305,
+          "points": 7598
+        },
+        "sonogym_s0015": {
+          "cov3": 0.9175,
+          "prec2": 1.0,
+          "points": 6779
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8855368234250222,
+          "prec2": 0.998918139199423,
+          "points": 5546
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6024844720496895,
+          "prec2": 0.9758032526775089,
+          "points": 2521
+        },
+        "sonogym_s0038": {
+          "cov3": 0.1526147278548559,
+          "prec2": 1.0,
+          "points": 1337
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": 1.0,
+          "points": 5
+        },
+        "sonogym_s0004": {
+          "cov3": 0.6592950932964755,
+          "prec2": 0.9967919340054996,
+          "points": 2182
+        },
+        "sonogym_s0028": {
+          "cov3": 0.21976967370441458,
+          "prec2": 1.0,
+          "points": 752
+        },
+        "sonogym_s0014": {
+          "cov3": 0.053597650513950074,
+          "prec2": 0.9798387096774194,
+          "points": 248
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.5522648198440059,
+      "train_prec2": 0.9918056776591351,
+      "train_min_prec2": 0.958499846295727,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8864315600717274,
+          "prec2": 0.9868518063406242,
+          "points": 8138
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7065
+        },
+        "sonogym_s0010": {
+          "cov3": 0.90150842945874,
+          "prec2": 0.9981818181818182,
+          "points": 6050
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6645962732919255,
+          "prec2": 0.958499846295727,
+          "points": 3253
+        },
+        "sonogym_s0038": {
+          "cov3": 0.2390608324439701,
+          "prec2": 1.0,
+          "points": 1768
+        },
+        "sonogym_s0024": {
+          "cov3": 0.03409090909090909,
+          "prec2": 1.0,
+          "points": 86
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7228749136143746,
+          "prec2": 0.9974235104669887,
+          "points": 3105
+        },
+        "sonogym_s0028": {
+          "cov3": 0.5374280230326296,
+          "prec2": 1.0,
+          "points": 1516
+        },
+        "sonogym_s0014": {
+          "cov3": 0.0631424375917768,
+          "prec2": 0.9852941176470589,
+          "points": 340
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.5899503946512852,
+      "train_prec2": 0.9906558248563118,
+      "train_min_prec2": 0.9509151414309485,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8882247459653317,
+          "prec2": 0.9846994535519126,
+          "points": 8235
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9993060374739764,
+          "points": 7205
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9032830523513753,
+          "prec2": 0.9980946332168943,
+          "points": 6298
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7032436162870945,
+          "prec2": 0.9509151414309485,
+          "points": 3606
+        },
+        "sonogym_s0038": {
+          "cov3": 0.32123799359658484,
+          "prec2": 0.99953509995351,
+          "points": 2151
+        },
+        "sonogym_s0024": {
+          "cov3": 0.05991735537190083,
+          "prec2": 1.0,
+          "points": 280
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7373876986869385,
+          "prec2": 0.9953424657534247,
+          "points": 3650
+        },
+        "sonogym_s0028": {
+          "cov3": 0.7111324376199616,
+          "prec2": 1.0,
+          "points": 2399
+        },
+        "sonogym_s0014": {
+          "cov3": 0.06387665198237885,
+          "prec2": 0.988009592326139,
+          "points": 417
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.4928997154631019,
+      "train_prec2": 0.9967068331449241,
+      "train_min_prec2": 0.977523949889462,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.996106929665196,
+          "points": 7706
+        },
+        "sonogym_s0015": {
+          "cov3": 0.91875,
+          "prec2": 1.0,
+          "points": 6893
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9103815439219166,
+          "prec2": 0.9997954173486089,
+          "points": 4888
+        },
+        "sonogym_s0012": {
+          "cov3": 0.642512077294686,
+          "prec2": 0.977523949889462,
+          "points": 2714
+        },
+        "sonogym_s0038": {
+          "cov3": 0.15955176093916756,
+          "prec2": 1.0,
+          "points": 1373
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0,
+          "prec2": 1.0,
+          "points": 6
+        },
+        "sonogym_s0004": {
+          "cov3": 0.6689702833448514,
+          "prec2": 0.9969352014010507,
+          "points": 2284
+        },
+        "sonogym_s0028": {
+          "cov3": 0.22072936660268713,
+          "prec2": 1.0,
+          "points": 782
+        },
+        "sonogym_s0014": {
+          "cov3": 0.02936857562408223,
+          "prec2": 1.0,
+          "points": 139
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.5575289955615522,
+      "train_prec2": 0.9940499190218541,
+      "train_min_prec2": 0.9604130808950087,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9891169923324264,
+          "points": 8086
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7123
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9130434782608695,
+          "prec2": 0.9990730441230997,
+          "points": 5394
+        },
+        "sonogym_s0012": {
+          "cov3": 0.714975845410628,
+          "prec2": 0.9604130808950087,
+          "points": 3486
+        },
+        "sonogym_s0038": {
+          "cov3": 0.24546424759871932,
+          "prec2": 1.0,
+          "points": 1811
+        },
+        "sonogym_s0024": {
+          "cov3": 0.0371900826446281,
+          "prec2": 1.0,
+          "points": 107
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7256392536281963,
+          "prec2": 0.9978461538461538,
+          "points": 3250
+        },
+        "sonogym_s0028": {
+          "cov3": 0.5383877159309021,
+          "prec2": 1.0,
+          "points": 1566
+        },
+        "sonogym_s0014": {
+          "cov3": 0.035976505139500736,
+          "prec2": 1.0,
+          "points": 207
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.5943387055390508,
+      "train_prec2": 0.9928388362853622,
+      "train_min_prec2": 0.95370611183355,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9874800540076102,
+          "points": 8147
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9994461368042094,
+          "points": 7222
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9148181011535049,
+          "prec2": 0.9991057055982829,
+          "points": 5591
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7446514837819186,
+          "prec2": 0.95370611183355,
+          "points": 3845
+        },
+        "sonogym_s0038": {
+          "cov3": 0.3281750266808965,
+          "prec2": 1.0,
+          "points": 2215
+        },
+        "sonogym_s0024": {
+          "cov3": 0.061466942148760334,
+          "prec2": 1.0,
+          "points": 320
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7429163787145819,
+          "prec2": 0.9958115183246073,
+          "points": 3820
+        },
+        "sonogym_s0028": {
+          "cov3": 0.7111324376199616,
+          "prec2": 1.0,
+          "points": 2465
+        },
+        "sonogym_s0014": {
+          "cov3": 0.0381791483113069,
+          "prec2": 1.0,
+          "points": 269
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.5848277627624127,
+      "train_prec2": 0.9910334412791842,
+      "train_min_prec2": 0.9544038516001133,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9847826086956522,
+          "points": 8280
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9993050729673384,
+          "points": 7195
+        },
+        "sonogym_s0010": {
+          "cov3": 0.904170363797693,
+          "prec2": 0.9980858191099059,
+          "points": 6269
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6997929606625258,
+          "prec2": 0.9544038516001133,
+          "points": 3531
+        },
+        "sonogym_s0038": {
+          "cov3": 0.3121664887940235,
+          "prec2": 0.9995145631067961,
+          "points": 2060
+        },
+        "sonogym_s0024": {
+          "cov3": 0.058884297520661155,
+          "prec2": 1.0,
+          "points": 218
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7373876986869385,
+          "prec2": 0.9966499162479062,
+          "points": 3582
+        },
+        "sonogym_s0028": {
+          "cov3": 0.6794625719769674,
+          "prec2": 1.0,
+          "points": 2191
+        },
+        "sonogym_s0014": {
+          "cov3": 0.06387665198237885,
+          "prec2": 0.9865591397849462,
+          "points": 372
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6318256626510373,
+      "train_prec2": 0.9882941790897218,
+      "train_min_prec2": 0.9321454722968026,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9847826086956522,
+          "points": 8280
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986157253599114,
+          "points": 7224
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9050576752440106,
+          "prec2": 0.996447327772629,
+          "points": 6474
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7232574189095928,
+          "prec2": 0.9321454722968026,
+          "points": 4097
+        },
+        "sonogym_s0038": {
+          "cov3": 0.483991462113127,
+          "prec2": 0.999630450849963,
+          "points": 2706
+        },
+        "sonogym_s0024": {
+          "cov3": 0.10640495867768596,
+          "prec2": 1.0,
+          "points": 526
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7567380787836904,
+          "prec2": 0.9910775566231984,
+          "points": 4371
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8320537428023033,
+          "prec2": 1.0,
+          "points": 3602
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07121879588839941,
+          "prec2": 0.9919484702093397,
+          "points": 621
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6582941790944189,
+      "train_prec2": 0.985869914983977,
+      "train_min_prec2": 0.9197687861271676,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9847826086956522,
+          "points": 8280
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986157253599114,
+          "points": 7224
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9964707687586313,
+          "points": 6517
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7398205659075224,
+          "prec2": 0.9197687861271676,
+          "points": 4325
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6109925293489862,
+          "prec2": 0.9991050119331742,
+          "points": 3352
+        },
+        "sonogym_s0024": {
+          "cov3": 0.12190082644628099,
+          "prec2": 1.0,
+          "points": 878
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7650310988251555,
+          "prec2": 0.9809544658493871,
+          "points": 4568
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8848368522072937,
+          "prec2": 1.0,
+          "points": 4297
+        },
+        "sonogym_s0014": {
+          "cov3": 0.08663729809104258,
+          "prec2": 0.9931318681318682,
+          "points": 728
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.5891100800003121,
+      "train_prec2": 0.9932844720033026,
+      "train_min_prec2": 0.9564177517937815,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9875564230816152,
+          "points": 8197
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9994456762749445,
+          "points": 7216
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9165927240461402,
+          "prec2": 0.9991013659237958,
+          "points": 5564
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7370600414078675,
+          "prec2": 0.9564177517937815,
+          "points": 3763
+        },
+        "sonogym_s0038": {
+          "cov3": 0.31963713980789754,
+          "prec2": 1.0,
+          "points": 2120
+        },
+        "sonogym_s0024": {
+          "cov3": 0.06043388429752066,
+          "prec2": 1.0,
+          "points": 259
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7429163787145819,
+          "prec2": 0.9970390309555854,
+          "points": 3715
+        },
+        "sonogym_s0028": {
+          "cov3": 0.6794625719769674,
+          "prec2": 1.0,
+          "points": 2255
+        },
+        "sonogym_s0014": {
+          "cov3": 0.0381791483113069,
+          "prec2": 1.0,
+          "points": 235
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6383402983002967,
+      "train_prec2": 0.9904810242857229,
+      "train_min_prec2": 0.9372207853280038,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9875564230816152,
+          "points": 8197
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9988960949358355,
+          "points": 7247
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9174800354924578,
+          "prec2": 0.9984336930038288,
+          "points": 5746
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7570738440303658,
+          "prec2": 0.9372207853280038,
+          "points": 4253
+        },
+        "sonogym_s0038": {
+          "cov3": 0.4957310565635005,
+          "prec2": 1.0,
+          "points": 2769
+        },
+        "sonogym_s0024": {
+          "cov3": 0.11776859504132231,
+          "prec2": 1.0,
+          "points": 572
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7636489288182446,
+          "prec2": 0.9922222222222222,
+          "points": 4500
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8320537428023033,
+          "prec2": 1.0,
+          "points": 3674
+        },
+        "sonogym_s0014": {
+          "cov3": 0.053597650513950074,
+          "prec2": 1.0,
+          "points": 466
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.7,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6651753747275616,
+      "train_prec2": 0.9882942236274705,
+      "train_min_prec2": 0.9264772214704555,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9875564230816152,
+          "points": 8197
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9988960949358355,
+          "points": 7247
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9174800354924578,
+          "prec2": 0.9984418282548476,
+          "points": 5776
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7653554175293306,
+          "prec2": 0.9264772214704555,
+          "points": 4434
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6318036286019211,
+          "prec2": 0.99970836978711,
+          "points": 3429
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1322314049586777,
+          "prec2": 1.0,
+          "points": 948
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7657221838286109,
+          "prec2": 0.9835680751173709,
+          "points": 4686
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8877159309021113,
+          "prec2": 1.0,
+          "points": 4368
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07856093979441997,
+          "prec2": 1.0,
+          "points": 592
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6035015785544876,
+      "train_prec2": 0.994302282560651,
+      "train_min_prec2": 0.9653846153846154,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8864315600717274,
+          "prec2": 0.9974510330024148,
+          "points": 7454
+        },
+        "sonogym_s0015": {
+          "cov3": 0.9175,
+          "prec2": 1.0,
+          "points": 6709
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8961845607808341,
+          "prec2": 0.9984517460863581,
+          "points": 5813
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6625258799171843,
+          "prec2": 0.9653846153846154,
+          "points": 2860
+        },
+        "sonogym_s0038": {
+          "cov3": 0.3975453575240128,
+          "prec2": 1.0,
+          "points": 2286
+        },
+        "sonogym_s0024": {
+          "cov3": 0.08832644628099173,
+          "prec2": 1.0,
+          "points": 645
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7277125086385625,
+          "prec2": 0.9952091983391887,
+          "points": 3131
+        },
+        "sonogym_s0028": {
+          "cov3": 0.7840690978886756,
+          "prec2": 1.0,
+          "points": 2760
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07121879588839941,
+          "prec2": 0.9922239502332815,
+          "points": 643
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6269070442316403,
+      "train_prec2": 0.9931905315424232,
+      "train_min_prec2": 0.9575588599752168,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8894202032277346,
+          "prec2": 0.994555583692074,
+          "points": 7898
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92,
+          "prec2": 1.0,
+          "points": 7003
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9032830523513753,
+          "prec2": 0.9981958340167295,
+          "points": 6097
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6742581090407177,
+          "prec2": 0.9575588599752168,
+          "points": 3228
+        },
+        "sonogym_s0038": {
+          "cov3": 0.4951974386339381,
+          "prec2": 1.0,
+          "points": 2701
+        },
+        "sonogym_s0024": {
+          "cov3": 0.08832644628099173,
+          "prec2": 1.0,
+          "points": 850
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7415342087076711,
+          "prec2": 0.995693135935397,
+          "points": 3715
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8589251439539347,
+          "prec2": 1.0,
+          "points": 3697
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07121879588839941,
+          "prec2": 0.9927113702623906,
+          "points": 686
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6349996338004814,
+      "train_prec2": 0.9912281072271067,
+      "train_min_prec2": 0.9467040673211781,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.891213389121339,
+          "prec2": 0.9880327268286726,
+          "points": 8189
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7128
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9032830523513753,
+          "prec2": 0.9980729083025534,
+          "points": 6227
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6908212560386473,
+          "prec2": 0.9467040673211781,
+          "points": 3565
+        },
+        "sonogym_s0038": {
+          "cov3": 0.5256136606189968,
+          "prec2": 0.999669093315685,
+          "points": 3022
+        },
+        "sonogym_s0024": {
+          "cov3": 0.10330578512396695,
+          "prec2": 1.0,
+          "points": 987
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7436074637180373,
+          "prec2": 0.9955089820359282,
+          "points": 4008
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8646833013435701,
+          "prec2": 1.0,
+          "points": 4091
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07121879588839941,
+          "prec2": 0.9930651872399445,
+          "points": 721
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6116184715382509,
+      "train_prec2": 0.9955443688150964,
+      "train_min_prec2": 0.9674193548387097,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9974910867555791,
+          "points": 7573
+        },
+        "sonogym_s0015": {
+          "cov3": 0.918125,
+          "prec2": 1.0,
+          "points": 6830
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9148181011535049,
+          "prec2": 0.9992236024844721,
+          "points": 5152
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7039337474120083,
+          "prec2": 0.9674193548387097,
+          "points": 3100
+        },
+        "sonogym_s0038": {
+          "cov3": 0.4151547491995731,
+          "prec2": 1.0,
+          "points": 2358
+        },
+        "sonogym_s0024": {
+          "cov3": 0.08987603305785125,
+          "prec2": 1.0,
+          "points": 673
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7325501036627505,
+          "prec2": 0.9957652752571083,
+          "points": 3306
+        },
+        "sonogym_s0028": {
+          "cov3": 0.7840690978886756,
+          "prec2": 1.0,
+          "points": 2834
+        },
+        "sonogym_s0014": {
+          "cov3": 0.06020558002936858,
+          "prec2": 1.0,
+          "points": 516
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6347721350334434,
+      "train_prec2": 0.9944275061411272,
+      "train_min_prec2": 0.9599317988064792,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9947056599016766,
+          "points": 7933
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7081
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9148181011535049,
+          "prec2": 0.9990820635212043,
+          "points": 5447
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7218771566597654,
+          "prec2": 0.9599317988064792,
+          "points": 3519
+        },
+        "sonogym_s0038": {
+          "cov3": 0.5106723585912487,
+          "prec2": 1.0,
+          "points": 2788
+        },
+        "sonogym_s0024": {
+          "cov3": 0.08987603305785125,
+          "prec2": 1.0,
+          "points": 896
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7470628887353145,
+          "prec2": 0.9961280330407847,
+          "points": 3874
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8598848368522073,
+          "prec2": 1.0,
+          "points": 3823
+        },
+        "sonogym_s0014": {
+          "cov3": 0.06167400881057269,
+          "prec2": 1.0,
+          "points": 556
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6485286898037664,
+      "train_prec2": 0.9926102040043988,
+      "train_min_prec2": 0.948931735278791,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9895268605224249,
+          "points": 8116
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 1.0,
+          "points": 7179
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9165927240461402,
+          "prec2": 0.9991021727419644,
+          "points": 5569
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7329192546583851,
+          "prec2": 0.948931735278791,
+          "points": 3838
+        },
+        "sonogym_s0038": {
+          "cov3": 0.571504802561366,
+          "prec2": 1.0,
+          "points": 3155
+        },
+        "sonogym_s0024": {
+          "cov3": 0.11776859504132231,
+          "prec2": 1.0,
+          "points": 1048
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7477539737387698,
+          "prec2": 0.9959310674964098,
+          "points": 4178
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8646833013435701,
+          "prec2": 1.0,
+          "points": 4235
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07782672540381791,
+          "prec2": 1.0,
+          "points": 598
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6328105796966412,
+      "train_prec2": 0.9915691036292065,
+      "train_min_prec2": 0.9489913544668588,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8965929468021518,
+          "prec2": 0.9880327268286726,
+          "points": 8189
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7078
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9032830523513753,
+          "prec2": 0.99822695035461,
+          "points": 6204
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6825396825396826,
+          "prec2": 0.9489913544668588,
+          "points": 3470
+        },
+        "sonogym_s0038": {
+          "cov3": 0.5128068303094984,
+          "prec2": 1.0,
+          "points": 2947
+        },
+        "sonogym_s0024": {
+          "cov3": 0.10330578512396695,
+          "prec2": 1.0,
+          "points": 951
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7415342087076711,
+          "prec2": 0.9959131545338442,
+          "points": 3915
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8627639155470249,
+          "prec2": 1.0,
+          "points": 3959
+        },
+        "sonogym_s0014": {
+          "cov3": 0.07121879588839941,
+          "prec2": 0.9929577464788732,
+          "points": 710
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6535383312408337,
+      "train_prec2": 0.989156219866632,
+      "train_min_prec2": 0.9342542849833717,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8983861326957562,
+          "prec2": 0.9847227234452063,
+          "points": 8313
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9991690901537184,
+          "points": 7221
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9050576752440106,
+          "prec2": 0.9981176470588236,
+          "points": 6375
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7122153209109731,
+          "prec2": 0.9342542849833717,
+          "points": 3909
+        },
+        "sonogym_s0038": {
+          "cov3": 0.615795090715048,
+          "prec2": 0.9991228070175439,
+          "points": 3420
+        },
+        "sonogym_s0024": {
+          "cov3": 0.12138429752066116,
+          "prec2": 1.0,
+          "points": 1117
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7498272287491361,
+          "prec2": 0.9937398562485509,
+          "points": 4313
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8714011516314779,
+          "prec2": 1.0,
+          "points": 4502
+        },
+        "sonogym_s0014": {
+          "cov3": 0.08590308370044053,
+          "prec2": 0.9932795698924731,
+          "points": 744
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6646652286400849,
+      "train_prec2": 0.9874989968014164,
+      "train_min_prec2": 0.9232424677187948,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8983861326957562,
+          "prec2": 0.984724560981477,
+          "points": 8314
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986176389272878,
+          "points": 7234
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9050576752440106,
+          "prec2": 0.997228637413395,
+          "points": 6495
+        },
+        "sonogym_s0012": {
+          "cov3": 0.728088336783989,
+          "prec2": 0.9232424677187948,
+          "points": 4182
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6504802561366062,
+          "prec2": 0.9991989319092123,
+          "points": 3745
+        },
+        "sonogym_s0024": {
+          "cov3": 0.12190082644628099,
+          "prec2": 1.0,
+          "points": 1208
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7643400138217,
+          "prec2": 0.9908807829181495,
+          "points": 4496
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4857
+        },
+        "sonogym_s0014": {
+          "cov3": 0.09838472834067548,
+          "prec2": 0.9935979513444302,
+          "points": 781
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6408050730329953,
+      "train_prec2": 0.9929195034578561,
+      "train_min_prec2": 0.9511739594450374,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9896628107309869,
+          "points": 8126
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7130
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9165927240461402,
+          "prec2": 0.999095513748191,
+          "points": 5528
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7260179434092477,
+          "prec2": 0.9511739594450374,
+          "points": 3748
+        },
+        "sonogym_s0038": {
+          "cov3": 0.528281750266809,
+          "prec2": 1.0,
+          "points": 3056
+        },
+        "sonogym_s0024": {
+          "cov3": 0.11776859504132231,
+          "prec2": 1.0,
+          "points": 1010
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7470628887353145,
+          "prec2": 0.9963432471964895,
+          "points": 4102
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8627639155470249,
+          "prec2": 1.0,
+          "points": 4096
+        },
+        "sonogym_s0014": {
+          "cov3": 0.06167400881057269,
+          "prec2": 1.0,
+          "points": 581
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.659502073939967,
+      "train_prec2": 0.9910264360493605,
+      "train_min_prec2": 0.9393422655298417,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9875579409612101,
+          "points": 8198
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9993093922651933,
+          "points": 7240
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9165927240461402,
+          "prec2": 0.9991158267020336,
+          "points": 5655
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7481021394064873,
+          "prec2": 0.9393422655298417,
+          "points": 4105
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6270010672358591,
+          "prec2": 0.9997160704145373,
+          "points": 3522
+        },
+        "sonogym_s0024": {
+          "cov3": 0.128099173553719,
+          "prec2": 1.0,
+          "points": 1192
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7546648237733241,
+          "prec2": 0.9941964285714285,
+          "points": 4480
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8733205374280231,
+          "prec2": 1.0,
+          "points": 4639
+        },
+        "sonogym_s0014": {
+          "cov3": 0.08002936857562408,
+          "prec2": 1.0,
+          "points": 614
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6705712036246869,
+      "train_prec2": 0.9895731679082864,
+      "train_min_prec2": 0.9287861271676301,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9875594584705452,
+          "points": 8199
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9988965517241379,
+          "points": 7250
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9174800354924578,
+          "prec2": 0.9991311902693311,
+          "points": 5755
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7612146307798482,
+          "prec2": 0.9287861271676301,
+          "points": 4325
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6632870864461046,
+          "prec2": 0.9997404619776797,
+          "points": 3853
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1322314049586777,
+          "prec2": 1.0,
+          "points": 1315
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7650310988251555,
+          "prec2": 0.9920447215652548,
+          "points": 4651
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4970
+        },
+        "sonogym_s0014": {
+          "cov3": 0.0947136563876652,
+          "prec2": 1.0,
+          "points": 650
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.662520650097018,
+      "train_prec2": 0.9878490045419913,
+      "train_min_prec2": 0.9259529011896092,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.9001793185893604,
+          "prec2": 0.9846559578038839,
+          "points": 8342
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9990332826957603,
+          "points": 7241
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9050576752440106,
+          "prec2": 0.9972260748959778,
+          "points": 6489
+        },
+        "sonogym_s0012": {
+          "cov3": 0.717736369910283,
+          "prec2": 0.9259529011896092,
+          "points": 4119
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6494130202774814,
+          "prec2": 0.999192462987887,
+          "points": 3715
+        },
+        "sonogym_s0024": {
+          "cov3": 0.12190082644628099,
+          "prec2": 1.0,
+          "points": 1178
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7546648237733241,
+          "prec2": 0.9910654456109002,
+          "points": 4477
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4763
+        },
+        "sonogym_s0014": {
+          "cov3": 0.09838472834067548,
+          "prec2": 0.993514915693904,
+          "points": 771
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.672035453975905,
+      "train_prec2": 0.9848923069091116,
+      "train_min_prec2": 0.9121962402567629,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.9001793185893604,
+          "prec2": 0.9846559578038839,
+          "points": 8342
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986195472114854,
+          "points": 7244
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9964944368236549,
+          "points": 6561
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7336093857832988,
+          "prec2": 0.9121962402567629,
+          "points": 4362
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6686232657417289,
+          "prec2": 0.9992691839220463,
+          "points": 4105
+        },
+        "sonogym_s0024": {
+          "cov3": 0.14307851239669422,
+          "prec2": 1.0,
+          "points": 1354
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7664132688320664,
+          "prec2": 0.9788929571397803,
+          "points": 4643
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9040307101727447,
+          "prec2": 1.0,
+          "points": 5077
+        },
+        "sonogym_s0014": {
+          "cov3": 0.1027900146842878,
+          "prec2": 0.9939024390243902,
+          "points": 820
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6755389982447567,
+      "train_prec2": 0.9837561312172816,
+      "train_min_prec2": 0.9089664613278576,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.9001793185893604,
+          "prec2": 0.9846559578038839,
+          "points": 8342
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986195472114854,
+          "points": 7244
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9964944368236549,
+          "points": 6561
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7336093857832988,
+          "prec2": 0.9089664613278576,
+          "points": 4383
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6702241195304163,
+          "prec2": 0.9922915206727401,
+          "points": 4281
+        },
+        "sonogym_s0024": {
+          "cov3": 0.15392561983471073,
+          "prec2": 1.0,
+          "points": 1444
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7664132688320664,
+          "prec2": 0.9789292625241883,
+          "points": 4651
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9165067178502879,
+          "prec2": 0.9998074701578745,
+          "points": 5194
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10939794419970632,
+          "prec2": 0.9940405244338498,
+          "points": 839
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6680492469321232,
+      "train_prec2": 0.9897955877345939,
+      "train_min_prec2": 0.9306884480746791,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8864315600717274,
+          "prec2": 0.9874113908579809,
+          "points": 8182
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9991732120711038,
+          "points": 7257
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9157054125998225,
+          "prec2": 0.9991329980925958,
+          "points": 5767
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7536231884057971,
+          "prec2": 0.9306884480746791,
+          "points": 4285
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6542155816435432,
+          "prec2": 0.9997369805365597,
+          "points": 3802
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1322314049586777,
+          "prec2": 1.0,
+          "points": 1277
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7622667588113338,
+          "prec2": 0.992017259978425,
+          "points": 4635
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4881
+        },
+        "sonogym_s0014": {
+          "cov3": 0.09324522760646109,
+          "prec2": 1.0,
+          "points": 639
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6757458230105243,
+      "train_prec2": 0.9870962284732077,
+      "train_min_prec2": 0.9175418994413408,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8864315600717274,
+          "prec2": 0.9874113908579809,
+          "points": 8182
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9988979198236672,
+          "points": 7259
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9157054125998225,
+          "prec2": 0.9984536082474227,
+          "points": 5820
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7598343685300207,
+          "prec2": 0.9175418994413408,
+          "points": 4475
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6808964781216649,
+          "prec2": 0.9997620747085415,
+          "points": 4203
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1503099173553719,
+          "prec2": 1.0,
+          "points": 1465
+        },
+        "sonogym_s0004": {
+          "cov3": 0.774015203870076,
+          "prec2": 0.9817991631799163,
+          "points": 4780
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8963531669865643,
+          "prec2": 1.0,
+          "points": 5149
+        },
+        "sonogym_s0014": {
+          "cov3": 0.09691629955947137,
+          "prec2": 1.0,
+          "points": 683
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.8,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6802237987042179,
+      "train_prec2": 0.9862918860705648,
+      "train_min_prec2": 0.91597949632271,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8864315600717274,
+          "prec2": 0.9874113908579809,
+          "points": 8182
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9988979198236672,
+          "points": 7259
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9157054125998225,
+          "prec2": 0.9984536082474227,
+          "points": 5820
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7598343685300207,
+          "prec2": 0.91597949632271,
+          "points": 4487
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6830309498399146,
+          "prec2": 0.9942528735632183,
+          "points": 4350
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1606404958677686,
+          "prec2": 1.0,
+          "points": 1552
+        },
+        "sonogym_s0004": {
+          "cov3": 0.774015203870076,
+          "prec2": 0.981821980777267,
+          "points": 4786
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9117082533589251,
+          "prec2": 0.9998097050428164,
+          "points": 5255
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10939794419970632,
+          "prec2": 1.0,
+          "points": 710
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6559244055005196,
+      "train_prec2": 0.9902037539152541,
+      "train_min_prec2": 0.9362368346142897,
+      "feasible": true,
+      "changed": 1,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8947997609085475,
+          "prec2": 0.9906311637080868,
+          "points": 8112
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 1.0,
+          "points": 7130
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8997338065661047,
+          "prec2": 0.9981102362204725,
+          "points": 6350
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6887508626639062,
+          "prec2": 0.9362368346142897,
+          "points": 3513
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6296691568836713,
+          "prec2": 0.9997305308542171,
+          "points": 3711
+        },
+        "sonogym_s0024": {
+          "cov3": 0.12190082644628099,
+          "prec2": 1.0,
+          "points": 1251
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7463718037318591,
+          "prec2": 0.9956616052060737,
+          "points": 4149
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8915547024952015,
+          "prec2": 1.0,
+          "points": 4543
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10866372980910426,
+          "prec2": 0.9914634146341463,
+          "points": 820
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6614060258359273,
+      "train_prec2": 0.9877302512722215,
+      "train_min_prec2": 0.9205350118017309,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8983861326957562,
+          "prec2": 0.9859341187785525,
+          "points": 8318
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9998609952738393,
+          "points": 7194
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8997338065661047,
+          "prec2": 0.9979779125836056,
+          "points": 6429
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6997929606625258,
+          "prec2": 0.9205350118017309,
+          "points": 3813
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6488794023479189,
+          "prec2": 0.9992341077355119,
+          "points": 3917
+        },
+        "sonogym_s0024": {
+          "cov3": 0.13739669421487602,
+          "prec2": 1.0,
+          "points": 1313
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7463718037318591,
+          "prec2": 0.9943833372337936,
+          "points": 4273
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8915547024952015,
+          "prec2": 1.0,
+          "points": 4713
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10866372980910426,
+          "prec2": 0.9916467780429594,
+          "points": 838
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6657102087895115,
+      "train_prec2": 0.98676349835498,
+      "train_min_prec2": 0.9147826086956522,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8983861326957562,
+          "prec2": 0.984661473936489,
+          "points": 8345
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9990316779637571,
+          "points": 7229
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8997338065661047,
+          "prec2": 0.9980030721966205,
+          "points": 6510
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7135955831608005,
+          "prec2": 0.9147826086956522,
+          "points": 4025
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6622198505869797,
+          "prec2": 0.9992577931716972,
+          "points": 4042
+        },
+        "sonogym_s0024": {
+          "cov3": 0.13739669421487602,
+          "prec2": 1.0,
+          "points": 1346
+        },
+        "sonogym_s0004": {
+          "cov3": 0.756046993780235,
+          "prec2": 0.9934090909090909,
+          "points": 4400
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4849
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10866372980910426,
+          "prec2": 0.991725768321513,
+          "points": 846
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6639319791576151,
+      "train_prec2": 0.9919128157911834,
+      "train_min_prec2": 0.9401731828916295,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9920664435353911,
+          "points": 8067
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 1.0,
+          "points": 7165
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9991107949493153,
+          "points": 5623
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7342995169082126,
+          "prec2": 0.9401731828916295,
+          "points": 3811
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6536819637139808,
+          "prec2": 1.0,
+          "points": 3861
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1322314049586777,
+          "prec2": 1.0,
+          "points": 1346
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7519004837595025,
+          "prec2": 0.9958649207443143,
+          "points": 4353
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8915547024952015,
+          "prec2": 1.0,
+          "points": 4708
+        },
+        "sonogym_s0014": {
+          "cov3": 0.09691629955947137,
+          "prec2": 1.0,
+          "points": 671
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6671943569662596,
+      "train_prec2": 0.9898379095556433,
+      "train_min_prec2": 0.9269013044548363,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9882611885546588,
+          "points": 8178
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9998616299986163,
+          "points": 7227
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.999123268455199,
+          "points": 5703
+        },
+        "sonogym_s0012": {
+          "cov3": 0.738440303657695,
+          "prec2": 0.9269013044548363,
+          "points": 4063
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6670224119530416,
+          "prec2": 0.9997533300444006,
+          "points": 4054
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1441115702479339,
+          "prec2": 1.0,
+          "points": 1418
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7519004837595025,
+          "prec2": 0.9946404644930773,
+          "points": 4478
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8915547024952015,
+          "prec2": 1.0,
+          "points": 4851
+        },
+        "sonogym_s0014": {
+          "cov3": 0.09691629955947137,
+          "prec2": 1.0,
+          "points": 689
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 1.6,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6713202796139237,
+      "train_prec2": 0.9888343195783418,
+      "train_min_prec2": 0.9203581526861452,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.885833831440526,
+          "prec2": 0.9874221516668702,
+          "points": 8189
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9991722996275348,
+          "points": 7249
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9086069210292813,
+          "prec2": 0.9991346486673589,
+          "points": 5778
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7522429261559697,
+          "prec2": 0.9203581526861452,
+          "points": 4244
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6718249733191035,
+          "prec2": 0.9997590361445783,
+          "points": 4150
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1441115702479339,
+          "prec2": 1.0,
+          "points": 1454
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7588113337940566,
+          "prec2": 0.9936625874125874,
+          "points": 4576
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4971
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10572687224669604,
+          "prec2": 1.0,
+          "points": 702
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6634393855744092,
+      "train_prec2": 0.9866495271304091,
+      "train_min_prec2": 0.9131419939577039,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.899581589958159,
+          "prec2": 0.984578601315003,
+          "points": 8365
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9991722996275348,
+          "points": 7249
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8979591836734694,
+          "prec2": 0.997992277992278,
+          "points": 6475
+        },
+        "sonogym_s0012": {
+          "cov3": 0.6949620427881298,
+          "prec2": 0.9131419939577039,
+          "points": 3972
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6616862326574173,
+          "prec2": 0.9992544731610338,
+          "points": 4024
+        },
+        "sonogym_s0024": {
+          "cov3": 0.13739669421487602,
+          "prec2": 1.0,
+          "points": 1331
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7553559087767795,
+          "prec2": 0.9940394314534617,
+          "points": 4362
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4795
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10866372980910426,
+          "prec2": 0.9916666666666667,
+          "points": 840
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6713452702333442,
+      "train_prec2": 0.9857549070512684,
+      "train_min_prec2": 0.9107519325368939,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.899581589958159,
+          "prec2": 0.9845822875582646,
+          "points": 8367
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986233480176211,
+          "points": 7264
+        },
+        "sonogym_s0010": {
+          "cov3": 0.8979591836734694,
+          "prec2": 0.9972677595628415,
+          "points": 6588
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7198067632850241,
+          "prec2": 0.9107519325368939,
+          "points": 4269
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6686232657417289,
+          "prec2": 0.9978637550439117,
+          "points": 4213
+        },
+        "sonogym_s0024": {
+          "cov3": 0.15392561983471073,
+          "prec2": 1.0,
+          "points": 1402
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7657221838286109,
+          "prec2": 0.9910186199342825,
+          "points": 4565
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9059500959692899,
+          "prec2": 1.0,
+          "points": 5030
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10866372980910426,
+          "prec2": 0.9916864608076009,
+          "points": 842
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6748084864934297,
+      "train_prec2": 0.9832779734187275,
+      "train_min_prec2": 0.9072802197802198,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.899581589958159,
+          "prec2": 0.9845822875582646,
+          "points": 8367
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986233480176211,
+          "points": 7264
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9050576752440106,
+          "prec2": 0.9965188436506736,
+          "points": 6607
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7287784679089027,
+          "prec2": 0.9072802197802198,
+          "points": 4368
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6696905016008537,
+          "prec2": 0.9889705882352942,
+          "points": 4352
+        },
+        "sonogym_s0024": {
+          "cov3": 0.15392561983471073,
+          "prec2": 1.0,
+          "points": 1451
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7671043538355218,
+          "prec2": 0.9816849816849816,
+          "points": 4641
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9097888675623801,
+          "prec2": 1.0,
+          "points": 5132
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11747430249632893,
+          "prec2": 0.9918414918414918,
+          "points": 858
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6685155408135917,
+      "train_prec2": 0.988805610822561,
+      "train_min_prec2": 0.9193972733795742,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.9873913575713061,
+          "points": 8169
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9993105350248207,
+          "points": 7252
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9991307371349096,
+          "points": 5752
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7342995169082126,
+          "prec2": 0.9193972733795742,
+          "points": 4181
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6696905016008537,
+          "prec2": 0.9997575757575757,
+          "points": 4125
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1441115702479339,
+          "prec2": 1.0,
+          "points": 1438
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7581202487906012,
+          "prec2": 0.9942630185348632,
+          "points": 4532
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8934740882917467,
+          "prec2": 1.0,
+          "points": 4915
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10572687224669604,
+          "prec2": 1.0,
+          "points": 701
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.674639324193489,
+      "train_prec2": 0.9882495124416624,
+      "train_min_prec2": 0.917786381234343,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.9873944437645331,
+          "points": 8171
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.998898678414097,
+          "points": 7264
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9086069210292813,
+          "prec2": 0.999141925519135,
+          "points": 5827
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7536231884057971,
+          "prec2": 0.917786381234343,
+          "points": 4391
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6771611526147279,
+          "prec2": 0.9990665110851809,
+          "points": 4285
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1606404958677686,
+          "prec2": 1.0,
+          "points": 1518
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7671043538355218,
+          "prec2": 0.9919576719576719,
+          "points": 4725
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8953934740882917,
+          "prec2": 1.0,
+          "points": 5111
+        },
+        "sonogym_s0014": {
+          "cov3": 0.10572687224669604,
+          "prec2": 1.0,
+          "points": 703
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.8,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6787824808534086,
+      "train_prec2": 0.9860476676960652,
+      "train_min_prec2": 0.9144456886898096,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.9873944437645331,
+          "points": 8171
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.998898678414097,
+          "points": 7264
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9086069210292813,
+          "prec2": 0.9984581120438581,
+          "points": 5837
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7550034506556246,
+          "prec2": 0.9144456886898096,
+          "points": 4465
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6830309498399146,
+          "prec2": 0.9904912836767037,
+          "points": 4417
+        },
+        "sonogym_s0024": {
+          "cov3": 0.16115702479338842,
+          "prec2": 1.0,
+          "points": 1565
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7753973738769868,
+          "prec2": 0.9847408026755853,
+          "points": 4784
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9107485604606526,
+          "prec2": 1.0,
+          "points": 5200
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11160058737151249,
+          "prec2": 1.0,
+          "points": 727
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6754164443898977,
+      "train_prec2": 0.9841003061707256,
+      "train_min_prec2": 0.9091324200913242,
+      "feasible": true,
+      "changed": 2,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.899581589958159,
+          "prec2": 0.9845859720396702,
+          "points": 8369
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986271279516749,
+          "points": 7284
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9094942324755989,
+          "prec2": 0.9966802474724611,
+          "points": 6627
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7267080745341615,
+          "prec2": 0.9091324200913242,
+          "points": 4380
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6755602988260405,
+          "prec2": 0.9903181189488244,
+          "points": 4338
+        },
+        "sonogym_s0024": {
+          "cov3": 0.15392561983471073,
+          "prec2": 1.0,
+          "points": 1438
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7643400138217,
+          "prec2": 0.9857173771910842,
+          "points": 4621
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9097888675623801,
+          "prec2": 1.0,
+          "points": 5124
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11747430249632893,
+          "prec2": 0.9918414918414918,
+          "points": 858
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6769924893262403,
+      "train_prec2": 0.9821045134985683,
+      "train_min_prec2": 0.9034373586612393,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.899581589958159,
+          "prec2": 0.9845859720396702,
+          "points": 8369
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986271279516749,
+          "points": 7284
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9094942324755989,
+          "prec2": 0.9965303967415899,
+          "points": 6629
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7267080745341615,
+          "prec2": 0.9034373586612393,
+          "points": 4422
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6782283884738527,
+          "prec2": 0.9851485148514851,
+          "points": 4444
+        },
+        "sonogym_s0024": {
+          "cov3": 0.15392561983471073,
+          "prec2": 1.0,
+          "points": 1469
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7643400138217,
+          "prec2": 0.9789609274366681,
+          "points": 4658
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9213051823416507,
+          "prec2": 0.9998088319632957,
+          "points": 5231
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11747430249632893,
+          "prec2": 0.9918414918414918,
+          "points": 858
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.75,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6775664103547068,
+      "train_prec2": 0.9812025274391156,
+      "train_min_prec2": 0.9034373586612393,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.899581589958159,
+          "prec2": 0.9845859720396702,
+          "points": 8369
+        },
+        "sonogym_s0015": {
+          "cov3": 0.921875,
+          "prec2": 0.9986271279516749,
+          "points": 7284
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9094942324755989,
+          "prec2": 0.9965303967415899,
+          "points": 6629
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7267080745341615,
+          "prec2": 0.9034373586612393,
+          "points": 4422
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6782283884738527,
+          "prec2": 0.9792642140468227,
+          "points": 4485
+        },
+        "sonogym_s0024": {
+          "cov3": 0.1590909090909091,
+          "prec2": 1.0,
+          "points": 1474
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7643400138217,
+          "prec2": 0.9789969995713673,
+          "points": 4666
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9213051823416507,
+          "prec2": 0.9998094149037545,
+          "points": 5247
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11747430249632893,
+          "prec2": 0.9895712630359212,
+          "points": 863
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.2
+      },
+      "train_cov3": 0.6765088840733332,
+      "train_prec2": 0.9863701501664204,
+      "train_min_prec2": 0.9137777777777778,
+      "feasible": true,
+      "changed": 3,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.9873959862946647,
+          "points": 8172
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9989003436426117,
+          "points": 7275
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9984620642515379,
+          "points": 5852
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7556935817805382,
+          "prec2": 0.9137777777777778,
+          "points": 4500
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6771611526147279,
+          "prec2": 0.9913949275362319,
+          "points": 4416
+        },
+        "sonogym_s0024": {
+          "cov3": 0.16115702479338842,
+          "prec2": 1.0,
+          "points": 1552
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7753973738769868,
+          "prec2": 0.9874002519949601,
+          "points": 4762
+        },
+        "sonogym_s0028": {
+          "cov3": 0.8963531669865643,
+          "prec2": 1.0,
+          "points": 5194
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11160058737151249,
+          "prec2": 1.0,
+          "points": 727
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.1
+      },
+      "train_cov3": 0.6806068434850514,
+      "train_prec2": 0.9848027530925003,
+      "train_min_prec2": 0.9090507726269316,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.9873959862946647,
+          "points": 8172
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9989003436426117,
+          "points": 7275
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9984620642515379,
+          "points": 5852
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7556935817805382,
+          "prec2": 0.9090507726269316,
+          "points": 4530
+        },
+        "sonogym_s0038": {
+          "cov3": 0.67982924226254,
+          "prec2": 0.9877560106856634,
+          "points": 4492
+        },
+        "sonogym_s0024": {
+          "cov3": 0.16115702479338842,
+          "prec2": 1.0,
+          "points": 1587
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7753973738769868,
+          "prec2": 0.9818485291049447,
+          "points": 4793
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9232245681381958,
+          "prec2": 0.9998110712261478,
+          "points": 5293
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11894273127753303,
+          "prec2": 1.0,
+          "points": 732
+        }
+      }
+    },
+    {
+      "config": {
+        "shadow_threshold": 0.9,
+        "attenuation_decay_rate": 0.4,
+        "intensity_threshold": 0.85,
+        "min_confidence": 0.05
+      },
+      "train_cov3": 0.6813586371567054,
+      "train_prec2": 0.9841285791329223,
+      "train_min_prec2": 0.9090507726269316,
+      "feasible": true,
+      "changed": 4,
+      "per_patient": {
+        "sample_totalsegmentator_patient": {
+          "cov3": 0.8822474596533174,
+          "prec2": 0.9873959862946647,
+          "points": 8172
+        },
+        "sonogym_s0015": {
+          "cov3": 0.92125,
+          "prec2": 0.9989003436426117,
+          "points": 7275
+        },
+        "sonogym_s0010": {
+          "cov3": 0.9077196095829636,
+          "prec2": 0.9984620642515379,
+          "points": 5852
+        },
+        "sonogym_s0012": {
+          "cov3": 0.7556935817805382,
+          "prec2": 0.9090507726269316,
+          "points": 4530
+        },
+        "sonogym_s0038": {
+          "cov3": 0.6814300960512273,
+          "prec2": 0.981661511268228,
+          "points": 4526
+        },
+        "sonogym_s0024": {
+          "cov3": 0.16632231404958678,
+          "prec2": 1.0,
+          "points": 1592
+        },
+        "sonogym_s0004": {
+          "cov3": 0.7753973738769868,
+          "prec2": 0.981875,
+          "points": 4800
+        },
+        "sonogym_s0028": {
+          "cov3": 0.9232245681381958,
+          "prec2": 0.9998115341123257,
+          "points": 5306
+        },
+        "sonogym_s0014": {
+          "cov3": 0.11894273127753303,
+          "prec2": 1.0,
+          "points": 732
+        }
+      }
+    }
+  ],
+  "test": {
+    "sonogym_s0029": {
+      "defaults": {
+        "cov3": 0.6837507280139778,
+        "prec2": 1.0,
+        "points": 3216
+      },
+      "selected": {
+        "cov3": 0.8334304018637158,
+        "prec2": 0.9997027790161985,
+        "points": 6729
+      }
+    },
+    "sonogym_s0006": {
+      "defaults": {
+        "cov3": 0.5280474649406688,
+        "prec2": 1.0,
+        "points": 2343
+      },
+      "selected": {
+        "cov3": 0.7961165048543689,
+        "prec2": 0.9985852869846402,
+        "points": 4948
+      }
+    },
+    "sonogym_s0034": {
+      "defaults": {
+        "cov3": 0.0,
+        "prec2": NaN,
+        "points": 0
+      },
+      "selected": {
+        "cov3": 0.010439970171513796,
+        "prec2": 0.9166666666666666,
+        "points": 60
+      }
+    },
+    "sonogym_s0030": {
+      "defaults": {
+        "cov3": 0.058657243816254416,
+        "prec2": 1.0,
+        "points": 186
+      },
+      "selected": {
+        "cov3": 0.07208480565371024,
+        "prec2": 1.0,
+        "points": 331
+      }
+    }
+  }
+}

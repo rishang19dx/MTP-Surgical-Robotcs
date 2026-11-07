@@ -74,6 +74,9 @@ class ReconstructionTask(Task):
     def bind(self, env) -> None:
         super().bind(env)
         dev = env.device
+        # segmenter thresholds matched to the env's B-mode model (mtp_gym.perception.PERCEPTION_PRESETS, DEC-044)
+        self.seg = BoneSurfaceSegmenter(axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (IMAGE_SIZE[0] - 1),
+                                        **env.perception_preset["segmenter"])
         self.targets: List[torch.Tensor] = []
         lo_all, hi_all = [], []
         for ps in env.patients:

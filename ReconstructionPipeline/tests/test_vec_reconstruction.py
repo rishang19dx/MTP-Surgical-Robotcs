@@ -121,3 +121,14 @@ def test_raster_coverage_matches_single_env(patient):
     cs, cv = info_s["coverage_ratio"], float(info_v["coverage_ratio"][0])
     print(f"\n[recon] raster coverage single {cs:.3f} vs vector {cv:.3f}")
     assert abs(cs - cv) < 0.05
+
+
+def test_perception_preset_follows_bmode_model(patient):
+    """DEC-044: the depth B-mode uses the perception preset tuned on the train split; legacy keeps the defaults."""
+    from mtp_gym.perception import PERCEPTION_PRESETS
+    d = UltrasoundVectorEnv(1, ReconstructionTask(), [patient], bmode_physics="depth", seed=0)
+    l = UltrasoundVectorEnv(1, ReconstructionTask(), [patient], bmode_physics="legacy", seed=0)
+    pd = PERCEPTION_PRESETS["depth"]
+    assert d.conf.shadow_threshold == pd["confidence"]["shadow_threshold"]
+    assert d.task.seg.min_confidence == pd["segmenter"]["min_confidence"]
+    assert l.conf.shadow_threshold == 0.70 and l.task.seg.min_confidence == 0.20

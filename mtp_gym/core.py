@@ -256,8 +256,11 @@ class UltrasoundVectorEnv(VectorEnv):
         # single-env simulator (env_reconstruction), used for parity tests
         self.us_sim = (ModelBasedUltrasoundSimulator.depth_physics(**sim_kw) if bmode_physics == "depth"
                        else ModelBasedUltrasoundSimulator(**sim_kw))
+        from mtp_gym.perception import PERCEPTION_PRESETS
+        self.perception_preset = PERCEPTION_PRESETS[bmode_physics]
         self.conf = UltrasoundConfidenceEstimator(device=self.device,
-                                                  axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (h - 1))
+                                                  axial_resolution_mm=PHYSICAL_SIZE_MM[0] / (h - 1),
+                                                  **self.perception_preset["confidence"])
         self._np_rng = np.random.default_rng(seed)
 
         N, dev = self.num_envs, self.device

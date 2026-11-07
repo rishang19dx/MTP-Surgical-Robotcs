@@ -1053,6 +1053,23 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Randomising only the start pose: it was already random, and that is not enough.
   - Removing the pose from the observation: it removes odometry that a real robot has.
 
+* **Outcome (2026-11-07).** Navigation PPO retrained under the offset: 2 patients (sample, s0015), 300k steps,
+  32 envs, seed 0, 53 min on the RTX 2050. Held-out patients: `results/vec_eval_nav_20261107_223741.md`, 4 × 16
+  episodes. Training patients: same evaluator, scratch run.
+
+  | Policy | Success, train patients | Success, held-out patients |
+  | :--- | ---: | ---: |
+  | random | 0.031 | 0.016 |
+  | blind | 0.062 | 0.031 |
+  | oracle | 1.000 | 1.000 |
+  | PPO | 1.000 | 0.078 |
+
+  - **On its training patients PPO navigates from the image.** The offset makes the blind baseline fail, so the
+    100 % cannot come from the pose.
+  - **It does not transfer to unseen anatomy.** With 2 training patients the policy overfits. This is the same
+    cross-patient gap SonoGym reports, and the full 9-patient training split (server GPU) is the next test.
+  - Preliminary: 1 seed, 2 training patients.
+
 ### `DEC-046`: Gym Reconstruction Reward = Target Coverage Gain (the area reward rewards wandering)
 * **Date**: November 7, 2026 (branch `audit-fixes`).
 * **Finding.** Laptop PPO runs: 2 training patients (sample, s0015), 300k steps, 32 envs, seed 0.

@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/kinematic_vs_deformation.py",
+    "args": {
+      "patients": "all",
+      "forces": "1,2,4,6,8,10,12,15",
+      "seed": 0,
+      "out_dir": "/home/rishang/Desktop/MTP/results"
+    },
+    "commit": "6420d21",
+    "forces_n": [
+      1.0,
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      15.0
+    ],
+    "bmode": "legacy (as compression_sweep.py)"
+  },
+  "rows": [
+    {
+      "patient": "sample_totalsegmentator_patient",
+      "shift_deformable_mm": 7.537687301635742,
+      "shift_rigid_mm": 7.537687301635742,
+      "poses_deformable": 9,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 9.602108001708984,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0015",
+      "shift_deformable_mm": 6.407035827636719,
+      "shift_rigid_mm": 6.407035827636719,
+      "poses_deformable": 7,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 8.118941307067871,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0010",
+      "shift_deformable_mm": 9.610553741455078,
+      "shift_rigid_mm": 9.610553741455078,
+      "poses_deformable": 6,
+      "poses_rigid": 8,
+      "indent_past_contact_max_force_mm": 13.657353401184082,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0012",
+      "shift_deformable_mm": 7.537689208984375,
+      "shift_rigid_mm": 7.537689208984375,
+      "poses_deformable": 9,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 9.496634483337402,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0038",
+      "shift_deformable_mm": 9.045225143432617,
+      "shift_rigid_mm": 9.04522705078125,
+      "poses_deformable": 9,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 12.383417129516602,
+      "deformation_part_mm": -1.9073486328125e-06
+    },
+    {
+      "patient": "sonogym_s0024",
+      "shift_deformable_mm": 8.668342590332031,
+      "shift_rigid_mm": 8.668342590332031,
+      "poses_deformable": 3,
+      "poses_rigid": 3,
+      "indent_past_contact_max_force_mm": 11.30913257598877,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0004",
+      "shift_deformable_mm": 8.668342590332031,
+      "shift_rigid_mm": 8.668342590332031,
+      "poses_deformable": 9,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 11.161712646484375,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0028",
+      "shift_deformable_mm": 8.668342590332031,
+      "shift_rigid_mm": 8.668342590332031,
+      "poses_deformable": 6,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 11.52219009399414,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0014",
+      "shift_deformable_mm": null,
+      "shift_rigid_mm": null,
+      "poses_deformable": 0,
+      "poses_rigid": 0,
+      "indent_past_contact_max_force_mm": 12.92506217956543
+    },
+    {
+      "patient": "sonogym_s0029",
+      "shift_deformable_mm": 7.914573669433594,
+      "shift_rigid_mm": 7.914573669433594,
+      "poses_deformable": 8,
+      "poses_rigid": 9,
+      "indent_past_contact_max_force_mm": 11.025989532470703,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0006",
+      "shift_deformable_mm": 8.479900360107422,
+      "shift_rigid_mm": 8.668342590332031,
+      "poses_deformable": 4,
+      "poses_rigid": 4,
+      "indent_past_contact_max_force_mm": 12.93983268737793,
+      "deformation_part_mm": -0.18844223022460938
+    },
+    {
+      "patient": "sonogym_s0034",
+      "shift_deformable_mm": 9.04522705078125,
+      "shift_rigid_mm": 9.04522705078125,
+      "poses_deformable": 3,
+      "poses_rigid": 3,
+      "indent_past_contact_max_force_mm": 12.244365692138672,
+      "deformation_part_mm": 0.0
+    },
+    {
+      "patient": "sonogym_s0030",
+      "shift_deformable_mm": 8.291458129882812,
+      "shift_rigid_mm": 8.291458129882812,
+      "poses_deformable": 6,
+      "poses_rigid": 6,
+      "indent_past_contact_max_force_mm": 10.502681732177734,
+      "deformation_part_mm": 0.0
+    }
+  ]
+}

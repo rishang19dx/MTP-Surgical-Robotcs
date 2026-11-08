@@ -91,9 +91,13 @@ the coupling loss, measured from the image only.
   at 1 N and 8 of 9 at 15 N; s0024 goes from 3 to 9 of 9.
 - **The gate passes for all 13.**
 
-**Inference.** Compression moves the anatomy in the image by a clinically relevant amount: about 1 cm, the same
-order as the freehand compression reported in the literature (Pheiffer et al. 2014). A rigid simulator cannot
-produce this. It also supports H3: reconstruction that ignores compression will be biased.
+**Inference: corrected on 8 Nov (DEC-051).** The original inference said this shift was something a rigid simulator
+cannot produce. That is wrong. `results/kinematic_vs_deformation_20261108_020955.md` renders the same indented face
+poses through rigid tissue and gets the same shift: the deformation part is 0.00 mm in 11 of 12 patients. The probe
+presses 8–14 mm deeper and the bone is fixed, so the shift is kinematic. The H3 inference ("reconstruction that
+ignores compression will be biased") is also withdrawn: that bias only appears if the indentation is ignored, which
+is true by construction. What remains is that force (through indentation) decides whether bone in thick backs
+enters the field of view, and the FEM supplies the anatomy-dependent force-to-indentation relation.
 
 **Statistic history.** Two statistics were replaced during development because they mixed structures or poses
 (DEC-041 progress T9); neither produced a reported number.
@@ -204,7 +208,9 @@ Held-out patients: s0029 0.68 → 0.83, s0006 0.53 → 0.80, s0034 (52 mm fat) 0
 
 1. A GPU-batched robotic-ultrasound gym with patient-specific FEM soft tissue, force and deformed B-mode, on the
    same 12 patients as SonoGym, checked component by component against a single-environment reference.
-2. Compression moves anatomy in the image by 6–10 mm. A rigid simulator cannot represent this (T9).
+2. ~~Compression moves anatomy in the image by 6–10 mm; a rigid simulator cannot represent this (T9).~~ Withdrawn
+   (DEC-051): the shift is probe kinematics. Supported instead: an anatomy-dependent force-to-indentation relation
+   (thin vs thick back 9.4 vs 3.5 N at the same indentation), with FEM fidelity within 5 % at 2 N (DEC-047).
 3. With literature depth physics, reconstruction difficulty grows with subcutaneous fat (ρ = −0.79), giving a
    patient-generalisation benchmark with a realistic hard tail.
 4. A pre-registered negative result: in simulation, extra force beyond coupling does not buy image quality (H2
@@ -225,3 +231,59 @@ Held-out patients: s0029 0.68 → 0.83, s0006 0.53 → 0.80, s0034 (52 mm fat) 0
 - H1: rigid-trained vs deformable-trained policies.
 - H3: reconstruction bias against force, with and without correction.
 - Throughput with the depth B-mode, and on the workstation GPU.
+
+---
+
+## 10. Overnight run, 8 November (DEC-049 to DEC-051)
+
+All runs on the laptop RTX 2050; results committed in `699c2ba`.
+
+**Thread C: kinematic vs deformation** (`results/kinematic_vs_deformation_20261108_020955.md`). The bone-echo shift
+is identical with and without the FEM warp at the same face poses: deformation part 0.00 mm in 11 of 12 patients.
+Claim 2 above is withdrawn.
+
+**Thread B: paraspinal muscle thickness** (`results/muscle_compression_20261108_021028.md`). The muscle does compress:
+0.75 mm median from 1 to 5 N (gate ii passes). But it cannot be measured from the simulated image: detection 0.38,
+median error 7.3 mm (gate i fails), because the CT-derived B-mode does not render the fascia. As pre-registered,
+this thread moves to Stage 2. Three thick backs show negative compression, which is not yet explained.
+
+**Thread A: generalisation pilot** (`results/vec_eval_nav_20261108_075931.md`, 64 held-out episodes per policy).
+
+| Training | Held-out success |
+| :--- | ---: |
+| 1 patient | 0.0 % |
+| 2 patients (seeds 0, 1) | 7.8 %, 4.7 % |
+| 3 patients | 4.7 % |
+| 2 patients + FEM augmentation (seeds 0, 1) | 14.1 %, 4.7 % |
+| 2 patients + warp control | 3.1 % |
+| 2 patients + imaging augmentation | 1.6 % |
+
+Against the pre-registrations: H1 is not supported, and H2 and H3 show no detectable difference within the ±12-point
+interval.
+
+**Inference.** The generalisation gap is robust: 100 % on training patients vs ≤ 14 % held out, against a blind
+baseline of 3 %. Whether more patients or physics augmentation close it cannot be decided at this scale. That test
+is the server study.
+
+**Reconstruction retrained with the coverage reward** (`results/vec_eval_recon_20261108_020410.md`). PPO does not beat
+random (0.32–0.34 vs 0.34; raster 0.43). The old H1 (trained rigid vs deformable) shows no difference.
+
+### Where the evidence stands for Stage 1 (8 November)
+
+**Supported:**
+
+- the gym and its component checks;
+- 13 patients with a held-out split;
+- an anatomy-dependent force-to-indentation relation, with FEM fidelity within 5 % at ≤ 2 N;
+- the fat-dependent imaging difficulty (with the confound noted);
+- the benchmark-validity checks (blind baseline, reward audit);
+- the pre-registered negatives (H2 force; the pilot H1–H3);
+- the generalisation gap.
+
+**Not supported:**
+
+- any task where soft-tissue deformation changes policy outcomes;
+- any learned policy that generalises.
+
+**Next test:** the server-scale generalisation study, under its own pre-registration.
+

@@ -217,7 +217,17 @@ time-limit flags in SB3's format.
 ```
 
 On the 4 GB laptop GPU, training runs at about 230 env-steps/s with 32 envs. It holds the FEM fields of 2–3
-patients, so the full 9-patient training split needs a larger GPU. No learned-policy result is reported yet.
+patients, so the full 9-patient training split needs a larger GPU.
+
+**Laptop pilot results** (1–2 seeds, ≤ 3 training patients, 300k steps, 4 held-out patients × 16 episodes; DEC-051):
+- **Navigation** ([`results/vec_eval_nav_20261108_075931.md`](results/vec_eval_nav_20261108_075931.md)). PPO succeeds in
+  100 % of episodes on its training patients but at most 14 % on held-out patients (random 1.6 %, blind 3.1 %,
+  oracle 100 %). The pre-registered pilot hypotheses (DEC-049) show no detectable effect: more patients (1/2/3),
+  FEM augmentation, and FEM vs non-physical warp or imaging augmentation.
+- **Reconstruction** ([`results/vec_eval_recon_20261108_020410.md`](results/vec_eval_recon_20261108_020410.md)). PPO
+  0.32–0.34 held-out Cov@3, vs random 0.34 and the scripted raster 0.43.
+
+At this scale no learned policy generalises. The confirmatory study needs the server GPU.
 
 **FEM fidelity reference.** `ReconstructionPipeline/simulation/fem_nonlinear.py` is a compressible Neo-Hookean
 (finite-strain) FEM on the same mesh, Dirichlet set and moduli as the precomputed linear model. Its linearisation
@@ -257,12 +267,16 @@ identical contact loads, 22 of 24 solves converged. The linear model is within 5
 | `aware` (FEM-deformed image), env-steps/s | 44.8 | 280.4 | 529.5 | 732.4 |
 | `rigid` (undeformed image, FEM force control kept), env-steps/s | 51.8 | 338.8 | 664.8 | 944.1 |
 
-**Does force change the image?** Source:
-[`results/compression_sweep_20261105_235841.md`](results/compression_sweep_20261105_235841.md). The sweep covers all
-13 patients, 9 poses per patient and 1–15 N, measured from the B-mode only. In the 12 patients where bone is visible
-at both 1 N and 15 N, the bone echo moves 6.4–9.6 mm toward the probe (median per patient, per scanline). In thick
-backs force also decides whether bone is visible at all: s0014 (76 mm of soft tissue) shows bone at 0 of 9 poses
-at 1 N and 8 of 9 at 15 N. A rigid simulator cannot produce either effect.
+**Does force change the image?** Sources:
+[`results/compression_sweep_20261105_235841.md`](results/compression_sweep_20261105_235841.md) and
+[`results/kinematic_vs_deformation_20261108_020955.md`](results/kinematic_vs_deformation_20261108_020955.md)
+(DEC-051). Over 13 patients, 9 poses and 1–15 N, the bone echo moves 6.4–9.6 mm toward the probe. **But the shift is
+entirely probe kinematics.** At the same indented face poses, rendering through rigid tissue gives the same shift
+(deformation part 0.00 mm in 11 of 12 patients), because the probe presses 8–14 mm deeper and the bone is fixed. A
+rigid simulator that lets the probe press in reproduces it. What the FEM adds is the anatomy-dependent
+force-to-indentation relation and the compression of the soft layers. In thick backs, force (through indentation)
+also decides whether bone enters the 75 mm field of view: s0014 shows bone at 0 of 9 poses at 1 N and 8 of 9 at
+15 N.
 
 ---
 
@@ -410,6 +424,12 @@ DEC-040, run right after the benchmark, load avg 3.3).
   (DEC-044, protocol fixed before running; [`results/perception_tuning_20261107_190845.md`](results/perception_tuning_20261107_190845.md))
   raises held-out coverage from 0.318 to 0.428 at Prec@2 0.979. The two fattest held-out backs (52 and 58 mm of
   fat) stay at 0.01–0.07.
+- **The bone-echo shift under force is kinematic, not deformation** (DEC-051). In the reconstruction task a
+  tracked probe makes the deformation largely irrelevant (aware vs unaware Cov@3 88.0 vs 88.8). The muscle-thickness
+  study, where deformation does change the measured quantity, failed its pre-registered measurement gate: the
+  simulated B-mode does not render the fascia (DEC-050/051). Showing a task where soft-tissue deformation changes
+  policy outcomes remains open.
+- **No learned policy generalises to held-out patients at laptop scale** (≤ 14 % navigation success; DEC-051).
 - **The linear FEM is accurate only at low force.** Against a Neo-Hookean reference on the same mesh (DEC-047)
   compression agrees within 5 % at 2 N but differs by up to about 30 % at 5–15 N. Force-dependent results above
   about 5 N carry this model error.

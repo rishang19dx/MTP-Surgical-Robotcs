@@ -33,15 +33,15 @@ Every task also obeys the AGENTS.md invariants:
 
 ## DEC-048 tasks (8 Nov onward; see tasks/plan.md "Revised direction")
 
-- [ ] C1 Correct the echo-shift overclaim (README, results doc); warp vs no-warp at the same face pose -> results/
-- [ ] C2 Record the current pipeline results (recon rigid/aware, force) in DECISIONS; retire tautological H3
-- [ ] A1 FEM pre-deformation augmentation (superposed random skin-load fields, <= 5 N regime) + stiffness randomisation
-- [ ] A2 Non-physical control: random smooth elastic CT warp, displacement RMS matched; imaging randomisation arm
-- [ ] A3 Pre-register H1-H3 (DECISIONS) with exact predictions, seeds, analysis
-- [ ] A4 Laptop runs: nav with 1/2/3 training patients; H2/H3 at 2 patients; eval on 4 held-out (+ SonoGym pos/rot error)
-- [ ] B1 Import autochthon labels (verify IDs against SonoGym STLs, as for L4)
-- [ ] B2 Gate by 16 Nov: muscle boundaries measurable from simulated B-mode; compression at <= 5 N > 1 axial px
-- [ ] B3 Pre-register H4/H5; measurement study (13 patients, 1-5 N, rigid control); force-aware correction
+- [x] C1 (8 Nov, DEC-051: shift is kinematic, docs corrected) Correct the echo-shift overclaim (README, results doc); warp vs no-warp at the same face pose -> results/
+- [x] C2 (8 Nov, DEC-051) Record the current pipeline results (recon rigid/aware, force) in DECISIONS; retire tautological H3
+- [x] A1 (8 Nov) FEM pre-deformation augmentation (superposed random skin-load fields, <= 5 N regime) + stiffness randomisation
+- [x] A2 (8 Nov) Non-physical control: random smooth elastic CT warp, displacement RMS matched; imaging randomisation arm
+- [x] A3 (8 Nov, DEC-049) Pre-register H1-H3 (DECISIONS) with exact predictions, seeds, analysis
+- [x] A4 (8 Nov, DEC-051: no detectable effect at laptop scale) Laptop runs: nav with 1/2/3 training patients; H2/H3 at 2 patients; eval on 4 held-out (+ SonoGym pos/rot error)
+- [x] B1 (8 Nov) Import autochthon labels (verify IDs against SonoGym STLs, as for L4)
+- [x] B2 (8 Nov, DEC-051: gate i FAILED -> thread B to Stage 2) Gate by 16 Nov: muscle boundaries measurable from simulated B-mode; compression at <= 5 N > 1 axial px
+- [ ] B3 (deferred to Stage 2 with B2 failure; negative-compression anomaly to check) Pre-register H4/H5; measurement study (13 patients, 1-5 N, rigid control); force-aware correction
 - [ ] S1 Server (when reachable): TotalSegmentator v2 import + filter, 9/30+ patient runs, 3-5 seeds
 - [ ] W1 Stage 1 abstract (26 Nov - 3 Dec); confirm backup-venue deadlines
 

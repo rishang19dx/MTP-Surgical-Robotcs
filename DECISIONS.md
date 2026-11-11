@@ -50,6 +50,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-040` | FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup | **Accepted** |
 | **Nov 2026** | `DEC-041`–`DEC-051` | RSS direction, gym, B-mode physics, pre-registered studies and their outcomes | see each record |
 | **Nov 2026** | `DEC-052` | MuJoCo Rigid-Body Backend Beside PyBullet (Stage 1); MuJoCo Flex Tissue Gated Behind a Study (Stage 2) | **Accepted** (Stage 1 done) |
+| **Nov 2026** | `DEC-053` | MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend | **Pre-registered** |
 
 ---
 
@@ -1432,3 +1433,67 @@ A chronological record of all architectural, research, algorithmic, and engineer
      idle-machine re-measurement above is still owed and must now include this control change.
   7. Full suite after the review: 195 passed, 3 xfailed (before: 184 passed, 2 xfailed). The new xfail is the
      strict PyBullet case of item 1.
+
+### `DEC-053`: MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend
+* **Date**: November 12, 2026 (branch `mujoco-bridge`). This entry is committed **before** the study is run on any
+  patient case. Results are added below it, never edited into the gate.
+* **Context**: the user asked for "demonstrations of soft body deformations in MuJoCo with the Slicer bridge"
+  and to "fix all" open items of DEC-052. DEC-052 requires a pre-registered gate before MuJoCo flex may become a
+  tissue backend.
+* **Facts established on a synthetic slab before writing this gate.** These are scratch spikes, not `results/`
+  numbers; the study regenerates what it needs. The slab is 16 × 8 × 16 nodes at 4 mm with Kuhn tets, MuJoCo
+  4.0.0 in `.venv-mj4`.
+  - The compiled model stores 24 stiffness values per tet (`flex_stiffness`), and the solver uses them at run
+    time.
+    - For Saint Venant–Kirchhoff (SVK, the default), all 24 are proportional to E.
+    - For the experimental Stable Neo-Hookean material (`elastic3d = 1`, MjSpec only), values 0–22 are
+      proportional to E and value 23 is geometric.
+    - Scaling values 0–22 of a tet by 2 gives the same displacement as doubling E. So **per-tet moduli (fat and
+      muscle) can be represented in one flex**, by scaling after compilation. A test will assert this.
+  - The `discrete` integrator settled a static load at dt = 0.02 s in about 150 steps, at about 8–12 ms per
+    step for 2,048 nodes.
+* **Study** (`ReconstructionPipeline/evaluation/mujoco_flex_fidelity.py`; the flex solve runs in `.venv-mj4`;
+  writes `results/mujoco_flex_fidelity_<stamp>.json/.md`):
+  1. Cases identical to DEC-047: patients sample, s0015 and s0014; sites paraspinal (−20, −45) and midline
+     (0, −32.5); linear contact force 2, 5, 10 and 15 N.
+     - Same 4 mm mesh and Dirichlet set; same per-cell moduli (fat or muscle by HU, × the patient's calibrated
+       `e_scale`); ν = 0.45.
+     - The **same nodal forces** (`fem_nonlinear.contact_nodal_forces`) are applied to the flex vertices. This
+       isolates the material model; contact is not part of the gate.
+  2. Reference: `compression_nl_mm` of `results/fem_fidelity_20261107_234638.json` (Neo-Hookean).
+     - Consistency check: the study recomputes the linear compression with the current code. A case whose value
+       differs from the JSON's `compression_linear_mm` by more than 0.1 % has no valid reference and is
+       reported, not scored.
+     - Rows where the Neo-Hookean solve did not converge in DEC-047 have no reference and are excluded, as there.
+  3. Both flex materials are run: SVK and Stable Neo-Hookean.
+  4. "Settled" means both of the following hold:
+     - the force-weighted compression changes by less than 1e-4 relative over 20 steps;
+     - the maximum vertex speed is below 1e-5 m/s.
+
+     The limit is 5,000 steps. **A flex case that does not settle counts as a failure**, not an exclusion.
+  5. Damping (`dof_damping`) and the timestep only change the path to equilibrium, not where it ends. They are
+     chosen on the synthetic slab, never on patient cases.
+* **Gate (per material; a material passes only if all five hold):**
+
+  | # | Criterion | Pass |
+  | :-- | :--- | :--- |
+  | G1 | Accuracy at 2 and 5 N | flex compression within 10 % of Neo-Hookean in **every** scored case |
+  | G2 | Accuracy at 10 and 15 N | median absolute relative error ≤ the linear FEM's on the same cases (from the JSON) |
+  | G3 | Stability at ν = 0.45 | every case finite, and no tet inverted (deformed signed volume > 0) |
+  | G4 | Cost | warm-started re-settle after a 0.33 mm indentation step (one 30 Hz frame at 10 mm/s), on the 4 mm mesh: ≤ 33 ms wall, or ≤ 100 ms recorded as "10 Hz tissue". Measured at the sample patient's midline site, 5 N. |
+  | G5 | Heterogeneity | fat and muscle moduli both represented (per-tet scaling, asserted by a test) |
+
+  - A material that fails is a negative result. Flex then does **not** become a tissue backend for any metric,
+    benchmark, gym run or paper claim.
+* **Demo backend (decided now, independent of the gate outcome).** The user asked for a visible demonstration.
+  - `--tissue-backend mujoco-flex` in the server runs a live flex simulation of the patient mesh in its own
+    `.venv-mj4` process. A probe body pressed into it by MuJoCo contact gives the force and the deformed skin.
+  - Unless the gate passes, it is labelled **demo-only**: the server prints this at startup, and the
+    benchmark, gym and studies reject the name.
+  - It uses a coarser mesh than the study (6 or 8 mm, whichever runs near real time), stated at startup.
+  - Its contact is MuJoCo's, not the gated nodal-force path. The gate therefore says nothing about the demo's
+    force values.
+* **Alternatives considered**:
+  - Two flexes for fat and muscle: separate flexes cannot share vertices, so the tissue would come apart.
+  - One averaged modulus: rejected now that per-tet scaling works.
+  - Running the study only at 8 mm: it would not compare against the 4 mm reference.

@@ -30,6 +30,7 @@ wheels/
 # Virtual environments
 venv/
 .venv/
+.venv-mj4/
 .env
 
 # Model checkpoints & large weights

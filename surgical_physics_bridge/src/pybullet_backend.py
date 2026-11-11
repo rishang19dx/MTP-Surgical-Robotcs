@@ -1,38 +1,16 @@
 """
-PyBullet physics backend for the unified server.
+PyBullet rigid-body backend for the unified server (the default ``--physics-backend``).
 
-Threading / process model (invariant 2, clock decoupling):
-    * Every PyBullet call of the simulation is made by the *physics loop* only (``run_physics_loop``),
-      which runs either in its own process (default, ``physics_process_main``; no GIL shared with the
-      ultrasound / streaming work) or, for tests and comparison, in-process. The physics client is
-      always DIRECT.
-    * The GUI is a separate *viewer process* (``viewer_process_main``) with its own PyBullet GUI client:
-      it mirrors the robot joints / probe pose from the physics loop at ~60 Hz, draws the force / beam
-      overlays and renders the FEM-deformed skin patch (visual mesh rebuilt at <= ``SKIN_VIEW_HZ``).
-      Rendering cost therefore never lands on the 1 kHz loop.
-    * The streaming side never touches PyBullet. It talks to both through ``PhysicsChannels``:
-        - ``commands``: queue of ``("target", dict)`` / ``("fixture", dict)`` messages
-          (streaming -> physics; the loop drains it each tick, latest target wins).
-        - ``contact``: lock-protected latest-value snapshot written by the physics loop every tick
-          (physics -> streaming), see ``CONTACT_FIELDS``.
-        - ``view``: latest joint / probe pose snapshot (physics -> viewer), see ``VIEW_FIELDS``.
-        - ``viewer``: queue of ``("target", dict)`` / ``("skin_mesh", dict)`` / ``("skin", array)``
-          (streaming -> viewer).
-        - ``rate``: lock-free ring buffers of ``PhysicsRateMonitor`` (physics -> streaming).
+The engine-independent parts (IPC channels, the tick, the tissue force law, the 1 kHz loop, the viewer loop
+and the process entry points) live in ``physics_common.py``; see its docstring for the process model. This
+module only holds the PyBullet calls: scene, IK, position motors, external force, contacts, fixtures, GUI.
 
-Probe-tissue contact (DEC-037): the torso is visual-only (no rigid probe-torso collision). The target
-carries the latest FEM tissue solution ``tissue = {contact_pb, beam_pb, force_n, stiffness_n_per_mm,
-indentation_mm, in_contact}`` from the streaming side (~30 Hz). Every 1 kHz tick the loop measures the
-probe face indentation delta along the beam from the PyBullet probe pose and applies
-``F = F0 + K_c (delta - delta0)`` (clipped to [0, ``TISSUE_FORCE_MAX_N``]) to the probe against the beam
-(first-order extrapolation of the FEM force with its contact stiffness; the loop never waits on the FEM).
 PyBullet provides robot kinematics/dynamics, probe collisions with rigid structures (table, virtual
-keep-out fixtures) and the GUI.
+keep-out fixtures) and the GUI. The torso is visual-only (DEC-037): the probe-tissue force comes from the
+tissue model through ``PhysicsBackendBase.apply_tissue_force``.
 """
 
 import os
-import queue
-import threading
 import time
 from typing import Dict, Optional
 
@@ -40,96 +18,28 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 
+# The shared names are re-exported: tests and scripts import them from this module.
 try:
-    from coordinates import ras_to_pybullet_points
-    from physics_rate import PhysicsRateMonitor
+    from physics_common import (  # noqa: F401
+        CONTACT_FIELDS, PROBE_LENGTH_M, ROBOT_BASE_Z, SKIN_RGBA, SKIN_VIEW_HZ, TISSUE_FORCE_MAX_N, VIEW_CLOSEUP_DISTANCE_M,
+        VIEW_CLOSEUP_PITCH_DEG, VIEW_CLOSEUP_YAW_DEG, VIEW_FIELDS, ARM_REST_POSTURE, LatestSnapshot,
+        PhysicsBackendBase, PhysicsChannels, dedicated_physics_cpu, exclude_dedicated_cpu, physics_process_main,
+        pin_to_dedicated_cpu, run_physics_loop, run_viewer, viewer_process_main,
+    )
 except ImportError:
-    from surgical_physics_bridge.src.coordinates import ras_to_pybullet_points
-    from surgical_physics_bridge.src.physics_rate import PhysicsRateMonitor
-
-#: Fields of the contact snapshot published by the physics loop every tick.
-CONTACT_FIELDS = (
-    "seq",               # physics tick counter at the time of the snapshot
-    "sim_time_s",        # simulated time
-    "n_contacts",        # probe contacts with rigid bodies (table, virtual keep-out fixtures)
-    "normal_force_n",    # summed PyBullet normal force of those contacts (rigid collision, NOT tissue force)
-    "min_distance_m",    # most negative contact distance (penetration), 0 if no contact
-    "ee_error_m",        # distance between commanded and achieved end-effector position
-    "tissue_force_n",    # FEM-extrapolated tissue reaction force applied to the probe this tick
-    "tissue_indentation_mm",  # probe face indentation along the beam measured from the PyBullet probe pose
-)
-#: Latest robot / probe pose for the viewer process: 7 arm joints, probe position (3), quaternion (4).
-VIEW_FIELDS = 14
-TISSUE_FORCE_MAX_N = 40.0
-SKIN_VIEW_HZ = 10.0
-SKIN_RGBA = [0.93, 0.62, 0.52, 0.95]
-# Viewer close-up on the FEM skin patch (set once when the patch mesh arrives).
-VIEW_CLOSEUP_DISTANCE_M = 0.24
-VIEW_CLOSEUP_YAW_DEG = 20.0
-VIEW_CLOSEUP_PITCH_DEG = -32.0
+    from surgical_physics_bridge.src.physics_common import (  # noqa: F401
+        CONTACT_FIELDS, PROBE_LENGTH_M, ROBOT_BASE_Z, SKIN_RGBA, SKIN_VIEW_HZ, TISSUE_FORCE_MAX_N, VIEW_CLOSEUP_DISTANCE_M,
+        VIEW_CLOSEUP_PITCH_DEG, VIEW_CLOSEUP_YAW_DEG, VIEW_FIELDS, ARM_REST_POSTURE, LatestSnapshot,
+        PhysicsBackendBase, PhysicsChannels, dedicated_physics_cpu, exclude_dedicated_cpu, physics_process_main,
+        pin_to_dedicated_cpu, run_physics_loop, run_viewer, viewer_process_main,
+    )
 
 
-class LatestSnapshot:
-    """Lock-protected latest-value buffer of floats (process-shared if built from a mp context)."""
-
-    def __init__(self, n: int, ctx=None):
-        if ctx is not None:
-            self._arr = ctx.Array("d", n, lock=True)
-            self._lock = self._arr.get_lock()
-            self._view = None
-        else:
-            self._arr = None
-            self._lock = threading.Lock()
-            self._view = np.zeros(n, dtype=np.float64)
-
-    def write(self, values) -> None:
-        with self._lock:
-            if self._arr is not None:
-                self._arr[:] = values
-            else:
-                self._view[:] = values
-
-    def read(self) -> np.ndarray:
-        with self._lock:
-            if self._arr is not None:
-                return np.array(self._arr[:], dtype=np.float64)
-            return self._view.copy()
-
-
-class PhysicsChannels:
-    """IPC between the streaming side and the physics loop (``ctx=None`` -> in-process primitives)."""
-
-    def __init__(self, ctx=None, rate_window: int = 5000):
-        self.ctx = ctx
-        if ctx is not None:
-            self.commands = ctx.Queue()
-            self.stop = ctx.Event()
-            self.ready = ctx.Event()
-            self.rate = ctx.RawArray("d", PhysicsRateMonitor(window=rate_window)._buf.size)
-        else:
-            self.commands = queue.SimpleQueue()
-            self.stop = threading.Event()
-            self.ready = threading.Event()
-            self.rate = PhysicsRateMonitor(window=rate_window)._buf  # plain numpy buffer
-        self.contact = LatestSnapshot(len(CONTACT_FIELDS), ctx)
-        self.view = LatestSnapshot(VIEW_FIELDS, ctx)
-        self.viewer = ctx.Queue() if ctx is not None else queue.SimpleQueue()
-        self.rate_window = rate_window
-
-    def read_contact(self) -> Dict[str, float]:
-        return dict(zip(CONTACT_FIELDS, self.contact.read().tolist()))
-
-    def rate_reader(self) -> PhysicsRateMonitor:
-        return PhysicsRateMonitor.reader(self.rate)
-
-
-class PyBulletBackend:
+class PyBulletBackend(PhysicsBackendBase):
     """Owns the PyBullet client and operating-room scene. Use only from the physics loop."""
 
     EE_LINK = 11            # Franka Panda grasptarget link
     ARM_JOINTS = list(range(7))
-    PROBE_LENGTH_M = 0.09   # end-effector mount -> transducer face along the beam
-    ROBOT_BASE_Z = 0.30
 
     def __init__(
         self,
@@ -138,27 +48,18 @@ class PyBulletBackend:
         urdf_path: Optional[str] = None,
         dt: float = 0.001,
     ):
-        self.gui = gui
-        self.dt = dt
+        self._init_common(gui, dt)
         self.cid = p.connect(p.GUI if gui else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=self.cid)
         p.setGravity(0, 0, -9.81, physicsClientId=self.cid)
         p.setTimeStep(dt, physicsClientId=self.cid)
-        self.sim_time = 0.0
-        self.step_count = 0
         self.robot_id: Optional[int] = None
         self.probe_body_id: Optional[int] = None
         self.torso_id = -1
         self.spine_id = -1
-        self.fixture_ids = []
-        self._ee_target = None
         self._q_seed = None
         self._overlay_ids: Dict[str, int] = {}
-        self._tissue: Optional[dict] = None
-        self.tissue_force_n = 0.0
-        self.tissue_indentation_mm = 0.0
         self.skin_body_id = -1
-        self._skin_indices: Optional[list] = None
         if patient_dir is not None:
             self.build_scene(patient_dir, urdf_path)
 
@@ -220,7 +121,7 @@ class PyBulletBackend:
         # solution (q4 > 0, outside the joint limit) that the limit solver then fights (~10 cm EE error).
         n_movable = sum(p.getJointInfo(self.robot_id, j, physicsClientId=c)[2] != p.JOINT_FIXED
                         for j in range(p.getNumJoints(self.robot_id, physicsClientId=c)))
-        rest = [0.0, -0.3, 0.0, -2.2, 0.0, 2.0, 0.79]
+        rest = list(ARM_REST_POSTURE)
         self._ik_rest = rest + [0.0] * (n_movable - len(rest))
         for j, qv in zip(self.ARM_JOINTS, rest):
             p.resetJointState(self.robot_id, j, qv, physicsClientId=c)
@@ -281,36 +182,42 @@ class PyBulletBackend:
             p.resetBaseVelocity(self.probe_body_id, [0, 0, 0], [0, 0, 0], physicsClientId=c)
         p.setJointMotorControlArray(self.robot_id, self.ARM_JOINTS, p.POSITION_CONTROL,
                                     targetPositions=q[:7], forces=[150.0] * 7, physicsClientId=c)
-        self._ee_target = np.asarray(pos, dtype=np.float64)
-        tissue = target.get("tissue")
-        if tissue is not None:
-            self._tissue = {
-                "contact": np.asarray(tissue["contact_pb"], dtype=np.float64),
-                "beam": np.asarray(tissue["beam_pb"], dtype=np.float64),
-                "F0": float(tissue["force_n"]),
-                "K": float(tissue["stiffness_n_per_mm"]),
-                "d0": float(tissue["indentation_mm"]),
-                "in_contact": bool(tissue["in_contact"]),
-            }
+        self._store_target(target)
 
-    def apply_tissue_force(self) -> None:
-        """F = F0 + K_c (delta - delta0) on the probe, against the beam, at the probe face (every tick)."""
-        tis = self._tissue
-        if tis is None or self.probe_body_id is None:
-            self.tissue_force_n = 0.0
-            return
-        c = self.cid
-        pos = np.asarray(p.getBasePositionAndOrientation(self.probe_body_id, physicsClientId=c)[0])
-        beam = tis["beam"]
-        face = pos + beam * (self.PROBE_LENGTH_M / 2.0)
-        delta = 1000.0 * float(np.dot(face - tis["contact"], beam))
-        f = tis["F0"] + tis["K"] * (delta - tis["d0"]) if tis["in_contact"] else 0.0
-        f = float(np.clip(f, 0.0, TISSUE_FORCE_MAX_N))
-        if f > 0.0:
-            p.applyExternalForce(self.probe_body_id, -1, (-beam * f).tolist(), face.tolist(), p.WORLD_FRAME,
-                                 physicsClientId=c)
-        self.tissue_force_n = f
-        self.tissue_indentation_mm = delta
+    # ------------------------------------------------------------ engine hooks
+    def _probe_centre(self) -> Optional[np.ndarray]:
+        if self.probe_body_id is None:
+            return None
+        return np.asarray(p.getBasePositionAndOrientation(self.probe_body_id, physicsClientId=self.cid)[0])
+
+    def _apply_probe_force(self, force: np.ndarray, point: np.ndarray) -> None:
+        # External forces are cleared by every stepSimulation, so the base class re-applies it each tick.
+        p.applyExternalForce(self.probe_body_id, -1, force.tolist(), point.tolist(), p.WORLD_FRAME,
+                             physicsClientId=self.cid)
+
+    def _step_engine(self) -> None:
+        p.stepSimulation(physicsClientId=self.cid)
+
+    def _probe_contacts(self):
+        n, force, min_d = 0, 0.0, 0.0
+        if self.probe_body_id is not None:
+            for cp in p.getContactPoints(bodyA=self.probe_body_id, physicsClientId=self.cid):
+                n += 1
+                force += float(cp[9])
+                min_d = min(min_d, float(cp[8]))
+        return n, force, min_d
+
+    def _ee_position(self) -> np.ndarray:
+        return np.asarray(p.getLinkState(self.robot_id, self.EE_LINK, physicsClientId=self.cid)[4])
+
+    def _create_fixture(self, pb_vertices: np.ndarray, indices: list) -> int:
+        """Static keep-out body colliding as the concave triangle mesh itself."""
+        verts = pb_vertices.tolist()
+        col = p.createCollisionShape(p.GEOM_MESH, vertices=verts, indices=indices,
+                                     flags=p.GEOM_FORCE_CONCAVE_TRIMESH, physicsClientId=self.cid)
+        vis = p.createVisualShape(p.GEOM_MESH, vertices=verts, indices=indices,
+                                  rgbaColor=[1, 0, 0, 0.3], physicsClientId=self.cid)
+        return p.createMultiBody(0, col, vis, physicsClientId=self.cid)
 
     def view_snapshot(self) -> list:
         c, r = self.cid, self.robot_id
@@ -326,12 +233,6 @@ class PyBulletBackend:
             p.resetJointState(self.robot_id, j, float(qv), physicsClientId=c)
         p.resetBasePositionAndOrientation(self.probe_body_id, snap[7:10].tolist(), snap[10:14].tolist(),
                                           physicsClientId=c)
-
-    def set_skin_mesh(self, indices) -> None:
-        """Triangle indices of the FEM skin patch (vertex order of the streamed skin vertices)."""
-        tris = np.asarray(indices, dtype=np.int64).reshape(-1, 3)
-        # P -> PB is a reflection (det -1): reverse the winding so the outward faces stay front-facing.
-        self._skin_indices = tris[:, ::-1].ravel().tolist()
 
     def focus_camera(self, target_pb, distance_m: float = VIEW_CLOSEUP_DISTANCE_M) -> None:
         """Close-up of the scan site, so the skin indentation under the probe is visible.
@@ -364,7 +265,7 @@ class PyBulletBackend:
                                     replaceItemUniqueId=self._overlay_ids.get(key, -1), physicsClientId=self.cid)
         self._overlay_ids[key] = new_id
 
-    def _draw_overlays(self, target: dict) -> None:
+    def draw_overlays(self, target: dict) -> None:
         contact = np.asarray(target["contact_pb"], dtype=np.float64)
         beam = np.asarray(target["beam_pb"], dtype=np.float64)
         lateral = np.asarray(target.get("lateral_pb", [1.0, 0.0, 0.0]), dtype=np.float64)
@@ -385,239 +286,17 @@ class PyBulletBackend:
                 hud, textPosition=[0.42, -0.30, 0.62], textColorRGB=[0.1, 0.95, 0.4], textSize=1.1,
                 replaceItemUniqueId=self._overlay_ids.get("hud", -1), physicsClientId=self.cid)
 
-    def set_virtual_fixture(self, vf_data: dict) -> None:
-        """Creates a static keep-out collision body from a Slicer mesh (vertices in RAS mm)."""
-        vertices = vf_data.get("vertices", [])
-        indices = vf_data.get("indices", [])
-        if not vertices or not indices:
-            print("[!] Invalid VirtualFixture: needs 'vertices' and 'indices'.")
-            return
-        if vf_data.get("policy", "keep_out") != "keep_out":
-            print(f"[!] Unsupported VirtualFixture policy: {vf_data.get('policy')}")
-            return
-        pb_vertices = ras_to_pybullet_points(np.asarray(vertices, dtype=np.float64).reshape(-1, 3)).tolist()
-        col = p.createCollisionShape(p.GEOM_MESH, vertices=pb_vertices, indices=list(indices),
-                                     flags=p.GEOM_FORCE_CONCAVE_TRIMESH, physicsClientId=self.cid)
-        vis = p.createVisualShape(p.GEOM_MESH, vertices=pb_vertices, indices=list(indices),
-                                  rgbaColor=[1, 0, 0, 0.3], physicsClientId=self.cid)
-        self.fixture_ids.append(p.createMultiBody(0, col, vis, physicsClientId=self.cid))
-        print(f"[+] Virtual keep-out fixture created ({len(pb_vertices)} vertices, {len(indices) // 3} faces).")
-
-    # -------------------------------------------------------------------- loop
-    def step(self) -> None:
-        self.apply_tissue_force()   # external forces are cleared by every stepSimulation
-        p.stepSimulation(physicsClientId=self.cid)
-        self.sim_time += self.dt
-        self.step_count += 1
-
-    def contact_snapshot(self) -> list:
-        n, force, min_d, ee_err = 0, 0.0, 0.0, 0.0
-        if self.probe_body_id is not None:
-            for cp in p.getContactPoints(bodyA=self.probe_body_id, physicsClientId=self.cid):
-                n += 1
-                force += float(cp[9])
-                min_d = min(min_d, float(cp[8]))
-        if self._ee_target is not None:
-            ee = p.getLinkState(self.robot_id, self.EE_LINK, physicsClientId=self.cid)[4]
-            ee_err = float(np.linalg.norm(np.asarray(ee) - self._ee_target))
-        return [float(self.step_count), self.sim_time, float(n), force, min_d, ee_err,
-                self.tissue_force_n, self.tissue_indentation_mm]
-
-    def tick(self, channels: PhysicsChannels) -> None:
-        """One physics tick: drain commands (latest target wins), step, publish contact snapshot."""
-        latest_target = None
-        while True:
-            try:
-                kind, payload = channels.commands.get_nowait()
-            except queue.Empty:
-                break
-            if kind == "target":
-                if latest_target is not None and latest_target.get("teleport"):
-                    payload = dict(payload, teleport=True)
-                latest_target = payload
-            elif kind == "fixture":
-                self.set_virtual_fixture(payload)
-        if latest_target is not None:
-            self.apply_target(latest_target)
-        self.step()
-        channels.contact.write(self.contact_snapshot())
-        if self.step_count % 10 == 0:   # the viewer renders at <= 60 Hz; 100 Hz snapshots are plenty
-            channels.view.write(self.view_snapshot())
+    def save_snapshot(self, out_dir: str, width: int = 1280, height: int = 800) -> None:
+        """Render the GUI client's current debug camera to ``out_dir/viewer_<unix ms>.png``."""
+        cam = p.getDebugVisualizerCamera(physicsClientId=self.cid)
+        _, _, rgba, _, _ = p.getCameraImage(width, height, viewMatrix=cam[2], projectionMatrix=cam[3],
+                                            renderer=p.ER_BULLET_HARDWARE_OPENGL, physicsClientId=self.cid)
+        rgb = np.asarray(rgba, dtype=np.uint8).reshape(height, width, 4)[:, :, :3]
+        from PIL import Image  # local import: only needed when snapshots are enabled
+        Image.fromarray(rgb).save(os.path.join(out_dir, f"viewer_{int(time.time() * 1e3)}.png"))
 
     def disconnect(self) -> None:
         try:
             p.disconnect(physicsClientId=self.cid)
         except Exception:
             pass
-
-
-def run_physics_loop(
-    backend: PyBulletBackend,
-    channels: PhysicsChannels,
-    target_hz: float = 1000.0,
-    spin_s: float = 2e-4,
-    max_lag_ticks: int = 5,
-    duration_s: Optional[float] = None,
-) -> PhysicsRateMonitor:
-    """
-    Deadline-scheduled fixed-rate loop. Sleeps until ``spin_s`` before each deadline and busy-waits
-    the remainder (Linux sleep overshoots by ~50-100 us). If the loop falls more than
-    ``max_lag_ticks`` behind it re-synchronises instead of bursting catch-up steps (counted as a resync).
-    """
-    monitor = PhysicsRateMonitor(target_hz=target_hz, window=channels.rate_window, shared_buffer=channels.rate)
-    monitor.reset()
-    dt = 1.0 / target_hz
-    t_begin = time.perf_counter()
-    next_t = t_begin
-    stop = channels.stop
-    while not stop.is_set():
-        remaining = next_t - time.perf_counter()
-        if remaining > spin_s:
-            time.sleep(remaining - spin_s)
-        while time.perf_counter() < next_t:
-            pass
-        t0 = time.perf_counter()
-        backend.tick(channels)
-        t1 = time.perf_counter()
-        monitor.tick(t0, t1)
-        next_t += dt
-        if t1 - next_t > max_lag_ticks * dt:
-            next_t = t1 + dt
-            monitor.note_resync()
-        if duration_s is not None and t1 - t_begin >= duration_s:
-            break
-    return monitor
-
-
-def dedicated_physics_cpu() -> Optional[int]:
-    """The CPU reserved for the physics process (highest-numbered allowed CPU), or None if unsupported."""
-    if not hasattr(os, "sched_getaffinity"):
-        return None
-    cpus = sorted(os.sched_getaffinity(0))
-    return cpus[-1] if len(cpus) >= 2 else None
-
-
-def pin_to_dedicated_cpu() -> Optional[int]:
-    """Pin the calling process to the dedicated physics CPU (Linux only)."""
-    cpu = dedicated_physics_cpu()
-    if cpu is not None:
-        os.sched_setaffinity(0, {cpu})
-    return cpu
-
-
-def exclude_dedicated_cpu(cpu: Optional[int]) -> None:
-    """Keep the calling (streaming) process, ALL its existing threads and its future threads off the physics
-    CPU. ``sched_setaffinity(0)`` only affects the calling thread on Linux, so thread pools created earlier
-    (numpy's OpenBLAS pool spins between calls; torch / CUDA workers) are re-pinned through /proc/self/task:
-    measured period p99 3.5 ms with only the calling thread excluded."""
-    if cpu is None or not hasattr(os, "sched_setaffinity"):
-        return
-    others = set(os.sched_getaffinity(0)) - {cpu}
-    if not others:
-        return
-    os.sched_setaffinity(0, others)
-    try:
-        tids = [int(t) for t in os.listdir("/proc/self/task")]
-    except OSError:
-        tids = []
-    for tid in tids:
-        try:
-            os.sched_setaffinity(tid, others)
-        except OSError:
-            pass
-
-
-def _save_viewer_snapshot(cid: int, out_dir: str, width: int = 1280, height: int = 800) -> None:
-    """Render the GUI client's current debug camera to ``out_dir/viewer_<unix ms>.png``."""
-    cam = p.getDebugVisualizerCamera(physicsClientId=cid)
-    _, _, rgba, _, _ = p.getCameraImage(width, height, viewMatrix=cam[2], projectionMatrix=cam[3],
-                                        renderer=p.ER_BULLET_HARDWARE_OPENGL, physicsClientId=cid)
-    rgb = np.asarray(rgba, dtype=np.uint8).reshape(height, width, 4)[:, :, :3]
-    from PIL import Image  # local import: only needed when snapshots are enabled
-    Image.fromarray(rgb).save(os.path.join(out_dir, f"viewer_{int(time.time() * 1e3)}.png"))
-
-
-def run_viewer(backend: PyBulletBackend, channels: PhysicsChannels, fps: float = 60.0,
-               skin_hz: float = SKIN_VIEW_HZ, log_interval_s: float = 10.0) -> None:
-    """Viewer loop (GUI client): mirror the physics state, draw overlays, rebuild the skin mesh."""
-    period = 1.0 / fps
-    last_skin = 0.0
-    pending_skin = None
-    skin_ms = []
-    last_log = time.perf_counter()
-    # Opt-in debug snapshots (viewer process only, never the physics loop): on Wayland an
-    # external tool cannot capture the GUI window, so the GUI client renders its own view.
-    snapshot_dir = os.environ.get("MTP_VIEWER_SNAPSHOT_DIR")
-    snapshot_interval_s = float(os.environ.get("MTP_VIEWER_SNAPSHOT_S", "5"))
-    last_snapshot = 0.0
-    if snapshot_dir:
-        os.makedirs(snapshot_dir, exist_ok=True)
-    while not channels.stop.is_set():
-        t0 = time.perf_counter()
-        target = None
-        while True:
-            try:
-                kind, payload = channels.viewer.get_nowait()
-            except queue.Empty:
-                break
-            if kind == "target":
-                target = payload
-            elif kind == "skin_mesh":
-                backend.set_skin_mesh(payload["indices"])
-                pending_skin = np.asarray(payload["vertices_pb"])
-                backend.focus_camera(pending_skin.mean(axis=0))
-            elif kind == "skin":
-                pending_skin = payload
-        snap = channels.view.read()
-        if np.any(snap[10:14]):
-            backend.set_view(snap)
-        if target is not None:
-            backend._draw_overlays(target)
-        if pending_skin is not None and t0 - last_skin >= 1.0 / skin_hz:
-            ts = time.perf_counter()
-            backend.update_skin(pending_skin)
-            skin_ms.append(1e3 * (time.perf_counter() - ts))
-            pending_skin = None
-            last_skin = t0
-        if snapshot_dir and t0 - last_snapshot >= snapshot_interval_s:
-            last_snapshot = t0
-            _save_viewer_snapshot(backend.cid, snapshot_dir)
-        if skin_ms and t0 - last_log >= log_interval_s:
-            last_log = t0
-            print(f"[viewer] skin mesh rebuild: median {np.median(skin_ms):.2f} ms, max {np.max(skin_ms):.2f} ms "
-                  f"over {len(skin_ms)} updates (viewer process, not the physics loop)")
-            skin_ms = skin_ms[-500:]
-        sleep = period - (time.perf_counter() - t0)
-        if sleep > 0:
-            time.sleep(sleep)
-
-
-def viewer_process_main(config: dict, channels: PhysicsChannels, fps: float = 60.0) -> None:
-    """Entry point of the GUI viewer process (spawned by the unified server with ``--gui``)."""
-    backend = None
-    try:
-        backend = PyBulletBackend(**dict(config, gui=True))
-        run_viewer(backend, channels, fps=fps)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        if backend is not None:
-            backend.disconnect()
-
-
-def physics_process_main(config: dict, channels: PhysicsChannels, target_hz: float = 1000.0) -> None:
-    """Entry point of the dedicated physics process (spawned by the unified server)."""
-    backend = None
-    try:
-        dedicated = pin_to_dedicated_cpu()
-        if dedicated is not None:
-            print(f"[+] Physics process pinned to CPU {dedicated}")
-        backend = PyBulletBackend(**config)
-        channels.ready.set()
-        run_physics_loop(backend, channels, target_hz=target_hz)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        channels.ready.set()  # never leave the parent waiting if scene construction failed
-        if backend is not None:
-            backend.disconnect()

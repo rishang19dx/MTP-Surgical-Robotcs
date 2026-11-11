@@ -37,10 +37,12 @@ flowchart TD
 > fix the question in the same change. Numbers quoted here come from `results/` or tests (see AGENTS invariant 6).
 
 ### Category A: Physics Core & Multi-Rate Decoupling
-*Ask these if the change touches `pybullet_backend.py`, `unified_server.py`, `physics_rate.py` or the force coupling.*
-1. **Clock Decoupling**: *"The physics loop runs in its own process at 1 kHz and is the only code that calls PyBullet. Does your change add any PyBullet call, lock or blocking queue read on the streaming side, or any wait on the FEM inside the physics tick? How will you show with `--benchmark-seconds` that p99 period stays near the measured 1.000–1.137 ms (`results/physics_rate_20261104_idle.json`, `results/physics_rate_20261105_normal_contact.json`)?"*
+*Ask these if the change touches `physics_common.py`, `pybullet_backend.py`, `mujoco_backend.py`, `unified_server.py`, `physics_rate.py` or the force coupling.*
+1. **Clock Decoupling**: *"The physics loop runs in its own process at 1 kHz and is the only code that calls the rigid-body engine (PyBullet or MuJoCo). Does your change add any engine call, lock or blocking queue read on the streaming side, or any wait on the FEM inside the physics tick? How will you show with `--benchmark-seconds` that p99 period stays near the measured 1.000–1.137 ms (`results/physics_rate_20261104_idle.json`, `results/physics_rate_20261105_normal_contact.json`)?"*
 2. **Force Extrapolation Validity**: *"Between 30 Hz tissue solutions, the 1 kHz loop applies `F = F0 + K_c(δ − δ0)`. How far can δ drift from δ0 in 33 ms under your change, and when does the first-order extrapolation stop being valid (contact loss, new active set, strain stiffening)?"*
 3. **Rigid vs Tissue Contact**: *"The torso is visual-only; probe–tissue force comes from the tissue model, and PyBullet only handles rigid contacts (table, keep-out fixtures). Does your change reintroduce rigid probe–torso collision, and if so, how do you avoid counting the force twice?"*
+
+4. **Both Backends**: *"The contract tests in `test_physics_backends.py` run against PyBullet and MuJoCo. Does your change hold for both? Remember that the PyBullet arm is kinematic (a 30 N push moves it by less than 1 µm) while the MuJoCo arm is torque-controlled and deflects, and that a MuJoCo fixture collides as a convex hull."*
 
 ---
 

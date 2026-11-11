@@ -11,7 +11,7 @@ before you change an entry point or a data route. All paths are relative to the 
 | Purpose | Entry point | Typical command |
 | :--- | :--- | :--- |
 | Unified server: 1 kHz physics + 30 Hz US/streaming + Slicer | [`surgical_physics_bridge/src/unified_server.py`](surgical_physics_bridge/src/unified_server.py) | `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 [--gui]` |
-| Physics-rate measurement (headless) | same | `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20` |
+| Physics-rate measurement (headless) | same | `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20 [--physics-backend mujoco]` |
 | 3D Slicer bridge | [`Slicer/slicer_surgical_physics_bridge.py`](Slicer/slicer_surgical_physics_bridge.py) | `Slicer --python-script Slicer/slicer_surgical_physics_bridge.py` |
 | Server + Slicer launcher | [`scripts/launch_dual_pybullet_slicer.sh`](scripts/launch_dual_pybullet_slicer.sh) | `bash scripts/launch_dual_pybullet_slicer.sh --mode raster_l4` |
 | 6-policy + soft-body benchmark | [`ReconstructionPipeline/evaluation/benchmark_runner.py`](ReconstructionPipeline/evaluation/benchmark_runner.py) | `./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --num-trials 3 --policies raster,orbital,nbv,ppo,cfm,diffusion --soft-body` |
@@ -30,6 +30,7 @@ before you change an entry point or a data route. All paths are relative to the 
 Server `--mode` choices are `orbital_l4` (default), `raster_l4`, `orbital`, `raster`, `nbv`, `diffusion`, `cfm` and
 `interactive` (hold pose). Other server flags: `--port` (18944), `--urdf` (default Franka Panda), `--patient-dir`,
 `--gui`, `--fps`, `--physics-mode {process,thread}`, `--physics-hz`, `--tissue-backend {fem,kelvinlet}`,
+`--physics-backend {pybullet,mujoco}` (default `pybullet`),
 `--benchmark-seconds` and `--no-benchmark-client`.
 
 ---
@@ -57,7 +58,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Phys as Physics process (1 kHz, PyBullet DIRECT)
+    participant Phys as Physics process (1 kHz, PyBullet or MuJoCo)
     participant Srv as Streaming loop (unified_server, --fps)
     participant Env as UltrasoundReconstructionEnv + FEM
     participant View as Viewer process (--gui only)
@@ -88,10 +89,19 @@ sequenceDiagram
   shares `PhysicsChannels` with the streaming side: a `commands` queue, a lock-protected `contact` snapshot, a
   `view` snapshot, a `viewer` queue and `RawArray` ring buffers for `PhysicsRateMonitor`. `thread` mode exists
   for comparison. `inline` is used by the tests.
-- **Streaming side.** It never imports or calls PyBullet. `test_server.py::test_streaming_side_never_imports_pybullet`
-  checks this.
+- **Streaming side.** It never imports or calls an engine. `test_server.py::test_streaming_side_never_imports_pybullet`
+  and `test_physics_backends.py::test_streaming_side_never_imports_an_engine` check this.
+- **Backends (DEC-052).** `physics_common.py` owns the loop, the channels, the tick and the force law, and
+  imports no engine. `create_backend("pybullet" | "mujoco")` imports the engine module inside the physics (or
+  viewer) process. Both backends use the PB world frame and the same Panda URDF, and take the same target
+  messages. They differ in three ways:
+  - PyBullet drives the arm with position motors (kinematic in effect); MuJoCo uses torque control, so the
+    tissue force deflects the arm.
+  - A MuJoCo fixture costs one model recompile and collides as a convex hull.
+  - The MuJoCo viewer is `mujoco.viewer.launch_passive`; it updates the skin mesh in place.
 - **Probe–torso contact.** The torso is visual-only, so there is no rigid probe–torso collision. The probe force
-  comes from the tissue model. PyBullet still provides robot dynamics, the table and virtual keep-out fixtures.
+  comes from the tissue model. The rigid-body engine provides robot dynamics, the table and virtual keep-out
+  fixtures.
 - **ROI targets.** `roi_target` is converted RAS → P with `ras_to_patient_points` and clipped to the env scan
   window. The current Slicer bridge does not send `CMD` or `VirtualFixture`; another OpenIGTLink client must send
   them.
@@ -237,7 +247,7 @@ Slicer 5.12.4 (recipe 10).
 | :--- | :--- | :--- | :--- |
 | **P** (patient / simulation) | CT array frame, **LPS**: +X left, +Y posterior (toward dorsal skin), +Z superior. Volumes indexed [z, y, x], point = origin + index · spacing. | mm | – |
 | **RAS** (3D Slicer world) | Right, Anterior, Superior | mm | `p_RAS = P_TO_RAS · p_P`, `P_TO_RAS = diag(−1, −1, +1)` (det +1), applied once by the `PatientToRAS` transform node |
-| **PB** (PyBullet world) | Z-up | m | `pb = (0.55 + x, z, 0.42 + (y − 55)) · 1e-3`, i.e. `P_TO_PB_ROT` (permutation, det −1) and `P_TO_PB_OFFSET_M = (0.55, 0, 0.365)`. Orientations go through `probe_axes_to_pybullet_quaternion` (always a proper rotation). |
+| **PB** (PyBullet and MuJoCo world) | Z-up | m | `pb = (0.55 + x, z, 0.42 + (y − 55)) · 1e-3`, i.e. `P_TO_PB_ROT` (permutation, det −1) and `P_TO_PB_OFFSET_M = (0.55, 0, 0.365)`. Orientations go through `probe_axes_to_pybullet_quaternion` (always a proper rotation, order x, y, z, w; the MuJoCo backend converts to w-first inside). |
 | **U** (probe) | origin at the undeformed skin contact under the probe centre; columns e_x = lateral array axis, b = +Y_probe = beam (into the body), e_z = elevation | mm | `T_P←U`. The face/image plane is at origin + δ·b. |
 
 Use the helpers in `surgical_physics_bridge/src/coordinates.py`: `patient_to_ras_points`, `ras_to_patient_points`,
@@ -289,6 +299,12 @@ MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
 ./.venv/bin/python -m ReconstructionPipeline.scripts.record_soft_body_demonstrations --video
 cp demonstrations/demo_fem_soft_body.mp4 demonstrations/report/
 ./.venv/bin/python -m ReconstructionPipeline.scripts.make_soft_body_report   # --only deformation,tilt,bmode,echo,recon_video,recon_3d,results
+
+# 13. MuJoCo backend (DEC-052): contract tests for both engines, rate, and the viewer
+./.venv/bin/python -m pytest ReconstructionPipeline/tests/test_physics_backends.py -q -s
+./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20 --physics-backend mujoco
+MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
+  ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui --physics-backend mujoco
 
 # 12. Vector-env throughput (results/throughput_<stamp>.json/.md)
 ./.venv/bin/python ReconstructionPipeline/evaluation/throughput_benchmark.py --num-envs 1,8,32,128 --modes rigid,aware

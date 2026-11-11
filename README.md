@@ -55,11 +55,11 @@ deformed) and the force/indentation trace.*
 
 | Component | File | Notes |
 | :--- | :--- | :--- |
-| Physics loop (1 kHz) | `surgical_physics_bridge/src/pybullet_backend.py` (`run_physics_loop`) | Makes every PyBullet call. Runs in its own process by default (`--physics-mode process`), so the US/streaming work cannot take its GIL. The torso is visual-only: there is no rigid probe–torso collision, and the probe force comes from the tissue model. |
+| Physics loop (1 kHz) | `surgical_physics_bridge/src/physics_common.py` (`run_physics_loop`) with `pybullet_backend.py` (default) or `mujoco_backend.py` (`--physics-backend mujoco`, DEC-052) | Makes every PyBullet call. Runs in its own process by default (`--physics-mode process`), so the US/streaming work cannot take its GIL. The torso is visual-only: there is no rigid probe–torso collision, and the probe force comes from the tissue model. |
 | Streaming / US loop (30 Hz) | `surgical_physics_bridge/src/unified_server.py` | Steps the env, sends targets to the physics loop and publishes to Slicer. Never touches PyBullet. |
 | GPU FEM tissue service | `ReconstructionPipeline/simulation/fem_tissue.py`, `tet_mesh.py` | Called synchronously by the env on the streaming side. The 1 kHz loop never waits on it. |
 | Kelvinlet tissue model (alternative) | `ReconstructionPipeline/simulation/tissue_model.py`, `kelvinlet_deformation.py` | `--tissue-backend kelvinlet`. Kept for comparison. |
-| Viewer (optional) | `pybullet_backend.viewer_process_main` | Separate process with its own PyBullet GUI client, so rendering cost never lands on the 1 kHz loop. |
+| Viewer (optional) | `physics_common.viewer_process_main` | Separate process with its own engine instance (PyBullet GUI client or MuJoCo passive viewer), so rendering cost never lands on the 1 kHz loop. |
 | Slicer bridge | `Slicer/slicer_surgical_physics_bridge.py` | Python script run inside Slicer. Uses the order-preserving `surgical_physics_bridge/src/obj_io.py`. |
 | Frames | `surgical_physics_bridge/src/coordinates.py` | See [Coordinate frames](#coordinate-frames). |
 
@@ -467,7 +467,9 @@ MTP/
 │   └── run_remote_totalsegmentator.sh  # remote setup / prepare / train / benchmark
 ├── surgical_physics_bridge/src/
 │   ├── unified_server.py               # streaming loop, OpenIGTLink, process orchestration
-│   ├── pybullet_backend.py             # 1 kHz physics loop, viewer process, PhysicsChannels
+│   ├── physics_common.py               # engine-free 1 kHz loop, tick, force law, PhysicsChannels, viewer loop
+│   ├── pybullet_backend.py             # PyBullet backend (default)
+│   ├── mujoco_backend.py               # MuJoCo backend: torque-controlled Panda, fixtures, passive viewer
 │   ├── physics_rate.py                 # PhysicsRateMonitor (lock-free ring buffers)
 │   ├── coordinates.py                  # P (LPS) <-> RAS <-> PyBullet
 │   └── obj_io.py                       # order-preserving OBJ reader/writer

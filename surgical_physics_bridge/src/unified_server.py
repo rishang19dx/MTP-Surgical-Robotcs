@@ -3,14 +3,15 @@ Unified Surgical Physics & Autonomous 3D Ultrasound Reconstruction Server.
 
 Runs two decoupled loops (AGENTS invariant 2):
 
-* **Physics loop (1 kHz)** -- ``pybullet_backend.run_physics_loop``. Owns *every* PyBullet call
-  (IK, motor commands, stepSimulation, contact queries, GUI overlays, virtual fixtures). By default
+* **Physics loop (1 kHz)** -- ``physics_common.run_physics_loop`` with the backend chosen by
+  ``--physics-backend`` (PyBullet by default, or MuJoCo). It owns *every* engine call
+  (IK, motor commands, stepping, contact queries, virtual fixtures). By default
   it runs in its own process (``--physics-mode process``) so the Python-heavy ultrasound /
   OpenIGTLink work cannot steal its GIL. ``thread`` mode runs it in a thread of this process
   (kept for comparison), ``inline`` is used by ``step_simulation_and_stream`` in tests.
 * **Streaming loop (``--fps``, default 30 Hz)** -- steps ``UltrasoundReconstructionEnv`` (tissue
   model, B-mode simulation, reconstruction), sends the resulting end-effector target to the
-  physics loop, and publishes to 3D Slicer. It never touches PyBullet; it only reads the physics
+  physics loop, and publishes to 3D Slicer. It never touches an engine; it only reads the physics
   loop's contact snapshot and rate statistics through ``PhysicsChannels``.
 
 OpenIGTLink messages published (all patient-frame data is in frame P, mm; the Slicer side applies
@@ -96,9 +97,12 @@ from surgical_physics_bridge.src.coordinates import (  # noqa: E402
 )
 from surgical_physics_bridge.src.obj_io import write_obj  # noqa: E402
 from surgical_physics_bridge.src.physics_rate import PhysicsRateMonitor  # noqa: E402
-from surgical_physics_bridge.src.pybullet_backend import (  # noqa: E402
+from surgical_physics_bridge.src.physics_common import (  # noqa: E402
+    BACKENDS,
+    PROBE_LENGTH_M,
+    PhysicsBackendBase,
     PhysicsChannels,
-    PyBulletBackend,
+    create_backend,
     dedicated_physics_cpu,
     exclude_dedicated_cpu,
     physics_process_main,
@@ -136,9 +140,13 @@ class UnifiedSurgicalBridgeServer:
         rate_log_interval_s: float = 5.0,
         rate_window: int = 60000,
         tissue_backend: str = "fem",
+        physics_backend: str = "pybullet",
     ):
         if physics_mode not in ("process", "thread", "inline"):
             raise ValueError(f"physics_mode must be process|thread|inline, got {physics_mode}")
+        if physics_backend not in BACKENDS:
+            raise ValueError(f"physics_backend must be one of {BACKENDS}, got {physics_backend}")
+        self.physics_backend = physics_backend
         self.port = port
         self.gui = gui
         self.publish_fps = publish_fps
@@ -161,12 +169,13 @@ class UnifiedSurgicalBridgeServer:
                                         rate_window=rate_window)
         self._cached_stats = self.channels.rate_reader().snapshot()
         self._last_stats_refresh = 0.0
-        self.backend: Optional[PyBulletBackend] = None
+        self.backend: Optional[PhysicsBackendBase] = None
         self.physics_proc = None
         self.physics_thread = None
         self.viewer_proc = None
-        # The physics client is always DIRECT; the GUI is a separate viewer process (process mode only).
-        self._physics_config = dict(gui=False, patient_dir=self.patient_dir, urdf_path=urdf_path, dt=self.dt_physics)
+        # The physics instance is always headless; the GUI is a separate viewer process (process mode only).
+        self._physics_config = dict(backend=physics_backend, gui=False, patient_dir=self.patient_dir,
+                                    urdf_path=urdf_path, dt=self.dt_physics)
         self._start_physics()
         if gui:
             self._start_viewer()
@@ -220,7 +229,7 @@ class UnifiedSurgicalBridgeServer:
             self.physics_proc = ctx.Process(
                 target=physics_process_main,
                 args=(self._physics_config, self.channels, self.physics_hz),
-                name="PyBulletPhysicsProcess",
+                name="PhysicsProcess",
                 daemon=True,
             )
             self.physics_proc.start()
@@ -230,13 +239,14 @@ class UnifiedSurgicalBridgeServer:
             exclude_dedicated_cpu(self._dedicated_cpu)
             print(f"[+] Physics process started (pid {self.physics_proc.pid}, {self.physics_hz:.0f} Hz target)")
         else:
-            self.backend = PyBulletBackend(**self._physics_config)
+            cfg = dict(self._physics_config)
+            self.backend = create_backend(cfg.pop("backend"), **cfg)
             if self.physics_mode == "thread":
                 # Default GIL switch interval is 5 ms, which alone caps a GIL-sharing 1 kHz loop near 200 Hz.
                 sys.setswitchinterval(2e-4)
                 self.physics_thread = threading.Thread(
                     target=run_physics_loop, args=(self.backend, self.channels, self.physics_hz),
-                    daemon=True, name="PyBulletPhysicsThread")
+                    daemon=True, name="PhysicsThread")
 
     def _start_viewer(self) -> None:
         if self.physics_mode != "process":
@@ -245,9 +255,9 @@ class UnifiedSurgicalBridgeServer:
         ctx = mp.get_context("spawn")
         cfg = dict(self._physics_config, gui=True)
         self.viewer_proc = ctx.Process(target=viewer_process_main, args=(cfg, self.channels),
-                                       name="PyBulletViewerProcess", daemon=True)
+                                       name="ViewerProcess", daemon=True)
         self.viewer_proc.start()
-        print(f"[+] PyBullet GUI viewer process started (pid {self.viewer_proc.pid})")
+        print(f"[+] {self.physics_backend} GUI viewer process started (pid {self.viewer_proc.pid})")
 
     def _resolve_patient_data(self, patient_dir: Optional[str]) -> str:
         if patient_dir and os.path.isdir(patient_dir):
@@ -392,7 +402,7 @@ class UnifiedSurgicalBridgeServer:
         contact_pb = patient_to_pybullet_points(face_p)
         beam_pb = P_TO_PB_ROT @ beam_p
         beam_pb /= np.linalg.norm(beam_pb)
-        ee_pos = contact_pb - beam_pb * PyBulletBackend.PROBE_LENGTH_M
+        ee_pos = contact_pb - beam_pb * PROBE_LENGTH_M
         fn = float(self.env.current_normal_force)
         coupling = float(self.env.current_coupling)
         stats = self._cached_stats
@@ -618,6 +628,11 @@ class UnifiedSurgicalBridgeServer:
                 proc.join(timeout=5.0)
                 if proc.is_alive():
                     proc.terminate()
+        # A child that died early leaves queued messages unread; without this the queue feeder threads
+        # block interpreter exit (seen when the viewer process crashed).
+        for q in (self.channels.commands, self.channels.viewer):
+            if hasattr(q, "cancel_join_thread"):
+                q.cancel_join_thread()
         if self.backend is not None:
             self.backend.disconnect()
             self.backend = None
@@ -640,6 +655,8 @@ def main():
     parser.add_argument("--physics-hz", type=float, default=1000.0, help="Physics loop rate (Hz)")
     parser.add_argument("--tissue-backend", choices=["fem", "kelvinlet"], default="fem",
                         help="Soft-tissue model: precomputed GPU FEM (default) or analytic Kelvinlet")
+    parser.add_argument("--physics-backend", choices=list(BACKENDS), default="pybullet",
+                        help="Rigid-body engine of the 1 kHz loop (robot, probe, fixtures, viewer)")
     parser.add_argument("--benchmark-seconds", type=float, default=0.0,
                         help="Headless benchmark: run both loops (PyBullet DIRECT) for N s and print physics-rate stats")
     parser.add_argument("--no-benchmark-client", action="store_true",
@@ -663,6 +680,7 @@ def main():
         physics_mode=args.physics_mode,
         physics_hz=args.physics_hz,
         tissue_backend=args.tissue_backend,
+        physics_backend=args.physics_backend,
     )
     if client is not None:
         t_wait = time.time()
@@ -677,7 +695,8 @@ def main():
         print("[benchmark] " + PhysicsRateMonitor.format(stats))
         print(f"[benchmark] streaming loop: {frames} scan steps in {args.benchmark_seconds:.1f} s "
               f"({frames / args.benchmark_seconds:.1f} Hz, target {args.fps:.0f} Hz)")
-        print("[benchmark] json " + json.dumps({"physics_mode": args.physics_mode, **stats,
+        print("[benchmark] json " + json.dumps({"physics_mode": args.physics_mode,
+                                                 "physics_backend": args.physics_backend, **stats,
                                                  "stream_hz": frames / args.benchmark_seconds}))
 
 

@@ -1399,3 +1399,36 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - The gains (10 Hz, 5 mrad) are chosen, not identified from a real Panda.
   - The Slicer bridge needs no change: message formats and frames are the same.
   - Stage 2 is not started. Its gate must be committed here before its study runs.
+* **Addendum (2026-11-12, code review of Stage 1)** — fixes made test-first in `tests/test_physics_backends.py`:
+  1. **A lone streamed target was not reached (MuJoCo).** Two defects compounded. First, the IK stopped after three
+     iterations (Decision 3 above). It now runs one iteration per tick until it converges, for at most 300 ticks
+     (`IK_MAX_TICKS`). Second, the following-error limit clamped the *stored command* to the measured joints. When
+     the arm overshot, the clamp dragged the command past the goal. The velocity feed-forward was differenced from
+     that clamped command, so it copied the arm's own velocity into the command. The result was a sustained,
+     torque-saturated oscillation of joint 6 at about 1 rad/s, a scratch reading in which the end effector was still
+     95 mm off after 1.5 s. **Decision 3 is corrected**: the 5 mrad bound now clips only the position error fed to
+     the PD law, and the feed-forward is the planned step. A blocked arm still pushes with a bounded force (the
+     fixture test passes).
+     - `test_a_single_streamed_target_is_reached_after_the_stream_stops` asserts < 1 mm and < 0.5° after 1.5 s.
+       It passes for MuJoCo.
+     - For PyBullet the test is `xfail(strict=True)`: PyBullet runs 10 IK iterations per target and never
+       continues. This is pre-existing and is not fixed here.
+  2. **Tracking after the fix**: worst end-effector error in the tilting sweep is 3.11 mm with MuJoCo, against
+     5.6 mm before, and 7.29 mm with PyBullet (printed by `test_tilting_sweep_is_tracked`). It is still one
+     trajectory. The deflection under 30 N is unchanged at about 1.08 mm (MuJoCo) and below 1 µm (PyBullet).
+  3. **Orientation was not reported.** `ee_error_m` is position only. `CONTACT_FIELDS` gains
+     `ee_orn_error_rad`, the angle between the flange link and the commanded quaternion.
+     - The value is taken from the flange link, like `ee_error_m`.
+     - In PyBullet the probe body is held to the flange by a constraint, so mid-motion it trails the link by a few
+       mrad; the test tolerance (5 mrad) says so.
+  4. **Fixture input** is validated in `physics_common.set_virtual_fixture` before any engine call (non-numeric,
+     index count not a multiple of 3, or out of range → ignored). An engine-side rejection (MuJoCo refuses a flat
+     mesh, which has no convex-hull volume; PyBullet accepts it) is no longer recorded as a fixture.
+  5. **Teardown and imports**: a MuJoCo recompile closes the offscreen snapshot renderer bound to the old model.
+     The backends import `physics_common` by the same module name that `create_backend` used, so the subclass
+     check holds whether the server runs as a script or as a package.
+  6. **Not changed**: concave fixtures still collide as their convex hull. `set_view` has no lock: the viewer
+     thread may read a camera half-updated for one frame, which is harmless. The rate was not re-measured; the
+     idle-machine re-measurement above is still owed and must now include this control change.
+  7. Full suite after the review: 195 passed, 3 xfailed (before: 184 passed, 2 xfailed). The new xfail is the
+     strict PyBullet case of item 1.

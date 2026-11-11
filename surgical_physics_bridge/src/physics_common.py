@@ -35,6 +35,7 @@ from the engine's own probe pose and applies ``F = F0 + K_c (delta - delta0)`` (
 """
 
 import importlib
+import math
 import os
 import queue
 import threading
@@ -63,6 +64,7 @@ CONTACT_FIELDS = (
     "ee_error_m",        # distance between commanded and achieved end-effector position
     "tissue_force_n",    # extrapolated tissue reaction force applied to the probe this tick
     "tissue_indentation_mm",  # probe face indentation along the beam measured from the engine's probe pose
+    "ee_orn_error_rad",  # angle between commanded and achieved end-effector orientation
 )
 #: Latest robot / probe pose for the viewer process: 7 arm joints, probe position (3), quaternion xyzw (4).
 VIEW_FIELDS = 14
@@ -152,6 +154,7 @@ class PhysicsBackendBase:
         ``_probe_contacts()``         (count, summed normal force N, most negative distance m) of the probe's
                                       rigid contacts.
         ``_ee_position()``            end-effector position (m).
+        ``_ee_orientation_xyzw()``    end-effector orientation, quaternion (x, y, z, w).
         ``_create_fixture(v, tris)``  static keep-out collision body from PB-frame vertices (m).
         ``view_snapshot()``           7 joint angles + probe position + probe quaternion (xyzw).
         ``disconnect()``
@@ -169,6 +172,7 @@ class PhysicsBackendBase:
         self.step_count = 0
         self.fixture_ids = []
         self._ee_target: Optional[np.ndarray] = None
+        self._ee_target_quat: Optional[tuple] = None   # commanded orientation, xyzw, unit norm
         self._tissue: Optional[dict] = None
         self.tissue_force_n = 0.0
         self.tissue_indentation_mm = 0.0
@@ -178,6 +182,9 @@ class PhysicsBackendBase:
     def _store_target(self, target: dict) -> None:
         """Record the commanded end-effector position and the tissue solution carried by a target."""
         self._ee_target = np.asarray(target["ee_pos"], dtype=np.float64)
+        q = [float(v) for v in target["ee_orn"]]
+        norm = math.sqrt(sum(v * v for v in q))
+        self._ee_target_quat = tuple(v / norm for v in q)
         tissue = target.get("tissue")
         if tissue is not None:
             self._tissue = {
@@ -216,9 +223,20 @@ class PhysicsBackendBase:
         if vf_data.get("policy", "keep_out") != "keep_out":
             print(f"[!] Unsupported VirtualFixture policy: {vf_data.get('policy')}")
             return
-        pb_vertices = ras_to_pybullet_points(np.asarray(vertices, dtype=np.float64).reshape(-1, 3))
-        self.fixture_ids.append(self._create_fixture(pb_vertices, [int(i) for i in indices]))
-        print(f"[+] Virtual keep-out fixture created ({len(pb_vertices)} vertices, {len(indices) // 3} faces).")
+        try:
+            tris = [int(i) for i in indices]
+            pb_vertices = ras_to_pybullet_points(np.asarray(vertices, dtype=np.float64).reshape(-1, 3))
+        except (TypeError, ValueError):
+            print("[!] Invalid VirtualFixture: 'vertices' must be N x 3 numbers and 'indices' integers.")
+            return
+        if len(tris) % 3 != 0 or min(tris) < 0 or max(tris) >= len(pb_vertices):
+            print("[!] Invalid VirtualFixture: 'indices' must be whole triangles of valid vertex indices.")
+            return
+        fixture = self._create_fixture(pb_vertices, tris)
+        if fixture is None:          # the engine rejected the mesh
+            return
+        self.fixture_ids.append(fixture)
+        print(f"[+] Virtual keep-out fixture created ({len(pb_vertices)} vertices, {len(tris) // 3} faces).")
 
     def set_skin_mesh(self, indices) -> None:
         """Triangle indices of the skin patch (vertex order of the streamed skin vertices)."""
@@ -235,11 +253,14 @@ class PhysicsBackendBase:
 
     def contact_snapshot(self) -> list:
         n, force, min_d = self._probe_contacts()
-        ee_err = 0.0
+        ee_err = orn_err = 0.0
         if self._ee_target is not None:
             ee_err = float(np.linalg.norm(np.asarray(self._ee_position()) - self._ee_target))
+            qc, qt = self._ee_orientation_xyzw(), self._ee_target_quat
+            dot = abs(sum(float(a) * b for a, b in zip(qc, qt)))     # plain floats: runs every tick
+            orn_err = 2.0 * math.acos(min(1.0, dot))
         return [float(self.step_count), self.sim_time, float(n), float(force), float(min_d), ee_err,
-                self.tissue_force_n, self.tissue_indentation_mm]
+                self.tissue_force_n, self.tissue_indentation_mm, orn_err]
 
     def tick(self, channels: PhysicsChannels) -> None:
         """One physics tick: drain commands (latest target wins), step, publish contact snapshot."""
@@ -278,7 +299,11 @@ class PhysicsBackendBase:
     def _ee_position(self) -> np.ndarray:
         raise NotImplementedError
 
+    def _ee_orientation_xyzw(self):
+        raise NotImplementedError
+
     def _create_fixture(self, pb_vertices: np.ndarray, indices: list):
+        """Return an id, or None if the engine rejected the mesh (the fixture is then not recorded)."""
         raise NotImplementedError
 
     def viewer_sync(self) -> None:

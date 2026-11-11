@@ -19,15 +19,15 @@ import pybullet as p
 import pybullet_data
 
 # The shared names are re-exported: tests and scripts import them from this module.
-try:
-    from physics_common import (  # noqa: F401
+if __name__.rpartition(".")[0]:   # same copy of physics_common as the importer (see create_backend)
+    from surgical_physics_bridge.src.physics_common import (  # noqa: F401
         CONTACT_FIELDS, PROBE_LENGTH_M, ROBOT_BASE_Z, SKIN_RGBA, SKIN_VIEW_HZ, TISSUE_FORCE_MAX_N, VIEW_CLOSEUP_DISTANCE_M,
         VIEW_CLOSEUP_PITCH_DEG, VIEW_CLOSEUP_YAW_DEG, VIEW_FIELDS, ARM_REST_POSTURE, LatestSnapshot,
         PhysicsBackendBase, PhysicsChannels, dedicated_physics_cpu, exclude_dedicated_cpu, physics_process_main,
         pin_to_dedicated_cpu, run_physics_loop, run_viewer, viewer_process_main,
     )
-except ImportError:
-    from surgical_physics_bridge.src.physics_common import (  # noqa: F401
+else:
+    from physics_common import (  # noqa: F401
         CONTACT_FIELDS, PROBE_LENGTH_M, ROBOT_BASE_Z, SKIN_RGBA, SKIN_VIEW_HZ, TISSUE_FORCE_MAX_N, VIEW_CLOSEUP_DISTANCE_M,
         VIEW_CLOSEUP_PITCH_DEG, VIEW_CLOSEUP_YAW_DEG, VIEW_FIELDS, ARM_REST_POSTURE, LatestSnapshot,
         PhysicsBackendBase, PhysicsChannels, dedicated_physics_cpu, exclude_dedicated_cpu, physics_process_main,
@@ -209,6 +209,9 @@ class PyBulletBackend(PhysicsBackendBase):
 
     def _ee_position(self) -> np.ndarray:
         return np.asarray(p.getLinkState(self.robot_id, self.EE_LINK, physicsClientId=self.cid)[4])
+
+    def _ee_orientation_xyzw(self):
+        return p.getLinkState(self.robot_id, self.EE_LINK, physicsClientId=self.cid)[5]
 
     def _create_fixture(self, pb_vertices: np.ndarray, indices: list) -> int:
         """Static keep-out body colliding as the concave triangle mesh itself."""

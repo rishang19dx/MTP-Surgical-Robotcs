@@ -37,13 +37,13 @@ from typing import Optional
 import mujoco
 import numpy as np
 
-try:
-    from physics_common import (
+if __name__.rpartition(".")[0]:   # same copy of physics_common as the importer (see create_backend)
+    from surgical_physics_bridge.src.physics_common import (
         ARM_REST_POSTURE, PROBE_MASS_KG, PROBE_RADIUS_M, SKIN_RGBA, TABLE_CENTRE, TABLE_HALF_EXTENTS,
         VIEW_CLOSEUP_DISTANCE_M, VIEW_CLOSEUP_PITCH_DEG, VIEW_CLOSEUP_YAW_DEG, PhysicsBackendBase,
     )
-except ImportError:
-    from surgical_physics_bridge.src.physics_common import (
+else:
+    from physics_common import (
         ARM_REST_POSTURE, PROBE_MASS_KG, PROBE_RADIUS_M, SKIN_RGBA, TABLE_CENTRE, TABLE_HALF_EXTENTS,
         VIEW_CLOSEUP_DISTANCE_M, VIEW_CLOSEUP_PITCH_DEG, VIEW_CLOSEUP_YAW_DEG, PhysicsBackendBase,
     )
@@ -100,7 +100,8 @@ class MujocoBackend(PhysicsBackendBase):
     MAX_JOINT_SPEED = 2.0         # rad/s, slew limit of the commanded joint positions
     MAX_FOLLOWING_ERROR = 0.005   # rad, see step()
     MAX_INTERP_TICKS = 100        # a target is interpolated over at most this many ticks
-    IK_ITERATIONS = 3             # per streamed target, one per tick (a teleport gets a cold 200-iteration solve)
+    IK_MAX_TICKS = 300            # a streamed target gets one IK iteration per tick until converged, at most this many
+                                  # (a teleport gets a cold 200-iteration solve)
     IK_DAMPING = 0.05
     MAX_VISUAL_RADIUS_M = 2.0     # anatomy meshes larger than this are not in metres and are not drawn
     IK_MAX_STEP = 0.3             # rad per iteration
@@ -123,6 +124,7 @@ class MujocoBackend(PhysicsBackendBase):
         self._last_target_step = 0
         self._ik_target = None
         self._ik_left = 0
+        self._ik_converged = True
         self._interp_ticks = 1
         self._skin_mesh_id = -1
         self._skin_geom_id = -1
@@ -267,7 +269,9 @@ class MujocoBackend(PhysicsBackendBase):
             scale = 2.0 * math.atan2(sin_half, ew) / sin_half if sin_half > 1e-12 else 2.0
             err[3], err[4], err[5] = ex * scale, ey * scale, ez * scale
             if err[:3] @ err[:3] < tol2 and err[3:] @ err[3:] < 100.0 * tol2:
+                self._ik_converged = True
                 break
+            self._ik_converged = False
             mujoco.mj_jacBody(m, d, self._jacp, self._jacr, ee)
             jac = self._jac[:, self._dof_slice]
             dq = jac.T @ np.linalg.solve(jac @ jac.T + self._ik_damping, err)
@@ -298,11 +302,11 @@ class MujocoBackend(PhysicsBackendBase):
             self.data.qvel[:] = 0.0
             self.data.qacc_warmstart[:] = 0.0
         else:
-            # The IK for a streamed target is spread over the next IK_ITERATIONS ticks (one iteration each, in
-            # step()), so no single tick carries the whole solve. The command is interpolated to reach the
+            # The IK for a streamed target is spread over the next ticks (one iteration each, in step(), until
+            # it converges), so no single tick carries the whole solve. The command is interpolated to reach the
             # goal when the next target is due (targets arrive at the streaming rate).
             self._ik_target = (pos, quat)
-            self._ik_left = self.IK_ITERATIONS
+            self._ik_left = self.IK_MAX_TICKS
             self._interp_ticks = int(np.clip(self.step_count - self._last_target_step, 1, self.MAX_INTERP_TICKS))
         self._last_target_step = self.step_count
         self._store_target(target)
@@ -317,20 +321,23 @@ class MujocoBackend(PhysicsBackendBase):
         if self._ik_left > 0:
             self._ik_left -= 1
             self._q_goal = self._solve_ik(*self._ik_target, self._q_goal, iterations=1)
+            if self._ik_converged:
+                self._ik_left = 0
             remaining = max(1, self._interp_ticks - (self.step_count - self._last_target_step))
             self._q_rate = np.clip(np.abs(self._q_goal - self._q_cmd) / (remaining * self.dt),
                                    0.0, self.MAX_JOINT_SPEED)
         q = d.qpos[self._qadr]
         max_dq = self._q_rate * self.dt
         dq = np.clip(self._q_goal - self._q_cmd, -max_dq, max_dq)
-        # Following-error limit: the command never runs ahead of the measured joints by more than this, so
-        # a blocked arm (keep-out fixture) pushes with a bounded force. Free motion is not slowed, because
-        # the velocity feed-forward below removes the steady tracking lag.
-        q_cmd = np.clip(self._q_cmd + dq, q - self.MAX_FOLLOWING_ERROR, q + self.MAX_FOLLOWING_ERROR)
-        qd_cmd = (q_cmd - self._q_cmd) / self.dt
-        self._q_cmd = q_cmd
+        self._q_cmd = self._q_cmd + dq
+        qd_cmd = dq / self.dt
+        # Following-error limit: the position error fed to the PD law is bounded, so a blocked arm (keep-out
+        # fixture) pushes with a bounded force. The bound acts on the error only, never on the planned command:
+        # clamping the command to the arm would drag it past the goal whenever the arm overshoots and turn the
+        # overshoot into a sustained, torque-saturated limit cycle (seen in review, DEC-052 addendum).
+        err = np.clip(self._q_cmd - q, -self.MAX_FOLLOWING_ERROR, self.MAX_FOLLOWING_ERROR)
         self._acc[:] = 0.0
-        self._acc[self._dofs] = self.KP * (q_cmd - q) + self.KD * (qd_cmd - d.qvel[self._dofs])
+        self._acc[self._dofs] = self.KP * err + self.KD * (qd_cmd - d.qvel[self._dofs])
         mujoco.mj_mulM(m, d, self._tau, self._acc)
         tau = np.clip(self._tau[self._dofs] + d.qfrc_bias[self._dofs], -self._tau_max, self._tau_max)
         d.qfrc_applied[:] = self._ext
@@ -369,6 +376,9 @@ class MujocoBackend(PhysicsBackendBase):
     def _ee_position(self) -> np.ndarray:
         return self.data.xpos[self._ee_id]
 
+    def _ee_orientation_xyzw(self):
+        return _wxyz_to_xyzw(self.data.xquat[self._ee_id])
+
     def _create_fixture(self, pb_vertices: np.ndarray, indices: list):
         """Static keep-out geom; needs a recompile. Collides as the CONVEX HULL of the mesh (see module doc)."""
         name = f"fixture_{len(self.fixture_ids)}"
@@ -389,6 +399,12 @@ class MujocoBackend(PhysicsBackendBase):
 
     def _recompile(self) -> None:
         """Rebuild the model from the spec, carrying the simulation state over."""
+        if self._renderer is not None:      # bound to the old compiled model
+            try:
+                self._renderer.close()
+            except Exception:
+                pass
+            self._renderer = None
         self.model, self.data = self.spec.recompile(self.model, self.data)
         self._bind()
         mujoco.mj_forward(self.model, self.data)
@@ -520,7 +536,9 @@ class MujocoBackend(PhysicsBackendBase):
         deadline = time.perf_counter() + 3.0
         while self.viewer.is_running() and time.perf_counter() < deadline:
             time.sleep(0.02)
-        time.sleep(0.2)
+        # launch_passive exposes no handle to its render thread, so there is nothing to join: after
+        # is_running() goes false the thread may still be inside its last frame. Wait it out.
+        time.sleep(0.5)
         self.viewer = None
 
     def disconnect(self) -> None:

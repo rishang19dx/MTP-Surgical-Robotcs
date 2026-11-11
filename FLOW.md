@@ -103,6 +103,12 @@ sequenceDiagram
   - Torque limits: PyBullet's motors allow 150 N·m per joint; MuJoCo uses the URDF limits (87 / 12 N·m) and
     adds 0.1 kg·m² of joint armature.
   - The probe is a separate body held by a fixed constraint in PyBullet and a child body in MuJoCo.
+  - IK for a streamed target: PyBullet runs 10 iterations once; MuJoCo runs one iteration per tick until it
+    converges (at most 300 ticks), so a lone target is reached (DEC-052 addendum).
+  - Fixture vertices and indices are validated in `physics_common.set_virtual_fixture` before any engine call;
+    MuJoCo also rejects a flat mesh (no hull volume), and a rejected fixture is not recorded.
+- **Contact snapshot.** `CONTACT_FIELDS` (in `physics_common.py`) holds `ee_error_m` (position) and, last,
+  `ee_orn_error_rad` (flange orientation against the commanded quaternion).
 - **Probe–torso contact.** The torso is visual-only, so there is no rigid probe–torso collision. The probe force
   comes from the tissue model. The rigid-body engine provides robot dynamics, the table and virtual keep-out
   fixtures.

@@ -178,6 +178,50 @@ def test_tilting_sweep_is_tracked(backend_and_channels):
     assert worst < 0.01
 
 
+def _orientation_error_rad(backend, target):
+    """Angle between the probe's quaternion (public view snapshot) and the commanded one."""
+    quat = np.asarray(backend.view_snapshot(), dtype=np.float64)[10:14]
+    return float((Rotation.from_quat(quat) * Rotation.from_quat(target["ee_orn"]).inv()).magnitude())
+
+
+@pytest.mark.parametrize("name", [
+    pytest.param("pybullet", marks=pytest.mark.xfail(strict=True, reason=(
+        "PyBullet runs 10 IK iterations per streamed target and never continues; a lone large step is left "
+        "8-30 mm short (pre-existing, DEC-052). The 30 Hz stream converges because each repeat warm-starts."))),
+    "mujoco",
+])
+@pytest.mark.parametrize("offset, tilt", [((0.05, 0.03, 0.02), 0.0), ((0.0, 0.0, 0.0), 0.2)])
+def test_a_single_streamed_target_is_reached_after_the_stream_stops(name, offset, tilt):
+    """The last target of a stream (or one large step) must be reached, not only targets that are repeated."""
+    pc = _common()
+    backend = pc.create_backend(name, gui=False, patient_dir=PATIENT_DIR, urdf_path=None, dt=0.001)
+    channels = pc.PhysicsChannels(rate_window=2000)
+    try:
+        _run(backend, channels, 200, _target(teleport=True))
+        target = _target(contact_pb=CONTACT_PB + np.asarray(offset),
+                         beam_pb=np.array([np.sin(tilt), 0.0, -np.cos(tilt)]))
+        c = _run(backend, channels, 1500, target)
+        rot_err = _orientation_error_rad(backend, target)
+    finally:
+        backend.disconnect()
+    assert c["ee_error_m"] < 0.001
+    assert np.degrees(rot_err) < 0.5
+
+
+def test_contact_snapshot_reports_the_orientation_error(backend_and_channels):
+    """``ee_orn_error_rad`` makes an orientation miss visible (``ee_error_m`` is position only)."""
+    backend, channels = backend_and_channels
+    c = _run(backend, channels, 200, _target(teleport=True))
+    assert c["ee_orn_error_rad"] < np.radians(0.5)
+    tilt = 0.2
+    target = _target(beam_pb=np.array([np.sin(tilt), 0.0, -np.cos(tilt)]))
+    c = _run(backend, channels, 20, target)              # mid-motion: the probe is still turning
+    # The field measures the flange link (like ee_error_m); the view snapshot reports the probe body, which
+    # PyBullet holds to the flange by a constraint that trails it by a few mrad mid-motion.
+    assert c["ee_orn_error_rad"] == pytest.approx(_orientation_error_rad(backend, target), abs=5e-3)
+    assert c["ee_orn_error_rad"] > np.radians(1.0)
+
+
 def test_backends_agree_on_the_probe_pose_for_the_same_target():
     """Same URDF, same target: the two engines must place the probe at the same world pose."""
     pc = _common()
@@ -285,6 +329,65 @@ def test_invalid_fixture_is_ignored(backend_and_channels):
     channels.commands.put(("fixture", dict(_box_fixture_ras(CONTACT_PB, 0.01), policy="keep_in")))
     c = _run(backend, channels, 50, _target(contact_pb=CONTACT_PB + np.array([0.0, 0.0, 0.06]), teleport=True))
     assert c["n_contacts"] == 0
+    assert backend.fixture_ids == []
+
+
+def test_malformed_fixture_indices_are_rejected_before_the_engine(backend_and_channels):
+    """A partial triangle or an out-of-range index never reaches the engine (PyBullet segfaults on both)."""
+    backend, channels = backend_and_channels
+    box = _box_fixture_ras(CONTACT_PB, 0.01)
+    channels.commands.put(("fixture", dict(box, indices=box["indices"][:-1])))
+    channels.commands.put(("fixture", dict(box, indices=box["indices"][:-3] + [0, 1, 8])))
+    channels.commands.put(("fixture", dict(box, indices=box["indices"][:-3] + [0, 1, -1])))
+    _run(backend, channels, 5, _target(teleport=True))
+    assert backend.fixture_ids == []
+
+
+def test_flat_fixture_is_accepted_by_pybullet_and_rejected_by_mujoco(backend_and_channels):
+    """A single flat sheet: PyBullet collides with the triangle mesh; MuJoCo needs a volume (convex hull) and
+    rejects it. Pinned per engine so the difference stays documented; a rejection is never recorded."""
+    backend, channels = backend_and_channels
+    verts_pb = CONTACT_PB + np.array([[-0.05, -0.05, 0.0], [0.05, -0.05, 0.0], [0.05, 0.05, 0.0], [-0.05, 0.05, 0.0]])
+    verts_ras = patient_to_ras_points(pybullet_to_patient_points(verts_pb))
+    channels.commands.put(("fixture", {"vertices": verts_ras.tolist(), "indices": [0, 1, 2, 0, 2, 3]}))
+    _run(backend, channels, 5, _target(contact_pb=CONTACT_PB + np.array([0.0, 0.0, 0.06]), teleport=True))
+    if type(backend).__name__ == "PyBulletBackend":
+        assert len(backend.fixture_ids) == 1
+    else:
+        assert backend.fixture_ids == []
+
+
+def test_backends_subclass_the_base_that_create_backend_was_imported_with():
+    """With ``src/`` on sys.path (the documented launch style) a backend must not load a second copy of
+    physics_common: ``isinstance`` against the importer's base class must hold."""
+    code = (
+        "import sys; sys.path.insert(0, 'surgical_physics_bridge/src'); "
+        "import surgical_physics_bridge.src.physics_common as pc; "
+        "print(*[int(isinstance(pc.create_backend(n, gui=False, patient_dir=None, urdf_path=None, dt=0.001), "
+        "pc.PhysicsBackendBase)) for n in pc.BACKENDS])"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+    assert out.stdout.split()[-2:] == ["1", "1"]
+
+
+def test_mujoco_recompile_drops_the_snapshot_renderer():
+    """The offscreen renderer is bound to one compiled model; after a recompile it must be rebuilt."""
+    pc = _common()
+    backend = pc.create_backend("mujoco", gui=False, patient_dir=PATIENT_DIR, urdf_path=None, dt=0.001)
+
+    class FakeRenderer:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    fake = FakeRenderer()
+    backend._renderer = fake
+    try:
+        backend._recompile()
+        assert backend._renderer is None and fake.closed
+    finally:
+        backend.disconnect()
 
 
 # --------------------------------------------------------------------------- 1 kHz budget (invariant 2)

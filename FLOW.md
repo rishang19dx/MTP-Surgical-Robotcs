@@ -89,16 +89,20 @@ sequenceDiagram
   shares `PhysicsChannels` with the streaming side: a `commands` queue, a lock-protected `contact` snapshot, a
   `view` snapshot, a `viewer` queue and `RawArray` ring buffers for `PhysicsRateMonitor`. `thread` mode exists
   for comparison. `inline` is used by the tests.
-- **Streaming side.** It never imports or calls an engine. `test_server.py::test_streaming_side_never_imports_pybullet`
+- **Streaming side.** In `process` mode (default) it never loads or calls an engine; `thread` and `inline`
+  modes create the backend inside the server process. `test_server.py::test_streaming_side_never_imports_pybullet`
   and `test_physics_backends.py::test_streaming_side_never_imports_an_engine` check this.
 - **Backends (DEC-052).** `physics_common.py` owns the loop, the channels, the tick and the force law, and
   imports no engine. `create_backend("pybullet" | "mujoco")` imports the engine module inside the physics (or
   viewer) process. Both backends use the PB world frame and the same Panda URDF, and take the same target
-  messages. They differ in three ways:
+  messages. They differ in these ways:
   - PyBullet drives the arm with position motors (kinematic in effect); MuJoCo uses torque control, so the
     tissue force deflects the arm.
   - A MuJoCo fixture costs one model recompile and collides as a convex hull.
   - The MuJoCo viewer is `mujoco.viewer.launch_passive`; it updates the skin mesh in place.
+  - Torque limits: PyBullet's motors allow 150 N·m per joint; MuJoCo uses the URDF limits (87 / 12 N·m) and
+    adds 0.1 kg·m² of joint armature.
+  - The probe is a separate body held by a fixed constraint in PyBullet and a child body in MuJoCo.
 - **Probe–torso contact.** The torso is visual-only, so there is no rigid probe–torso collision. The probe force
   comes from the tissue model. The rigid-body engine provides robot dynamics, the table and virtual keep-out
   fixtures.
@@ -300,14 +304,14 @@ MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
 cp demonstrations/demo_fem_soft_body.mp4 demonstrations/report/
 ./.venv/bin/python -m ReconstructionPipeline.scripts.make_soft_body_report   # --only deformation,tilt,bmode,echo,recon_video,recon_3d,results
 
+# 12. Vector-env throughput (results/throughput_<stamp>.json/.md)
+./.venv/bin/python ReconstructionPipeline/evaluation/throughput_benchmark.py --num-envs 1,8,32,128 --modes rigid,aware
+
 # 13. MuJoCo backend (DEC-052): contract tests for both engines, rate, and the viewer
 ./.venv/bin/python -m pytest ReconstructionPipeline/tests/test_physics_backends.py -q -s
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20 --physics-backend mujoco
 MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
   ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui --physics-backend mujoco
-
-# 12. Vector-env throughput (results/throughput_<stamp>.json/.md)
-./.venv/bin/python ReconstructionPipeline/evaluation/throughput_benchmark.py --num-envs 1,8,32,128 --modes rigid,aware
 
 # 9. Remote GPU host (must be inside */workspace/rishang/*)
 rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/

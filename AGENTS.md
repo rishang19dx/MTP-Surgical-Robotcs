@@ -22,9 +22,9 @@
 
 ## Invariants & Critical Boundaries
 1. **Python Environment**: ALWAYS use `./.venv/bin/python` (Python 3.10). Never use the global `/usr/bin/python`, which lacks PyTorch and pyigtl.
-   - One exception (DEC-052): the MuJoCo flex tissue process and its study run in `./.venv-mj4` (Python 3.11, MuJoCo 4.x), because MuJoCo 4 does not support Python 3.10. Nothing else may use it.
+   - One exception (DEC-052): the MuJoCo flex tissue process and its study (Stage 2, not started) will run in `./.venv-mj4` (Python 3.11, MuJoCo 4.x), because MuJoCo 4 does not support Python 3.10. Nothing else may use it. It is local and gitignored: `uv venv --python 3.11 .venv-mj4 && uv pip install --python .venv-mj4/bin/python mujoco==4.0.0 numpy`.
 2. **Clock Decoupling**: Physics MUST step at 1000 Hz, decoupled from streaming (30 Hz) and visualization.
-   - Only the physics loop calls the rigid-body engine (PyBullet or MuJoCo). The streaming side never imports either (tests check this).
+   - Only the physics loop calls the rigid-body engine (PyBullet or MuJoCo). In `--physics-mode process` (default) the streaming process never loads an engine (tests check the module import); `thread` and `inline` load it in-process.
    - The physics loop never waits on the FEM solver.
    - 3D Slicer or GUI stutter must never destabilize contact physics.
    - Measure the rate with `--benchmark-seconds` after any change to the loop.

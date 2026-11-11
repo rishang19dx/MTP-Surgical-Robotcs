@@ -647,7 +647,7 @@ def main():
     parser.add_argument("--port", type=int, default=18944, help="OpenIGTLink port (default 18944)")
     parser.add_argument("--urdf", type=str, default="", help="Path to robot URDF (default: Franka Panda)")
     parser.add_argument("--patient-dir", type=str, default="", help="TotalSegmentator-style patient directory")
-    parser.add_argument("--gui", action="store_true", help="Open the PyBullet GUI")
+    parser.add_argument("--gui", action="store_true", help="Open the GUI viewer of the selected physics backend")
     parser.add_argument("--fps", type=float, default=30.0, help="Streaming / scan-step rate to Slicer (Hz)")
     parser.add_argument("--mode", type=str, choices=SCAN_MODES, default="orbital_l4", help="Scan execution mode")
     parser.add_argument("--physics-mode", choices=["process", "thread"], default="process",
@@ -658,7 +658,7 @@ def main():
     parser.add_argument("--physics-backend", choices=list(BACKENDS), default="pybullet",
                         help="Rigid-body engine of the 1 kHz loop (robot, probe, fixtures, viewer)")
     parser.add_argument("--benchmark-seconds", type=float, default=0.0,
-                        help="Headless benchmark: run both loops (PyBullet DIRECT) for N s and print physics-rate stats")
+                        help="Headless benchmark: run both loops (headless engine) for N s and print physics-rate stats")
     parser.add_argument("--no-benchmark-client", action="store_true",
                         help="Benchmark without a draining OpenIGTLink client (messages are then never packed)")
     args = parser.parse_args()

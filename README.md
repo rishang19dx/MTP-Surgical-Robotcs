@@ -40,8 +40,8 @@ deformed) and the force/indentation trace.*
  │    → OpenIGTLink (pyigtl) to 3D Slicer, port 18944                                    │     │
  └───────────────────────────────────────────────────────────────────────────────────────┼─────┘
                      PhysicsChannels (queues + lock-protected snapshots + ring buffers)  │
- ┌───────────── physics process (1 kHz, PyBullet DIRECT) ────────┐   ┌──── viewer process (--gui) ────┐
- │  IK + motor control of the Panda, stepSimulation              │   │  PyBullet GUI client, ~60 Hz    │
+ ┌──── physics process (1 kHz, PyBullet DIRECT or MuJoCo) ───────┐   ┌──── viewer process (--gui) ────┐
+ │  IK + motor control of the Panda, engine step                 │   │  engine GUI / viewer, ~60 Hz    │
  │  probe force  F = F0 + K_c (δ − δ0)  every tick               │   │  mirrors joints / probe pose,   │
  │  rigid contacts (table, virtual keep-out fixtures)            │   │  renders the FEM-deformed skin  │
  └───────────────────────────────────────────────────────────────┘   └─────────────────────────────────┘
@@ -55,8 +55,8 @@ deformed) and the force/indentation trace.*
 
 | Component | File | Notes |
 | :--- | :--- | :--- |
-| Physics loop (1 kHz) | `surgical_physics_bridge/src/physics_common.py` (`run_physics_loop`) with `pybullet_backend.py` (default) or `mujoco_backend.py` (`--physics-backend mujoco`, DEC-052) | Makes every PyBullet call. Runs in its own process by default (`--physics-mode process`), so the US/streaming work cannot take its GIL. The torso is visual-only: there is no rigid probe–torso collision, and the probe force comes from the tissue model. |
-| Streaming / US loop (30 Hz) | `surgical_physics_bridge/src/unified_server.py` | Steps the env, sends targets to the physics loop and publishes to Slicer. Never touches PyBullet. |
+| Physics loop (1 kHz) | `surgical_physics_bridge/src/physics_common.py` (`run_physics_loop`) with `pybullet_backend.py` (default) or `mujoco_backend.py` (`--physics-backend mujoco`, DEC-052) | Makes every engine call. Runs in its own process by default (`--physics-mode process`), so the US/streaming work cannot take its GIL. The torso is visual-only: there is no rigid probe–torso collision, and the probe force comes from the tissue model. |
+| Streaming / US loop (30 Hz) | `surgical_physics_bridge/src/unified_server.py` | Steps the env, sends targets to the physics loop and publishes to Slicer. Loads no engine in `process` mode (default). |
 | GPU FEM tissue service | `ReconstructionPipeline/simulation/fem_tissue.py`, `tet_mesh.py` | Called synchronously by the env on the streaming side. The 1 kHz loop never waits on it. |
 | Kelvinlet tissue model (alternative) | `ReconstructionPipeline/simulation/tissue_model.py`, `kelvinlet_deformation.py` | `--tissue-backend kelvinlet`. Kept for comparison. |
 | Viewer (optional) | `physics_common.viewer_process_main` | Separate process with its own engine instance (PyBullet GUI client or MuJoCo passive viewer), so rendering cost never lands on the 1 kHz loop. |
@@ -167,7 +167,7 @@ Other flags are `--tissue-backend {fem,kelvinlet}`, `--soft-body-only`, `--no-ke
 **Server and Slicer.**
 
 ```bash
-# Headless physics-rate measurement (both loops, PyBullet DIRECT)
+# Headless physics-rate measurement (both loops; add --physics-backend mujoco for MuJoCo)
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20
 
 # Live server; --mode {orbital_l4,raster_l4,orbital,raster,nbv,diffusion,cfm,interactive}
@@ -364,6 +364,12 @@ DEC-040, run right after the benchmark, load avg 3.3).
 |---|---|---|---|---|---|---|---|---|
 | 2026-11-04 | 1000.0 Hz | 1.000 ms | 1.137 ms | 4.21 ms | 0.455 ms | 2 / 20040 | 0 | 29.95 Hz |
 | 2026-11-05 (normal contact) | 1000.0 Hz | 1.000 ms | 1.000 ms | 3.75 ms | 0.312 ms | 17 / 20015 | 0 | 29.9 Hz |
+
+These two rows predate the split of the loop into `physics_common.py` (DEC-052). The runs made after it, in
+[`results/physics_rate_20261111_mujoco_vs_pybullet.json`](results/physics_rate_20261111_mujoco_vs_pybullet.json),
+were on a loaded laptop (streaming at 14.5–23.7 Hz) and are worse for both backends: PyBullet 979.7–999.6 Hz,
+MuJoCo 981.4–1000.0 Hz. They do not show 1 kHz for either backend, and the rate has to be re-measured on an idle
+machine.
 
 ---
 

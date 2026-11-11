@@ -48,7 +48,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-038` | Integration & Retraining: FEM Default, 1 kHz Force Extrapolation, Frame P = LPS, Fair Benchmark | **Accepted** |
 | **Nov 2026** | `DEC-039` | Slicer B-mode Display Fix and Wayland-Safe Screenshots | **Accepted** |
 | **Nov 2026** | `DEC-040` | FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup | **Accepted** |
-| **Nov 2026** | `DEC-041`–`DEC-051` | RSS direction, gym, B-mode physics, pre-registered studies (see the records below) | **Accepted** |
+| **Nov 2026** | `DEC-041`–`DEC-051` | RSS direction, gym, B-mode physics, pre-registered studies and their outcomes | see each record |
 | **Nov 2026** | `DEC-052` | MuJoCo Rigid-Body Backend Beside PyBullet (Stage 1); MuJoCo Flex Tissue Gated Behind a Study (Stage 2) | **Accepted** (Stage 1 done) |
 
 ---
@@ -1323,9 +1323,9 @@ A chronological record of all architectural, research, algorithmic, and engineer
     that put a false torque on elements).
   - A tetrahedral slab at our 4 mm resolution (4,851 vertices) costs about 70–90 ms per step on the laptop CPU,
     and one at 8 mm about 5–8 ms (scratch spike, not a `results/` number). Our patient mesh is three times
-    larger. A flex cannot run inside the 1 ms tick.
+    larger. On these scratch numbers a flex cannot run inside the 1 ms tick.
   - No published check of flex indentation force against FEM or an analytical solution was found.
-* **Grilling outcome (QUIZME A1, A3, F2)** — user decisions on 2026-11-10:
+* **Grilling outcome (QUIZME A1, A3, F2, E4)** — user decisions on 2026-11-10:
   1. **Role**: staged and gated. Stage 1: MuJoCo does PyBullet's job (robot, probe, fixtures, viewer) and the GPU
      FEM stays the tissue model. Stage 2: MuJoCo flex as a third tissue backend only if it passes a gate that is
      pre-registered before the study runs.
@@ -1352,35 +1352,48 @@ A chronological record of all architectural, research, algorithmic, and engineer
      clipped to the URDF effort limits. `q_d` is interpolated toward a damped-least-squares IK solution over the
      measured interval between targets. The IK runs one iteration per tick for three ticks after each target.
      A following-error limit (5 mrad) bounds the force of a blocked arm.
-  4. **Fixtures** need one `MjSpec` recompile (measured about 6 ms for a small mesh), and a mesh collides as its
-     convex hull.
+  4. **Fixtures** need one `MjSpec` recompile inside a tick (about 6 ms for a 4-vertex mesh in a scratch
+     timing), and a mesh collides as its convex hull. A teleport also runs its 200-iteration cold IK inside one
+     tick.
   5. **Server**: `--physics-backend {pybullet,mujoco}`, default `pybullet`.
 * **Verification (TDD)**: `tests/test_physics_backends.py` was written first; its contract tests run against
   both backends. Full suite: 184 passed, 2 xfailed (before: 154 passed, 1 xfailed).
   - Tests that failed for a real reason during development: the fixture test (a blocked torque-controlled arm
-    pushed with about 400 N and buckled, which led to the following-error limit) and a tilting-sweep test added
-    after a 27 mm tracking lag was measured (which led to the velocity feed-forward).
-  - `test_tissue_force_really_pushes_the_robot_back` is a strict xfail for PyBullet (see Findings).
+    pushed hard enough to buckle, which led to the following-error limit) and a tilting-sweep test added
+    after a large tracking lag was seen (which led to the velocity feed-forward). The sizes seen then (about
+    400 N, 27 mm) were scratch readings of code that no longer exists.
+  - `test_tissue_force_acts_on_the_dynamics_as_each_backend_models_the_arm` asserts a different behaviour for
+    each engine (see Findings). So the two backends do not satisfy one identical contract.
+  - The tissue-force tests check the formula and the consistency of the reported indentation with the engine
+    pose. The physical effect of the force is checked only by the test above.
 * **Findings**:
-  - **PyBullet's arm is kinematic.** A 30 N push on the probe moves it by less than 1 µm, because the position
-    motors are velocity constraints with a 150 N limit. The MuJoCo arm moves by about 1.1 mm (both printed by
-    the test). So with PyBullet the tissue force never fed back into the motion; this is the DEC-048 caveat,
-    now measured.
+  - **PyBullet's arm is rigid under the tissue force.** A 30 N push on the probe moves it by less than 1 µm
+    (asserted), because the position motors are velocity constraints with a 150 N·m limit, above the Panda's
+    87 / 12 N·m. Checked at one pose and one force. With the chosen MuJoCo gains the arm moves by about 1.1 mm
+    (printed by the same test). The deflection exists only in the interactive server: it is not fed back to
+    the tissue solve, the B-mode or the reconstruction, and the gym has no robot. **The "kinematic robot"
+    caveat of DEC-048 therefore stands for every reported result.**
   - **Tracking** in a sweep that translates and tilts the probe (peak 0.67 rad/s): worst end-effector error
-    7.3 mm with PyBullet, 5.6 mm with MuJoCo (printed by `test_tilting_sweep_is_tracked`).
+    7.3 mm with PyBullet, 5.6 mm with MuJoCo (printed by `test_tilting_sweep_is_tracked`). One trajectory;
+    not a ranking.
   - **Rate** (`results/physics_rate_20261111_mujoco_vs_pybullet.json`; three 20 s runs per backend,
     interleaved, on a loaded laptop with the powersave governor): MuJoCo reached 1000.0 Hz in two runs and
     981.4 Hz in one; PyBullet reached 979.7, 992.2 and 999.6 Hz. Tick compute p99 was 0.78–1.26 ms for MuJoCo and
-    0.93–1.32 ms for PyBullet. Streaming ran at 14.5–23.6 Hz against a 30 Hz target, so the machine was not in
+    0.93–1.32 ms for PyBullet. Streaming ran at 14.5–23.7 Hz against a 30 Hz target, so the machine was not in
     the state of the 5 Nov record (29.9 Hz). **These runs do not show either backend holding 1 kHz, and they do
     not separate the two.** They must be repeated on an idle machine before any rate claim for MuJoCo.
-  - The refactor did not slow PyBullet: before and after, run back to back, gave the same rate (scratch
-    comparison, not in `results/`).
+  - **Whether the refactor slowed PyBullet is not established.** The only committed post-refactor runs are
+    worse than the 5 Nov record (tick compute p99 0.93–1.32 ms against 0.312 ms in
+    `results/physics_rate_20261105_normal_contact.json`) at a similar load average. A scratch comparison of the
+    parent commit and the refactor, run back to back on the same day, showed no difference, but it is not in
+    `results/`. The JSON was also taken from the tree before the commit. Repeat on an idle machine at the
+    commit, with the parent commit alongside.
   - **Data bug found, not fixed**: `meshes/patient_l4_vertebra.obj` is in frame P (mm) while the other PyBullet
     meshes are in the PB frame (metres). PyBullet draws it about 1000× too large. The MuJoCo viewer skips it.
 * **Consequences / limitations**:
-  - The physics process pins itself to the highest-numbered CPU. On the i5-1240P that is an efficiency core. The
-    MuJoCo tick spends more time in Python (IK, control) than the PyBullet tick and is more exposed to that.
+  - The physics process pins itself to the highest-numbered CPU. On the i5-1240P that is an efficiency core.
+    Conjecture, not established: the MuJoCo tick has more Python in it (IK, control) and may suffer more from
+    that. The in-process test prints a lower median tick for MuJoCo than for PyBullet.
   - Concave keep-out fixtures are over-approximated (convex hull).
   - The MuJoCo viewer was checked by hand on 2026-11-11 (FLOW recipe 13); it has no automated test.
   - The gains (10 Hz, 5 mrad) are chosen, not identified from a real Panda.

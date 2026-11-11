@@ -12,7 +12,7 @@ default backend and the RSS runs (`tasks/plan.md`) are not touched.
 | Material model | Saint Venant–Kirchhoff on linear tets, one Young/Poisson pair per flex. A Neo-Hookean option exists only as an experimental C-API switch (3.15+). No per-element stiffness in MJCF. | XML reference, changelog |
 | 3.17.0 vs 4.0.0 for soft bodies | 3.17.0 uses twice the first Lamé parameter in 3D (ν = 0.45 behaves like about 0.47) and distributes contact forces with weights that put a false torque on elements. Both are fixed in 4.0.0. 4.0.0 itself has a sparse-Cholesky bug in the Newton solver (issue 3767), so use CG there. | 4.0.0 changelog |
 | It runs with our stack | 3.17.0 imports with numpy 1.26.4 on Python 3.10. 4.0.0 is installed in a second venv, `.venv-mj4` (Python 3.11). | both venvs |
-| We can reuse the robot model | MuJoCo loads `pybullet_data/franka_panda/panda.urdf` directly. `panda_grasptarget` at the rest posture is at (0.4842, 0, 0.4110) in both engines. | scratch script; now `test_backends_agree_on_the_probe_pose_for_the_same_target` |
+| We can reuse the robot model | MuJoCo loads `pybullet_data/franka_panda/panda.urdf` directly. `panda_grasptarget` at the rest posture is at (0.4842, 0, 0.4110) in both engines. | scratch script (these coordinates); `test_backends_agree_on_the_probe_pose_for_the_same_target` checks agreement at a scan pose |
 | Soft tissue at 1 kHz | No. A 21×21×11 tet slab at 4 mm (4,851 vertices, 24,000 tets, E = 15 kPa, ν = 0.45) costs about 70 ms per step on 3.17.0 and about 90 ms on 4.0.0; an 11×11×6 slab at 8 mm costs about 5 ms and 8 ms. Our patient mesh is larger (15,259 nodes, 71,232 tets). | scratch spike, laptop CPU, not a `results/` number |
 | GPU soft bodies | MJX (JAX) does not support flex. MuJoCo Warp lists flex as experimental and publishes no tetrahedral timings. | MJX feature table, MuJoCo Warp README |
 | Indentation force validated? | No published comparison of flex indentation force against FEM or an analytical solution was found. The contact is a soft constraint, so its compliance adds to the tissue's. | docs, issue tracker search |
@@ -82,9 +82,10 @@ test runs against both backends. Full suite: 184 passed, 2 xfailed (before: 154 
 | 1.8 | Docs: DECISIONS (DEC-052), FLOW, AGENTS, QUIZME | – | done |
 
 What the tests found:
-- **PyBullet's arm is kinematic.** Under a 30 N push on the probe it deflects by less than 1 µm; the
-  torque-controlled MuJoCo arm deflects by about 1.1 mm (printed by
-  `test_tissue_force_really_pushes_the_robot_back`, a strict xfail for PyBullet).
+- **PyBullet's arm is rigid under the tissue force.** Under a 30 N push on the probe it moves by less than
+  1 µm (asserted); the torque-controlled MuJoCo arm moves by about 1.1 mm with the chosen gains (printed by
+  `test_tissue_force_acts_on_the_dynamics_as_each_backend_models_the_arm`). The deflection is not fed back to
+  the tissue solve or the image, so the DEC-048 caveat stands for all reported results.
 - **Tilting sweep.** Worst end-effector error 7.3 mm with PyBullet and 5.6 mm with MuJoCo (printed by
   `test_tilting_sweep_is_tracked`).
 - **A data bug, not fixed here.** `meshes/patient_l4_vertebra.obj` is in frame P (mm), not in the PB frame
@@ -92,9 +93,11 @@ What the tests found:
   it with a warning.
 
 Open after Stage 1:
-- The physics process pins itself to the highest-numbered CPU, which on the i5-1240P is an efficiency core. The
-  MuJoCo tick has more Python in it (IK) than the PyBullet one and pays more for that. Pinning to a performance
+- The physics process pins itself to the highest-numbered CPU, which on the i5-1240P is an efficiency core.
+  Whether that hurts the MuJoCo tick more (it has more Python in it) is a conjecture. Pinning to a performance
   core is a change to the shared loop and needs its own measurement.
+- The rate must be re-measured on an idle machine, with the parent commit alongside: the committed runs do not
+  show 1 kHz for either backend and do not rule out a slowdown of PyBullet.
 - A concave keep-out fixture is over-approximated by its convex hull.
 - Review gates: one code-review agent and one audit agent (invariants 2, 4, 6; "can each new test fail?").
 
@@ -140,7 +143,7 @@ If the gate fails, the result is recorded as a negative finding and Stage 2 stop
 | :--- | :--- | :--- |
 | Frictionless contact (DEC-040) | tangential force during a lateral sweep at 4 N, μ ∈ {0, 0.3} | no difference between μ = 0 and μ = 0.3 |
 | Linear, small strain (DEC-047) | the study above at 10–15 N | not better than linear |
-| Kinematic robot (DEC-048) | joint torque and tracking error under the tissue load, Stage 1 backend | torque does not change with the load |
+| Kinematic robot (DEC-048) | Stage 1 gives a compliant arm in the server only. To touch the caveat, the measured probe pose must feed the tissue solve and the image; then compare reconstruction with and without it | no measurable change |
 | Quasi-static tissue | force overshoot and settling time after a 2 mm step indentation | overshoot is solver noise (changes sign with timestep) |
 
 **Not in scope:** the gym (`mtp_gym`) stays on the batched PyTorch FEM. A stepped flex model cannot serve its
@@ -148,7 +151,7 @@ admittance loop, which makes many quasi-static solves per env step.
 
 ## 5. Risks
 
-1. Flex cost: already measured at 5–70× the tick budget; handled by the separate process and the gate.
+1. Flex cost: 5–90× the tick budget in the scratch spike; handled by the separate process and the gate.
 2. Near-incompressibility (ν = 0.45): ill-conditioning warning seen in the spike.
 3. Contact force may be governed by `solref`/`solimp` softness rather than elasticity; the study must show the
    force changes with Young's modulus as expected.

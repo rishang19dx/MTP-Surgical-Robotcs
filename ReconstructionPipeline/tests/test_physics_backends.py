@@ -2,7 +2,8 @@
 Contract tests for the rigid-body physics backends of the unified server (DEC-052).
 
 Every backend named in ``physics_common.BACKENDS`` must satisfy the same contract, because the 1 kHz loop,
-the streaming side and the Slicer bridge are shared. The world frame of every backend is the "PB" frame
+the streaming side and the Slicer bridge are shared. One behaviour differs on purpose and is pinned for each
+engine separately: how the arm responds to the tissue force (rigid in PyBullet, compliant in MuJoCo). The world frame of every backend is the "PB" frame
 of ``coordinates.py`` (Z-up, metres); quaternions cross the backend boundary as (x, y, z, w).
 
 The tests are written against behaviour (poses, forces and contacts read back through the public
@@ -100,7 +101,9 @@ def test_physics_common_imports_no_engine():
 
 
 def test_streaming_side_never_imports_an_engine():
-    """Invariant 2: only the physics loop calls the engine. The streaming module must not even load one."""
+    """Invariant 2: only the physics loop calls the engine. Importing the streaming module loads no engine.
+    This covers module import only: in ``process`` mode (the default) the engine is created in the physics
+    process; ``thread`` and ``inline`` modes create it inside the server process by design."""
     import surgical_physics_bridge.src.unified_server as us
     src = inspect.getsource(us)
     assert "import pybullet" not in src and "import mujoco" not in src
@@ -204,10 +207,13 @@ def test_tissue_force_follows_the_first_order_extrapolation(backend_and_channels
     c = _run(backend, channels, 300, target)
     expect = float(np.clip(f0 + k * (c["tissue_indentation_mm"] - d0), 0.0, pc.TISSUE_FORCE_MAX_N))
     assert c["tissue_force_n"] == pytest.approx(expect, rel=1e-6, abs=1e-6)
-    # the reported indentation is the measured one: face position along the beam from the skin point
+    # Consistency of the report with the engine pose (same expression as the backend: catches sign, unit and
+    # stale-pose slips, not more).
     measured = 1000.0 * float((_probe_face(backend, channels) - skin) @ BEAM_PB)
     assert c["tissue_indentation_mm"] == pytest.approx(measured, abs=0.05)
-    assert abs(c["tissue_indentation_mm"] - d0) < 3.0
+    # Independent of the backend's own bookkeeping: the face was COMMANDED d0 mm past the skin point, so
+    # the measured indentation must be d0 up to the tracking error under load.
+    assert abs(c["tissue_indentation_mm"] - d0) < 1.0
 
 
 def test_tissue_force_is_zero_out_of_contact_and_clipped_at_the_maximum(backend_and_channels):
@@ -219,22 +225,26 @@ def test_tissue_force_is_zero_out_of_contact_and_clipped_at_the_maximum(backend_
     assert c["tissue_force_n"] == pytest.approx(pc.TISSUE_FORCE_MAX_N)
 
 
-def test_tissue_force_really_pushes_the_robot_back(backend_and_channels, request):
-    """The force must act on the dynamics, not only be reported: a constant push against the beam moves
-    the probe face backwards along the beam relative to the unloaded hold.
+def test_tissue_force_acts_on_the_dynamics_as_each_backend_models_the_arm(backend_and_channels):
+    """What a 30 N push against the beam does to the probe, measured from the engine's own pose.
 
-    PyBullet is a strict xfail: its position motors are velocity constraints with a 150 N limit, so the arm
-    is effectively kinematic (measured 0.4 um of deflection under 30 N). This is the "kinematic robot"
-    caveat of DEC-048; the torque-controlled MuJoCo arm is the backend that removes it."""
+    The two backends model the arm differently, and this test pins both behaviours:
+      * MuJoCo (torque control): the arm is compliant, so the face moves back along the beam (> 10 um).
+      * PyBullet (POSITION_CONTROL motors, i.e. velocity constraints with a 150 N m limit): the arm is rigid
+        for loads below that limit, so the face does not move (< 1 um). The tissue force is then a reported
+        value with no effect on the motion. Checked at this one pose and force only.
+    The deflection exists only in the interactive server; it is not fed back to the tissue solve or the image."""
     backend, channels = backend_and_channels
-    if type(backend).__name__ == "PyBulletBackend":
-        request.applymarker(pytest.mark.xfail(strict=True, reason="PyBullet position motors: kinematic arm"))
     _run(backend, channels, 600, _target(teleport=True))
     unloaded = float(_probe_face(backend, channels) @ BEAM_PB)
     _run(backend, channels, 600, _target(tissue=_tissue(30.0, 0.0, 0.0)))
     loaded = float(_probe_face(backend, channels) @ BEAM_PB)
-    print(f"[{type(backend).__name__}] deflection under 30 N: {1e6 * (unloaded - loaded):.1f} um")
-    assert unloaded - loaded > 1e-5      # > 10 um of deflection against the beam under 30 N
+    deflection = unloaded - loaded
+    print(f"[{type(backend).__name__}] deflection under 30 N: {1e6 * deflection:.1f} um")
+    if type(backend).__name__ == "PyBulletBackend":
+        assert abs(deflection) < 1e-6
+    else:
+        assert deflection > 1e-5
 
 
 # --------------------------------------------------------------------------- virtual keep-out fixture
@@ -339,6 +349,7 @@ def test_mujoco_server_applies_fem_force_extrapolation(mujoco_inline_server):
     assert tis["in_contact"] and tis["stiffness_n_per_mm"] > 0.0
     c = s.channels.read_contact()
     expect = tis["force_n"] + tis["stiffness_n_per_mm"] * (c["tissue_indentation_mm"] - tis["indentation_mm"])
-    assert c["tissue_force_n"] == pytest.approx(float(np.clip(expect, 0.0, 40.0)), rel=1e-6, abs=1e-6)
+    limit = _common().TISSUE_FORCE_MAX_N
+    assert c["tissue_force_n"] == pytest.approx(float(np.clip(expect, 0.0, limit)), rel=1e-6, abs=1e-6)
     assert abs(c["tissue_indentation_mm"] - tis["indentation_mm"]) < 5.0
     assert c["tissue_force_n"] > 0.0

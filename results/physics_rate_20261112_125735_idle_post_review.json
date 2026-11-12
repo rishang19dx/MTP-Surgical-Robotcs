@@ -1,0 +1,260 @@
+{
+ "script": "scripts/physics_rate_compare.py",
+ "args": {
+  "runs": 3,
+  "seconds": 20.0,
+  "ref_commit": "ec88541",
+  "max_load": 1.0,
+  "label": "idle_post_review",
+  "port": 18960
+ },
+ "commit": "223b530",
+ "date": "2026-11-12",
+ "mujoco_version": "3.17.0",
+ "governor": "powersave",
+ "cpus": 16,
+ "pinned_cpu": "highest-numbered (physics_common.pin_to_dedicated_cpu)",
+ "protocol": "3 interleaved runs per configuration, 20 s each, default server mode orbital_l4, FEM tissue, OpenIGTLink drain client; each run waits for 1-min load < 1.0 (max 120 s)",
+ "runs": [
+  {
+   "physics_mode": "process",
+   "physics_backend": "mujoco",
+   "total_ticks": 20062,
+   "overruns": 10,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 1000.0001199780837,
+   "period_p50_ms": 0.999999000043772,
+   "period_p99_ms": 1.0082439199885584,
+   "period_max_ms": 4.05771900000218,
+   "compute_p99_ms": 0.7315694500277888,
+   "stream_hz": 21.7,
+   "run": 1,
+   "config": "mujoco",
+   "commit": "223b530",
+   "loadavg_before": [
+    0.95,
+    1.27,
+    0.61
+   ],
+   "loadavg_after": [
+    2.36,
+    1.62,
+    0.75
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "physics_backend": "pybullet",
+   "total_ticks": 20161,
+   "overruns": 12,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 999.9999905758652,
+   "period_p50_ms": 1.0000000000331966,
+   "period_p99_ms": 1.0002389999726802,
+   "period_max_ms": 4.459074000010332,
+   "compute_p99_ms": 0.686753999980283,
+   "stream_hz": 24.5,
+   "run": 1,
+   "config": "pybullet",
+   "commit": "223b530",
+   "loadavg_before": [
+    1.16,
+    1.39,
+    0.77
+   ],
+   "loadavg_after": [
+    1.22,
+    1.37,
+    0.79
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "total_ticks": 20081,
+   "overruns": 26,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 1000.0000059259985,
+   "period_p50_ms": 0.9999979999975039,
+   "period_p99_ms": 1.0422890000199914,
+   "period_max_ms": 4.284602999973686,
+   "compute_p99_ms": 0.834658600024341,
+   "stream_hz": 15.55,
+   "run": 1,
+   "config": "pybullet@ec88541",
+   "commit": "ec88541",
+   "loadavg_before": [
+    1.46,
+    1.4,
+    0.88
+   ],
+   "loadavg_after": [
+    3.24,
+    1.91,
+    1.07
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "physics_backend": "mujoco",
+   "total_ticks": 20054,
+   "overruns": 3,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 1000.0000007978443,
+   "period_p50_ms": 0.9999999999763531,
+   "period_p99_ms": 1.000144469986708,
+   "period_max_ms": 2.322348999996393,
+   "compute_p99_ms": 0.5484215800356652,
+   "stream_hz": 26.0,
+   "run": 2,
+   "config": "mujoco",
+   "commit": "223b530",
+   "loadavg_before": [
+    1.5,
+    1.78,
+    1.13
+   ],
+   "loadavg_after": [
+    1.55,
+    1.77,
+    1.15
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "physics_backend": "pybullet",
+   "total_ticks": 20077,
+   "overruns": 9,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 1000.0000004980827,
+   "period_p50_ms": 0.9999999999763531,
+   "period_p99_ms": 1.0002832400232364,
+   "period_max_ms": 3.580034000037813,
+   "compute_p99_ms": 0.7061611999961325,
+   "stream_hz": 22.05,
+   "run": 2,
+   "config": "pybullet",
+   "commit": "223b530",
+   "loadavg_before": [
+    1.3,
+    1.61,
+    1.17
+   ],
+   "loadavg_after": [
+    1.68,
+    1.69,
+    1.21
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "total_ticks": 20040,
+   "overruns": 8,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 1000.0000046407224,
+   "period_p50_ms": 0.9999979999975039,
+   "period_p99_ms": 1.0153017800303132,
+   "period_max_ms": 4.298355000059928,
+   "compute_p99_ms": 0.6911162099993363,
+   "stream_hz": 23.7,
+   "run": 2,
+   "config": "pybullet@ec88541",
+   "commit": "ec88541",
+   "loadavg_before": [
+    0.96,
+    1.46,
+    1.17
+   ],
+   "loadavg_after": [
+    3.01,
+    1.99,
+    1.36
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "physics_backend": "mujoco",
+   "total_ticks": 20093,
+   "overruns": 3,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 999.999997362267,
+   "period_p50_ms": 0.9999989999869285,
+   "period_p99_ms": 1.0062130800179148,
+   "period_max_ms": 4.111800999908155,
+   "compute_p99_ms": 0.8107915999516971,
+   "stream_hz": 18.2,
+   "run": 3,
+   "config": "mujoco",
+   "commit": "223b530",
+   "loadavg_before": [
+    0.97,
+    1.57,
+    1.27
+   ],
+   "loadavg_after": [
+    1.54,
+    1.64,
+    1.31
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "physics_backend": "pybullet",
+   "total_ticks": 20060,
+   "overruns": 2,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 1000.0000013459618,
+   "period_p50_ms": 0.9999999999763531,
+   "period_p99_ms": 1.000147000013385,
+   "period_max_ms": 4.328622999992149,
+   "compute_p99_ms": 0.5539545400301903,
+   "stream_hz": 25.95,
+   "run": 3,
+   "config": "pybullet",
+   "commit": "223b530",
+   "loadavg_before": [
+    0.94,
+    1.45,
+    1.28
+   ],
+   "loadavg_after": [
+    1.77,
+    1.63,
+    1.35
+   ]
+  },
+  {
+   "physics_mode": "process",
+   "total_ticks": 20068,
+   "overruns": 15,
+   "resyncs": 0,
+   "target_hz": 1000.0,
+   "achieved_hz": 999.9999947677891,
+   "period_p50_ms": 0.9999999999763531,
+   "period_p99_ms": 1.0002813300320668,
+   "period_max_ms": 4.380328000024747,
+   "compute_p99_ms": 0.6993461599154215,
+   "stream_hz": 22.65,
+   "run": 3,
+   "config": "pybullet@ec88541",
+   "commit": "ec88541",
+   "loadavg_before": [
+    0.97,
+    1.44,
+    1.31
+   ],
+   "loadavg_after": [
+    1.51,
+    1.52,
+    1.34
+   ]
+  }
+ ]
+}

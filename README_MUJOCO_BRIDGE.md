@@ -245,10 +245,10 @@ As of this branch's last commit:
   and fixed during that review (a streamed-target tracking bug, a control-loop limit cycle, missing orientation
   reporting, unvalidated fixture input, concave-fixture over-approximation, and the long-standing L4-mesh-frame
   bug inherited from `main`).
-- **The physics rate has not yet been re-measured since the most recent control-loop fix.** The only committed
-  rate comparison (`results/physics_rate_20261111_mujoco_vs_pybullet.json`) predates it and was taken on a loaded
-  machine; it does not show either backend reliably holding 1 kHz and does not separate the two engines. Do not
-  cite it as a performance comparison. A fresh idle-machine run is owed before any MuJoCo-vs-PyBullet rate claim.
+- **Both backends hold 1 kHz on a quiet machine** (`results/physics_rate_20261112_125735_idle_post_review.json`,
+  `scripts/physics_rate_compare.py`): 3 of 3 runs at 1000.0 Hz each for MuJoCo, PyBullet, and PyBullet at the
+  pre-refactor commit, with tick compute p99 0.55–0.84 ms. The refactor did not slow PyBullet. The ranges overlap,
+  so this does not rank the two engines.
 - **The Stage 2 gate failed, for both materials (2026-11-12).** Source:
   [`results/mujoco_flex_fidelity_20261112_112537.md`](results/mujoco_flex_fidelity_20261112_112537.md), result
   recorded in DEC-053. SVK is unusable at any tested force (90–420 % compression error at 2 N, inverted elements in every case,

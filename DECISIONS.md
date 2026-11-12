@@ -1449,7 +1449,23 @@ A chronological record of all architectural, research, algorithmic, and engineer
        with `patient_to_pybullet_points` (`write_pybullet_copy`), and the sample patient's file was regenerated.
      - `test_pybullet_meshes_are_in_the_pybullet_frame` failed before and passes now. Both viewers draw L4 in
        place.
-  3. **Rate** after the control change: see the DEC-053 results (measured once the flex study had finished).
+  3. **Rate after the review (2026-11-12)**, `results/physics_rate_20261112_125735_idle_post_review.json`, made
+     by `scripts/physics_rate_compare.py`. Three interleaved 20 s runs per configuration, each started at a 1-min
+     load average of 0.94–1.50, governor powersave, at commit `223b530`:
+
+     | Configuration | Achieved rate | Tick compute p99 | Overruns (of ~20,000 ticks) |
+     | :--- | :--- | :--- | :--- |
+     | MuJoCo (HEAD) | 1000.0 Hz in 3 of 3 | 0.548–0.811 ms | 3–10 |
+     | PyBullet (HEAD) | 1000.0 Hz in 3 of 3 | 0.554–0.706 ms | 2–12 |
+     | PyBullet at `ec88541` (before the refactor) | 1000.0 Hz in 3 of 3 | 0.691–0.835 ms | 8–26 |
+
+     - Both backends hold 1 kHz on a quiet machine, with no resync in any run. This closes the rate item of
+       Findings above.
+     - **The refactor did not slow PyBullet**: HEAD's p99 range does not exceed the parent commit's. This closes
+       the open question in Findings.
+     - The ranges overlap, so the runs do not rank MuJoCo against PyBullet.
+     - The streaming loop ran at 15.6–26.0 Hz in every configuration (the parent commit included), below its
+       30 Hz target. That is the streaming side, not the physics loop, and it was not investigated here.
 
 ### `DEC-053`: MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend
 * **Date**: November 12, 2026 (branch `mujoco-bridge`). This entry is committed **before** the study is run on any

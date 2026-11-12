@@ -50,7 +50,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-040` | FEM Contact Along the Probe-Face Normal (3-Direction Compliance) & Dead-Code Cleanup | **Accepted** |
 | **Nov 2026** | `DEC-041`–`DEC-051` | RSS direction, gym, B-mode physics, pre-registered studies and their outcomes | see each record |
 | **Nov 2026** | `DEC-052` | MuJoCo Rigid-Body Backend Beside PyBullet (Stage 1); MuJoCo Flex Tissue Gated Behind a Study (Stage 2) | **Accepted** (Stage 1 done) |
-| **Nov 2026** | `DEC-053` | MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend | **Pre-registered** |
+| **Nov 2026** | `DEC-053` | MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend | **Gate failed** (demo only) |
 
 ---
 
@@ -1514,3 +1514,40 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Two flexes for fat and muscle: separate flexes cannot share vertices, so the tissue would come apart.
   - One averaged modulus: rejected now that per-tet scaling works.
   - Running the study only at 8 mm: it would not compare against the 4 mm reference.
+* **Result (2026-11-12): the gate fails for both materials.** Source:
+  [`results/mujoco_flex_fidelity_20261112_112537.json`](results/mujoco_flex_fidelity_20261112_112537.json) /
+  [`.md`](results/mujoco_flex_fidelity_20261112_112537.md). 3 patients × 2 sites × 4 forces × 2 materials = 48
+  rows; 4 excluded (no valid reference, per the pre-registered rule: the Neo-Hookean solve itself did not
+  converge for those cases in DEC-047). Commit `3409010`, MuJoCo 4.0.0.
+
+  | Material | G1 (≤5 N) | G2 (10–15 N) | G3 (stability) | G4 (cost) | Passes |
+  | :--- | :--- | :--- | :--- | :--- | :---: |
+  | SVK | FAIL | FAIL (median 251.8 % vs linear's 14.9 %) | FAIL (30–6,409 inverted tets; every case) | FAIL (50.5 s) | **no** |
+  | Stable Neo-Hookean | FAIL (one case, +15.1 %) | FAIL (median 18.8 % vs linear's 14.9 %) | FAIL (up to 39 inverted tets; 7 of 24 cases) | FAIL (12.5 s) | **no** |
+
+  - **SVK is wrong from first contact.** At 2 N, where the linear FEM is within 0.1–5.1 % of Neo-Hookean, SVK
+    compression is 90–420 % too large. Every one of its 24 cases has inverted tets (30 at the least, 6,409 at the
+    most). Scored errors at 10–15 N are 47–369 %.
+  - **Stable Neo-Hookean is close at low force and still fails.**
+    - At 2 N it is within 1.2–4.5 % of Neo-Hookean in all six cases. At 5 N five cases are within 3.2 %; one
+      (sample patient, midline) is +15.1 %, and G1 requires every scored case.
+    - From 10 N up its scored errors are 6.3–237 %, against 3.5–23.7 % for the linear FEM on the same cases, so
+      the median (18.8 %) is worse than linear (14.9 %): G2 fails.
+    - No tet inverts at 2 or 5 N; 7 of the 12 cases at 10–15 N have 7–39 inverted tets: G3 fails.
+  - **Both fail G4 by two to three orders of magnitude.** The warm re-settle after a 0.33 mm step (sample patient,
+    midline, 5 N; dt 0.02 s) took 12.5 s (98 steps) for Stable Neo-Hookean and 50.5 s (393 steps) for SVK,
+    against 33 ms (or 100 ms, "10 Hz tissue"). A flex solve on the 4 mm patient mesh cannot keep up with the
+    streaming loop, whatever its accuracy.
+  - All 48 cases settled (no unsettled case). Flex solve time was 8.8–333 s per case, 70 minutes in total
+    (48 min SVK, 22 min Stable Neo-Hookean).
+  - Excluded rows (no reference, as pre-registered): s0015 paraspinal and s0014 midline at 15 N, both materials.
+* **Decision: MuJoCo flex stays demo-only, indefinitely.** Per the pre-registration, this is not reopened with
+  relaxed thresholds. `--tissue-backend mujoco-flex` keeps printing its demo-only banner, and
+  `UltrasoundReconstructionEnv`/`benchmark_runner.py` keep rejecting the name (unchanged code; the gate failing
+  only confirms the fence should stay). No metric, benchmark, gym run or paper claim in this project may use
+  MuJoCo flex. The live demo (`scripts/demo_mujoco_flex_slicer.sh`) remains valid as a demonstration of the
+  pipeline and of MuJoCo's own contact mechanics, not as a validated tissue model.
+* **What would change this.** A different element formulation or resolution was not tried (the study used the
+  project's standard 4 mm mesh to match DEC-047; a finer mesh might reduce the inversion but would raise G4's
+  already-failing cost further). Re-opening Stage 2 would need a new pre-registered study, not a rerun of this
+  one.

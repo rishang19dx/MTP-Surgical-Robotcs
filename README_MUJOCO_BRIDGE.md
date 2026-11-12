@@ -6,10 +6,10 @@ This branch adds MuJoCo as an alternative physics engine to the project describe
 1. **Stage 1 (done): MuJoCo as a rigid-body backend.** `--physics-backend mujoco` replaces PyBullet for the robot,
    probe, table, virtual keep-out fixtures and viewer in the 1 kHz loop. The GPU FEM stays the tissue model.
    `--physics-backend pybullet` remains the **default**; nothing on `main` changes behaviour.
-2. **Stage 2 (gated): MuJoCo flex as a tissue model.** A live MuJoCo 4 soft-body (flex) simulation of the patient
-   mesh, in its own process, runs as `--tissue-backend mujoco-flex`. It is **demo only** — it does not back any
-   metric, benchmark or gym run — unless it passes a pre-registered accuracy/stability/cost gate against a
-   Neo-Hookean reference. See [Stage 2: the gate](#stage-2-the-gate) for where that result lives.
+2. **Stage 2 (gate failed): MuJoCo flex as a tissue model.** A live MuJoCo 4 soft-body (flex) simulation of the
+   patient mesh, in its own process, runs as `--tissue-backend mujoco-flex`. It is **demo only**: it backs no
+   metric, benchmark or gym run. It failed its pre-registered accuracy/stability/cost gate against a Neo-Hookean
+   reference on 2026-11-12, for both materials tested (see [Status](#status)), so it stays demo only.
 
 This branch is a **side track**: it was built off `audit-fixes` to attack four tracked limitations (friction,
 real robot dynamics, dynamic tissue response, large-strain accuracy) without disturbing the RSS 2027 runs on
@@ -130,8 +130,8 @@ Facts checked before committing to this (DEC-052 section 0, `tasks/mujoco_plan.m
 - **Demo-only fencing**: `TISSUE_BACKENDS = ("fem", "kelvinlet", "mujoco-flex")` in `unified_server.py`, but
   `UltrasoundReconstructionEnv` and `benchmark_runner.py` only accept `"fem"`/`"kelvinlet"` — they raise/exit on
   `"mujoco-flex"` (tested: `test_mujoco_flex_is_not_accepted_by_the_env_or_the_benchmark`). The server prints a
-  demo-only banner at startup when this backend is selected. This fence does not move unless the gate below
-  passes.
+  demo-only banner at startup when this backend is selected. The gate failed (see Status), so this fence
+  stays.
 
 ---
 
@@ -181,7 +181,7 @@ including the Wayland-safe snapshot environment variables.
 | Flag | Values | Notes |
 | :--- | :--- | :--- |
 | `--physics-backend` | `pybullet` (default) \| `mujoco` | Rigid-body engine of the 1 kHz loop (robot, probe, fixtures, viewer). |
-| `--tissue-backend` | `fem` (default) \| `kelvinlet` \| `mujoco-flex` | `mujoco-flex` is demo only (DEC-053); rejected by the env, benchmark and gym. |
+| `--tissue-backend` | `fem` (default) \| `kelvinlet` \| `mujoco-flex` | `mujoco-flex` is demo only (DEC-053 gate failed); rejected by the env, benchmark and gym. |
 | `--flex-element-mm` | float, default `8.0` | Element size of the live flex mesh; 8 mm runs near real time on a laptop CPU. |
 
 ---
@@ -209,7 +209,7 @@ renders or grabs itself, from inside its own process.
 
 ---
 
-## Stage 2: the gate
+## Stage 2: the gate (failed — see Status)
 
 Because MuJoCo flex has no published validation against a reference continuum solver, DEC-053 pre-registers a
 gate — written into `DECISIONS.md` **before** the study (`ReconstructionPipeline/evaluation/mujoco_flex_fidelity.py`)
@@ -240,7 +240,7 @@ Do not treat any flex force or compression number as validated until that gate e
 
 As of this branch's last commit:
 
-- **Stage 1 is implemented, tested, and under live review.** `test_physics_backends.py` runs its full contract
+- **Stage 1 is implemented and tested.** `test_physics_backends.py` runs its full contract
   suite against both engines; see the DEC-052 entry and its two addenda in `DECISIONS.md` for the defects found
   and fixed during that review (a streamed-target tracking bug, a control-loop limit cycle, missing orientation
   reporting, unvalidated fixture input, concave-fixture over-approximation, and the long-standing L4-mesh-frame
@@ -249,12 +249,16 @@ As of this branch's last commit:
   rate comparison (`results/physics_rate_20261111_mujoco_vs_pybullet.json`) predates it and was taken on a loaded
   machine; it does not show either backend reliably holding 1 kHz and does not separate the two engines. Do not
   cite it as a performance comparison. A fresh idle-machine run is owed before any MuJoCo-vs-PyBullet rate claim.
-- **The Stage 2 gate study is in progress / has not yet produced a committed result.** Expect it to take on the
-  order of an hour on a laptop CPU across the three patients and both materials — most of the wall time is the
-  flex solver settling at large (10–15 N) loads, where SVK in particular has shown a growing number of inverted
-  elements as compression increases on some cases. **Do not assume the gate passes.** Check
-  `results/mujoco_flex_fidelity_*.md` and the corresponding `DECISIONS.md` entry for the actual outcome before
-  using `--tissue-backend mujoco-flex` for anything beyond a visual demonstration.
+- **The Stage 2 gate failed, for both materials (2026-11-12).** Source:
+  [`results/mujoco_flex_fidelity_20261112_112537.md`](results/mujoco_flex_fidelity_20261112_112537.md), result
+  recorded in DEC-053. SVK is unusable at any tested force (90–420 % compression error at 2 N, inverted elements in every case,
+  up to 6,409). Stable Neo-Hookean tracks the Neo-Hookean reference within 1.2–4.5 %
+  at 2 N in every case, but still fails the gate (one 5 N case at +15.1 %, worse-than-linear error
+  from 10 N up, and a handful of inverted elements). **Both fail cost by two to three orders of magnitude**: the
+  warm re-settle took 12.5 s (Stable Neo-Hookean) and 50.5 s (SVK) against a 33/100 ms budget — a flex solve on this mesh cannot run
+  near streaming rate regardless of accuracy. Per the pre-registration, this is not reopened with relaxed
+  thresholds: `--tissue-backend mujoco-flex` stays demo-only indefinitely, and the env/benchmark continue to
+  reject it. Treat any flex force or compression number as illustrative only, never as validated.
 - **No recorded demonstration is committed yet.** `demonstrations/mujoco_flex/` is generated by
   `scripts/demo_mujoco_flex_slicer.sh` on demand; it is not currently checked in.
 

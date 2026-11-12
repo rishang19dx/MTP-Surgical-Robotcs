@@ -1829,7 +1829,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
     - Rigid-trained policies lose 20.3 / 4.7 points on deformable tissue and 25.0 / 7.8 points on kinematic
       tissue, so their drop comes from the indentation, not the warp. Seed 0 also needs 14.9 steps (vs 5–6) and
       ends 5.9 mm off.
-    - In the other direction, aware- and kinematic-trained policies lose 4.7–26.6 points when deployed on the
+    - In the other direction, aware- and kinematic-trained policies lose 4.7–25.0 points when deployed on the
       skin (rigid).
     - Mean force is 3.97–4.00 N for every policy, because the navigation task holds the 4 N target force and the
       policy cannot change it (`mtp_gym/tasks/navigation.py`, `map_action`).

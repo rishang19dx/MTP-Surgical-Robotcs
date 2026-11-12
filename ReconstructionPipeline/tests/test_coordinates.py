@@ -80,3 +80,16 @@ def test_probe_orientation_is_proper_and_aligned():
     r2 = Rotation.from_quat(probe_axes_to_pybullet_quaternion(beam_t, lateral_p)).as_matrix()
     assert np.isclose(np.linalg.det(r2), 1.0)
     assert np.allclose(r2[:, 2], (P_TO_PB_ROT @ beam_t) / np.linalg.norm(beam_t))
+
+
+@pytest.mark.parametrize("name", ["patient_lumbar_spine", "patient_l4_vertebra"])
+def test_pybullet_meshes_are_in_the_pybullet_frame(name):
+    """Every PyBullet-frame mesh (no ``_ras`` suffix) equals its frame-P twin mapped by patient_to_pybullet_points.
+    The L4 file was a copy of its frame-P twin (mm), drawn ~1000x too large (DEC-052 data bug)."""
+    v_pb, f_pb = read_obj(os.path.join(PATIENT_DIR, "meshes", f"{name}.obj"))
+    v_p, f_p = read_obj(os.path.join(PATIENT_DIR, "meshes", f"{name}_ras.obj"))
+    torso_pb, _ = read_obj(os.path.join(PATIENT_DIR, "meshes", "patient_torso_skin.obj"))
+    lo, hi = torso_pb.min(0) - 0.05, torso_pb.max(0) + 0.05
+    assert np.all((v_pb >= lo) & (v_pb <= hi)), f"{name}.obj is not inside the PyBullet torso bounds (metres)"
+    if len(v_pb) == len(v_p):
+        assert np.allclose(patient_to_pybullet_points(v_p), v_pb, atol=1e-5)

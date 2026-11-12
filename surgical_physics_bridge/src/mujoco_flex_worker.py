@@ -21,8 +21,12 @@ Two uses:
 
 from __future__ import annotations
 
+import os
+import struct
 import sys
 import time
+import warnings
+import zlib
 
 import numpy as np
 import mujoco
@@ -73,8 +77,10 @@ def build_model(nodes_mm: np.ndarray, tets: np.ndarray, fixed: np.ndarray, young
     if probe:
         hx, hz = PROBE_FACE_M[0] / 2, PROBE_FACE_M[1] / 2
         probe_xml = (f'<body name="probe" mocap="true" pos="0 1 0"><geom name="probe_face" type="box" '
-                     f'size="{hx} {PROBE_DEPTH_M / 2} {hz}" rgba="0.2 0.4 1 1" friction="0.3"/></body>')
+                     f'size="{hx} {PROBE_DEPTH_M / 2} {hz}" rgba="0.2 0.4 1 1" friction="0.3"/></body>'
+                     '<camera name="demo" pos="0 0 0" fovy="45"/>')
     xml = f"""<mujoco>
+  <visual><headlight ambient="0.35 0.35 0.35" diffuse="0.7 0.7 0.7"/><global offwidth="1280" offheight="960"/></visual>
   <option timestep="{dt}" gravity="0 0 0" integrator="discrete" solver="CG"/>
   <worldbody>
     {probe_xml}
@@ -89,7 +95,11 @@ def build_model(nodes_mm: np.ndarray, tets: np.ndarray, fixed: np.ndarray, young
 </mujoco>"""
     spec = mujoco.MjSpec.from_string(xml)
     spec.flexes[0].elastic3d = MATERIALS[material]
-    model = spec.compile()
+    with warnings.catch_warnings():
+        # MuJoCo warns that the flex "has no equality constraints or passive forces" because elasticity is set
+        # per element after compilation (flex_stiffness); tests/test_mujoco_flex.py shows the elasticity acts.
+        warnings.filterwarnings("ignore", message=".*not rigid and has no equality constraints.*")
+        model = spec.compile()
     if model.nflexelem != len(tets) or model.nflexstiffness != STIFFNESS_PER_TET * len(tets):
         raise RuntimeError("unexpected flex stiffness layout; per-tet moduli cannot be applied")
     k = model.flex_stiffness.reshape(-1, STIFFNESS_PER_TET)
@@ -181,6 +191,65 @@ def run_study(in_path: str, out_path: str) -> None:
     np.savez(out_path, **out)
 
 
+
+# --------------------------------------------------------------------------------------------- snapshots
+def write_png(path: str, rgb: np.ndarray) -> None:
+    """Minimal PNG writer (stdlib only; .venv-mj4 has no imaging library)."""
+    h, w, _ = rgb.shape
+    raw = b"".join(b"\x00" + rgb[r].astype(np.uint8).tobytes() for r in range(h))
+
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
+class FlexSnapshots:
+    """Opt-in offscreen renders of the live flex (MTP_FLEX_SNAPSHOT_DIR, every MTP_FLEX_SNAPSHOT_S sim seconds).
+    The camera looks at the probe face from the side and above, with dorsal (+Y of frame P) up; a CSV row per
+    frame records the contact force and the probe depth so captions come from the simulation, not by hand."""
+
+    def __init__(self, model):
+        self.dir = os.environ.get("MTP_FLEX_SNAPSHOT_DIR", "")
+        self.period = float(os.environ.get("MTP_FLEX_SNAPSHOT_S", "0.25"))
+        self.next_t = 0.0
+        self.index = 0
+        self.renderer = None
+        if self.dir:
+            os.makedirs(self.dir, exist_ok=True)
+            self.renderer = mujoco.Renderer(model, 480, 640)
+            self.cam = model.camera("demo").id
+            with open(os.path.join(self.dir, "flex_frames.csv"), "w") as f:
+                f.write("file,sim_time_s,force_along_minus_beam_n,probe_face_depth_mm,max_displacement_mm\n")
+
+    def maybe(self, model, data, face_m, beam, force_vec, depth_mm, umax_mm) -> None:
+        if self.renderer is None or face_m is None or data.time < self.next_t:
+            return
+        self.next_t = data.time + self.period
+        up = np.array([0.0, 1.0, 0.0])
+        lat = np.cross(beam, np.array([0.0, 0.0, 1.0]))
+        lat = lat / max(np.linalg.norm(lat), 1e-9)
+        view = 0.55 * lat - 0.6 * beam + 0.58 * np.array([0.0, 0.0, 1.0])      # side, above, along the spine
+        view /= np.linalg.norm(view)
+        pos = face_m + 0.16 * view
+        zc = view                                      # camera looks along -z
+        xc = np.cross(up, zc)
+        xc /= np.linalg.norm(xc)
+        yc = np.cross(zc, xc)
+        R = np.stack([xc, yc, zc], 1)
+        model.cam_pos[self.cam] = pos
+        model.cam_quat[self.cam] = _rot_to_quat(R)
+        mujoco.mj_kinematics(model, data)
+        mujoco.mj_camlight(model, data)
+        self.renderer.update_scene(data, camera=self.cam)
+        name = f"flex_{self.index:04d}.png"
+        write_png(os.path.join(self.dir, name), self.renderer.render())
+        with open(os.path.join(self.dir, "flex_frames.csv"), "a") as f:
+            f.write(f"{name},{data.time:.3f},{float(-force_vec @ beam):.4f},{depth_mm:.3f},{umax_mm:.3f}\n")
+        self.index += 1
+
 # --------------------------------------------------------------------------------------------- live
 def _rot_to_quat(R: np.ndarray) -> np.ndarray:
     q = np.zeros(4)
@@ -221,6 +290,8 @@ def run_live(mesh_path: str, host: str, port: int, authkey_hex: str) -> None:
     data.mocap_pos[mocap] = info["nodes_m"].mean(0) + np.array([0.0, 1.0, 0.0])
     conn.send({"type": "ready", "nodes": int(len(info["nodes_m"])), "tets": int(len(info["tets"])),
                "dt": LIVE_DT, "material": str(z["material"])})
+    shots = FlexSnapshots(model)
+    skin_top = None
     t_wall0 = time.perf_counter()
     last_pub = 0.0
     step_ms = []
@@ -233,6 +304,7 @@ def run_live(mesh_path: str, host: str, port: int, authkey_hex: str) -> None:
                 return
             if msg.get("type") == "target":
                 T = np.frombuffer(msg["pose"], dtype=np.float64).reshape(4, 4)
+                skin_top = T[:3, 3] * 1e-3
                 b = T[:3, 1] / np.linalg.norm(T[:3, 1])
                 goal_face = (T[:3, 3] + float(msg["indentation_mm"]) * b) * 1e-3
                 goal_R = T[:3, :3] / np.linalg.norm(T[:3, :3], axis=0, keepdims=True)
@@ -264,6 +336,10 @@ def run_live(mesh_path: str, host: str, port: int, authkey_hex: str) -> None:
         ahead = sim_t - (time.perf_counter() - t_wall0)
         if ahead > 0:
             time.sleep(ahead)
+        if shots.renderer is not None and face is not None and skin_top is not None and data.time >= shots.next_t:
+            fv = _probe_contact_force(model, data, info["probe_geom"])
+            umax = float(np.linalg.norm(displacement_m(data, info), axis=1).max() * 1e3)
+            shots.maybe(model, data, face, R[:, 1], fv, float((face - skin_top) @ R[:, 1] * 1e3), umax)
         now = time.perf_counter() - t_wall0
         if now - last_pub >= PUBLISH_PERIOD_S:
             last_pub = now
@@ -285,7 +361,10 @@ def main(argv) -> None:
     if len(argv) >= 3 and argv[0] == "study":
         run_study(argv[1], argv[2])
     elif len(argv) >= 5 and argv[0] == "live":
-        run_live(argv[1], argv[2], int(argv[3]), argv[4])
+        try:
+            run_live(argv[1], argv[2], int(argv[3]), argv[4])
+        except (EOFError, ConnectionError):
+            pass        # the server went away without a "stop" (killed or crashed): exit quietly
     else:
         raise SystemExit(__doc__)
 

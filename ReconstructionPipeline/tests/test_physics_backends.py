@@ -343,18 +343,51 @@ def test_malformed_fixture_indices_are_rejected_before_the_engine(backend_and_ch
     assert backend.fixture_ids == []
 
 
-def test_flat_fixture_is_accepted_by_pybullet_and_rejected_by_mujoco(backend_and_channels):
-    """A single flat sheet: PyBullet collides with the triangle mesh; MuJoCo needs a volume (convex hull) and
-    rejects it. Pinned per engine so the difference stays documented; a rejection is never recorded."""
+def _sheet_ras(corners_pb):
+    return patient_to_ras_points(pybullet_to_patient_points(np.asarray(corners_pb))).tolist()
+
+
+def test_flat_fixture_blocks_the_probe(backend_and_channels):
+    """A single flat sheet 3 cm below the probe face blocks it on both engines (MuJoCo used to reject it: a mesh
+    without volume has no convex hull; fixtures are now per-triangle shells)."""
     backend, channels = backend_and_channels
-    verts_pb = CONTACT_PB + np.array([[-0.05, -0.05, 0.0], [0.05, -0.05, 0.0], [0.05, 0.05, 0.0], [-0.05, 0.05, 0.0]])
-    verts_ras = patient_to_ras_points(pybullet_to_patient_points(verts_pb))
-    channels.commands.put(("fixture", {"vertices": verts_ras.tolist(), "indices": [0, 1, 2, 0, 2, 3]}))
-    _run(backend, channels, 5, _target(contact_pb=CONTACT_PB + np.array([0.0, 0.0, 0.06]), teleport=True))
-    if type(backend).__name__ == "PyBulletBackend":
-        assert len(backend.fixture_ids) == 1
-    else:
-        assert backend.fixture_ids == []
+    start = CONTACT_PB + np.array([0.0, 0.0, 0.06])
+    _run(backend, channels, 200, _target(contact_pb=start, teleport=True))
+    z = start[2] - 0.03
+    sheet = [[start[0] - 0.08, start[1] - 0.08, z], [start[0] + 0.08, start[1] - 0.08, z],
+             [start[0] + 0.08, start[1] + 0.08, z], [start[0] - 0.08, start[1] + 0.08, z]]
+    channels.commands.put(("fixture", {"vertices": _sheet_ras(sheet), "indices": [0, 1, 2, 0, 2, 3]}))
+    goal = start + BEAM_PB * 0.05
+    for i in range(1, 51):
+        c = _run(backend, channels, 20, _target(contact_pb=start + (goal - start) * i / 50))
+    c = _run(backend, channels, 300)
+    assert len(backend.fixture_ids) == 1
+    assert c["n_contacts"] >= 1
+    assert float(_probe_face(backend, channels)[2]) > z - 0.005
+
+
+def test_concave_fixture_leaves_its_opening_free(backend_and_channels):
+    """A U-channel (bottom and two walls, open top) around the probe path: descending into the opening is free.
+    A convex hull would fill the channel and block the probe at its top."""
+    backend, channels = backend_and_channels
+    start = CONTACT_PB + np.array([0.0, 0.0, 0.06])
+    _run(backend, channels, 200, _target(contact_pb=start, teleport=True))
+    x0, x1 = start[0] - 0.05, start[0] + 0.05
+    y0, y1 = start[1] - 0.08, start[1] + 0.08
+    zb, zt = start[2] - 0.10, start[2] - 0.01
+    v = [[x0, y0, zb], [x1, y0, zb], [x1, y1, zb], [x0, y1, zb],      # bottom
+         [x0, y0, zt], [x0, y1, zt], [x1, y0, zt], [x1, y1, zt]]      # wall tops
+    tris = [0, 1, 2, 0, 2, 3,                                          # bottom
+            0, 3, 5, 0, 5, 4,                                          # wall x0
+            1, 6, 7, 1, 7, 2]                                          # wall x1
+    channels.commands.put(("fixture", {"vertices": _sheet_ras(v), "indices": tris}))
+    goal = start + BEAM_PB * 0.05
+    for i in range(1, 51):
+        c = _run(backend, channels, 20, _target(contact_pb=start + (goal - start) * i / 50))
+    c = _run(backend, channels, 500)
+    assert len(backend.fixture_ids) == 1
+    assert c["n_contacts"] == 0
+    assert c["ee_error_m"] < 0.002
 
 
 def test_backends_subclass_the_base_that_create_backend_was_imported_with():

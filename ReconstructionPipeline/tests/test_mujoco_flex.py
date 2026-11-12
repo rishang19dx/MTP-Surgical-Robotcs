@@ -152,3 +152,60 @@ def test_live_worker_reports_a_restoring_contact_force(tmp_path):
     assert abs(f[1]) > 3 * max(abs(f[0]), abs(f[2]))
     assert u[top, 1].min() < -1.0                           # the skin under the probe is pressed in
     assert last["probe_face_mm"][1] == pytest.approx(nodes[:, 1].max() - 3.0, abs=0.05)
+
+
+# ------------------------------------------------------------------ .venv side (MujocoFlexTissueModel)
+def test_lattice_field_puts_nodes_on_the_lattice_and_copies_skin_values_into_the_air_above():
+    from types import SimpleNamespace
+    sys.path.insert(0, ROOT)
+    from ReconstructionPipeline.simulation.mujoco_flex_tissue import lattice_field
+    # 2 x 4 x 1 lattice; column (0,0) has nodes j=0,1 (skin at j=1), column (1,0) has j=0 only (skin at j=0)
+    node_ijk = np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0]])
+    mesh = SimpleNamespace(lattice_shape=(2, 4, 1), node_ijk=node_ijk, skin_nodes=np.array([1, 2]),
+                           skin_column_ik=np.array([[0, 0], [1, 0]]))
+    u = np.array([[1.0, 0, 0], [2.0, 0, 0], [3.0, 0, 0]], dtype=np.float32)
+    g = lattice_field(mesh, u)                       # (3, NZ, NY, NX)
+    assert g.shape == (3, 1, 4, 2)
+    assert g[0, 0, :, 0].tolist() == [1.0, 2.0, 2.0, 2.0]   # node, skin, air, air
+    assert g[0, 0, :, 1].tolist() == [3.0, 3.0, 3.0, 3.0]
+
+
+def test_mujoco_flex_is_not_accepted_by_the_env_or_the_benchmark():
+    """DEC-053: demo only. Only the server builds it; the env and the benchmark reject the name."""
+    sys.path.insert(0, ROOT)
+    from ReconstructionPipeline.planning.env_reconstruction import UltrasoundReconstructionEnv
+    with pytest.raises(ValueError):
+        UltrasoundReconstructionEnv(patient_data=None, tissue_backend="mujoco-flex")
+    out = subprocess.run([sys.executable, os.path.join(ROOT, "ReconstructionPipeline", "evaluation",
+                                                       "benchmark_runner.py"), "--tissue-backend", "mujoco-flex"],
+                         capture_output=True, text=True, timeout=300)
+    assert out.returncode != 0 and "invalid choice" in out.stderr
+
+
+def test_live_flex_model_presses_the_patient_skin(tmp_path):
+    """Sample patient, 8 mm flex: a probe 4 mm past first contact pushes back, the tissue under it moves along the
+    beam, and the reported indentation is the worker's actual probe depth."""
+    import torch
+    sys.path.insert(0, ROOT)
+    from mtp_gym.core import load_patient
+    from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel
+    from ReconstructionPipeline.simulation.mujoco_flex_tissue import MujocoFlexTissueModel
+    data = load_patient(os.path.join(ROOT, "data", "sample_totalsegmentator_patient"))
+    geom = FEMTissueModel.from_patient_data(data, c1_bounds=(-32.0, 32.0), c2_bounds=(-55.0, -10.0),
+                                            device=torch.device("cpu"), verbose=False)
+    flex = MujocoFlexTissueModel(data, geometry=geom, element_size_mm=8.0, verbose=False)
+    try:
+        T = geom.dorsal_pose(-20.0, -45.0)
+        d = geom.first_contact_indentation(T) + 4.0
+        st = flex.solve(T, d)
+        s0 = flex.wait_for_state(0.0)
+        flex.wait_for_state(s0["sim_time_s"] + 3.0, timeout_s=60.0)
+        st = flex.solve(T, d)
+    finally:
+        flex.close()
+    assert st.in_contact and st.reaction_force_n > 0.2
+    assert st.indentation_mm == pytest.approx(d, abs=0.05)
+    b = T[:3, 1]
+    p = torch.tensor((T[:3, 3] + d * b)[None], dtype=torch.float32)
+    moved = (st.displace(p) - p).numpy()[0]
+    assert moved @ b > 0.5                                   # tissue under the face is pushed along the beam

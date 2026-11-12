@@ -19,8 +19,9 @@ Design:
       that fresh state, then ``mj_step2``.
     * **Fixtures**: MuJoCo cannot add a geom to a compiled model, so a fixture triggers one ``MjSpec``
       recompile (state carried over). That tick is long (measured ~6 ms for a small mesh); steady-state
-      ticks are unaffected. Limitation: a mesh geom collides as its CONVEX HULL, so a concave keep-out
-      region is over-approximated (PyBullet collides with the concave triangle mesh).
+      ticks are unaffected. A mesh geom collides as its convex hull, so each fixture TRIANGLE becomes its own
+      thin convex prism (``FIXTURE_SHELL_M`` thick, centred on the triangle): the union follows a concave
+      surface and a flat sheet has a volume. PyBullet collides with the triangle mesh itself.
     * **Viewer** (``gui=True``, viewer process only): ``mujoco.viewer.launch_passive``. Nothing in the
       headless path imports or touches OpenGL.
 
@@ -99,6 +100,8 @@ class MujocoBackend(PhysicsBackendBase):
     JOINT_ARMATURE = 0.1          # reflected rotor inertia (kg m^2); the URDF has none
     MAX_JOINT_SPEED = 2.0         # rad/s, slew limit of the commanded joint positions
     MAX_FOLLOWING_ERROR = 0.005   # rad, see step()
+    FIXTURE_SHELL_M = 0.004       # thickness of the per-triangle fixture prisms
+    MAX_FIXTURE_TRIANGLES = 2000  # one geom per triangle; larger keep-out meshes must be decimated first
     MAX_INTERP_TICKS = 100        # a target is interpolated over at most this many ticks
     IK_MAX_TICKS = 300            # a streamed target gets one IK iteration per tick until converged, at most this many
                                   # (a teleport gets a cold 200-iteration solve)
@@ -380,19 +383,37 @@ class MujocoBackend(PhysicsBackendBase):
         return _wxyz_to_xyzw(self.data.xquat[self._ee_id])
 
     def _create_fixture(self, pb_vertices: np.ndarray, indices: list):
-        """Static keep-out geom; needs a recompile. Collides as the CONVEX HULL of the mesh (see module doc)."""
+        """Static keep-out shell: one thin convex prism per triangle (see module doc); needs a recompile."""
         name = f"fixture_{len(self.fixture_ids)}"
-        mesh = self.spec.add_mesh(name=name, uservert=np.asarray(pb_vertices, dtype=np.float64).ravel().tolist(),
-                                  userface=[int(i) for i in indices])
-        mesh.inertia = mujoco.mjtMeshInertia.mjMESH_INERTIA_SHELL
-        geom = self.spec.worldbody.add_geom(name=name + "_geom", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=name,
-                                            rgba=[1.0, 0.0, 0.0, 0.3], contype=0, conaffinity=_ENV_AFFINITY)
+        v = np.asarray(pb_vertices, dtype=np.float64).reshape(-1, 3)
+        tris = np.asarray(indices, dtype=np.int64).reshape(-1, 3)
+        if len(tris) > self.MAX_FIXTURE_TRIANGLES:
+            print(f"[!] VirtualFixture has {len(tris)} triangles (> {self.MAX_FIXTURE_TRIANGLES}); ignored.")
+            return None
+        added = []
+        half = 0.5 * self.FIXTURE_SHELL_M
+        for k, (a, b, c) in enumerate(v[tris]):
+            n = np.cross(b - a, c - a)
+            norm = np.linalg.norm(n)
+            if norm < 1e-12:            # degenerate triangle
+                continue
+            n *= half / norm
+            prism = np.vstack([a + n, b + n, c + n, a - n, b - n, c - n])
+            mesh = self.spec.add_mesh(name=f"{name}_{k}", uservert=prism.ravel().tolist())
+            mesh.inertia = mujoco.mjtMeshInertia.mjMESH_INERTIA_SHELL
+            geom = self.spec.worldbody.add_geom(name=f"{name}_{k}_geom", type=mujoco.mjtGeom.mjGEOM_MESH,
+                                                meshname=f"{name}_{k}", rgba=[1.0, 0.0, 0.0, 0.3], contype=0,
+                                                conaffinity=_ENV_AFFINITY)
+            added += [geom, mesh]
+        if not added:
+            print("[!] VirtualFixture has only degenerate triangles; ignored.")
+            return None
         try:
             self._recompile()
         except Exception as exc:
             print(f"[!] VirtualFixture rejected by MuJoCo ({str(exc).splitlines()[0]}); ignored.")
-            self.spec.delete(geom)
-            self.spec.delete(mesh)
+            for el in added:
+                self.spec.delete(el)
             self._recompile()
             return None
         return name

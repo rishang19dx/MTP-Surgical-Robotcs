@@ -65,3 +65,6 @@ ReconstructionPipeline/.fem_cache/
 data/sample_totalsegmentator_patient/meshes/patient_fem_skin.obj
 checkpoints/*.npz
 checkpoints/vec_ppo/*.zip
+
+# MuJoCo engine warning log (written to the working directory)
+MUJOCO_LOG.TXT

@@ -12,6 +12,8 @@ an explicit P->RAS matrix.  Each patient dict carries a CT-derived dorsal skin h
 
 from typing import Tuple, Dict, Optional, List, Any
 
+import os
+import glob
 import numpy as np
 import nibabel as nib
 
@@ -764,10 +766,30 @@ class PatientAssetGenerator:
             o3d.io.write_triangle_mesh(torso_path, o3d_torso)
             print(f"[+] Exported patient torso skin mesh to: {torso_path} ({len(verts)} verts, {len(faces)} faces)")
 
+        # 3. PyBullet copies of other frame-P meshes (the L4 target): derived from the frame-P file with the
+        #    canonical mapping, never copied verbatim (DEC-052 data bug: the L4 PB file was a frame-P copy).
+        for p_path in sorted(glob.glob(os.path.join(output_mesh_dir, "*_ras.obj"))):
+            pb_path = p_path[: -len("_ras.obj")] + ".obj"
+            if os.path.basename(pb_path) not in ("patient_lumbar_spine.obj", "patient_torso_skin.obj"):
+                write_pybullet_copy(p_path, pb_path)
+
         return {
             "spine": spine_path,
             "torso_skin": torso_path,
         }
+
+
+def write_pybullet_copy(p_obj_path: str, pb_obj_path: str) -> None:
+    """Write the PyBullet-frame (metres, Z-up) copy of a frame-P (mm) OBJ, vertex order preserved."""
+    import sys
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from surgical_physics_bridge.src.coordinates import patient_to_pybullet_points
+    from surgical_physics_bridge.src.obj_io import read_obj, write_obj
+    v, f = read_obj(p_obj_path)
+    write_obj(pb_obj_path, patient_to_pybullet_points(v), f)
+    print(f"[+] Wrote PyBullet copy {pb_obj_path} from {p_obj_path}")
 
 
 if __name__ == "__main__":

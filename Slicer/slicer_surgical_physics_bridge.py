@@ -107,6 +107,16 @@ class SlicerSurgicalPhysicsBridge:
         self.skin_live = None      # (N, 3) float32 array bound to the skin-patch vtkPoints (deep=False)
         self.skin_deformed = False
         self._skin_reload_size = None
+        # Opt-in snapshots for demonstrations (DEC-039 style: Qt grab() from inside Slicer, Wayland-safe).
+        # MTP_SLICER_SNAPSHOT_DIR: save the main window every MTP_SLICER_SNAPSHOT_S s (default 5) with the latest
+        # telemetry in snapshots.csv; MTP_SLICER_EXIT_AFTER_S: quit Slicer after that many seconds.
+        self.snapshot_dir = os.environ.get("MTP_SLICER_SNAPSHOT_DIR", "")
+        self.snapshot_period_s = float(os.environ.get("MTP_SLICER_SNAPSHOT_S", "5"))
+        self.exit_after_s = float(os.environ.get("MTP_SLICER_EXIT_AFTER_S", "0"))
+        self.t_start = time.time()
+        self.last_snapshot = 0.0
+        self.snapshot_index = 0
+        self.last_telemetry = {}
 
         self._setup_layout()
         self._setup_nodes()
@@ -299,8 +309,32 @@ class SlicerSurgicalPhysicsBridge:
             self.is_connected = False
             self._warn_once("connect", f"Waiting for server at {self.host}:{self.port} ({e})")
 
+    def _maybe_snapshot(self, now):
+        if self.exit_after_s > 0 and now - self.t_start >= self.exit_after_s:
+            print("[*] MTP_SLICER_EXIT_AFTER_S reached; quitting Slicer.")
+            self.disconnect()
+            slicer.util.exit(0)
+            return
+        if not self.snapshot_dir or not self.is_connected or now - self.last_snapshot < self.snapshot_period_s:
+            return
+        self.last_snapshot = now
+        os.makedirs(self.snapshot_dir, exist_ok=True)
+        name = f"slicer_{self.snapshot_index:04d}.png"
+        lm = slicer.app.layoutManager()
+        widget = lm.viewport() if lm is not None else slicer.util.mainWindow()   # the views only, no panels
+        widget.grab().save(os.path.join(self.snapshot_dir, name))
+        t = self.last_telemetry
+        new = not os.path.exists(os.path.join(self.snapshot_dir, "snapshots.csv"))
+        with open(os.path.join(self.snapshot_dir, "snapshots.csv"), "a") as f:
+            if new:
+                f.write("file,elapsed_s,normal_force_n,indentation_mm,in_contact,skin_deformed\n")
+            f.write(f"{name},{now - self.t_start:.2f},{t.get('normal_force_n', '')},{t.get('indentation_mm', '')},"
+                    f"{t.get('in_contact', '')},{self.skin_deformed}\n")
+        self.snapshot_index += 1
+
     def on_timer_tick(self):
         now = time.time()
+        self._maybe_snapshot(now)
         if not self.is_connected:
             if now - self.last_connect_attempt >= 1.0:
                 self.last_connect_attempt = now
@@ -340,6 +374,11 @@ class SlicerSurgicalPhysicsBridge:
             self._update_skin(msg)
 
         msg = latest.get("Telemetry")
+        if isinstance(msg, pyigtl.StringMessage):
+            try:
+                self.last_telemetry = json.loads(msg.string)
+            except (ValueError, TypeError):
+                pass
         if isinstance(msg, pyigtl.StringMessage) and now - self.last_telemetry_log >= 5.0:
             self.last_telemetry_log = now
             try:

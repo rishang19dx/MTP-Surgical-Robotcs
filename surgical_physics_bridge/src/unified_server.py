@@ -121,6 +121,7 @@ BENCH_CLIENT_SRC = (
 )
 SCAN_MODES = ["orbital_l4", "raster_l4", "orbital", "raster", "nbv", "diffusion", "cfm", "interactive"]
 FEM_SKIN_OBJ = "patient_fem_skin.obj"
+TISSUE_BACKENDS = ("fem", "kelvinlet", "mujoco-flex")   # mujoco-flex: demo only (DEC-053)
 SKIN_CHANGE_MIN_MM = 0.01
 MAX_OUTGOING_QUEUE = 64
 
@@ -141,6 +142,7 @@ class UnifiedSurgicalBridgeServer:
         rate_window: int = 60000,
         tissue_backend: str = "fem",
         physics_backend: str = "pybullet",
+        flex_element_mm: float = 8.0,
     ):
         if physics_mode not in ("process", "thread", "inline"):
             raise ValueError(f"physics_mode must be process|thread|inline, got {physics_mode}")
@@ -180,14 +182,25 @@ class UnifiedSurgicalBridgeServer:
         if gui:
             self._start_viewer()
 
+        if tissue_backend not in TISSUE_BACKENDS:
+            raise ValueError(f"tissue_backend must be one of {TISSUE_BACKENDS}, got {tissue_backend}")
+        self.tissue_backend = tissue_backend
+        self.flex_tissue = None
         print(f"[*] Initializing Ultrasound Reconstruction Environment (dorsal, {tissue_backend} tissue)...")
         self.env = UltrasoundReconstructionEnv(
             patient_data=self.patient_dir,
             target_vertebra="vertebrae_L4",
             max_steps=10000,
             device=self.device,
-            tissue_backend=tissue_backend,
+            tissue_backend="fem" if tissue_backend == "mujoco-flex" else tissue_backend,
         )
+        if tissue_backend == "mujoco-flex":
+            # DEC-053: demo-only live MuJoCo flex tissue in its own .venv-mj4 process, on the FEM model's geometry.
+            from ReconstructionPipeline.simulation.mujoco_flex_tissue import MujocoFlexTissueModel
+            self.flex_tissue = MujocoFlexTissueModel(self.env.patient_data, geometry=self.env.tissue_model,
+                                                     element_size_mm=flex_element_mm, device=self.device)
+            self.env.tissue_model = self.flex_tissue
+            self.env.adm_iters = 1      # the live force is fresh once per step, so one admittance iteration per step
         self.skin_vertices, self.skin_tris = self._skin_patch()
         self.skin_obj_path = self._export_skin_obj()
         self._last_skin_sent: Optional[np.ndarray] = None
@@ -636,6 +649,8 @@ class UnifiedSurgicalBridgeServer:
         if self.backend is not None:
             self.backend.disconnect()
             self.backend = None
+        if self.flex_tissue is not None:
+            self.flex_tissue.close()
         try:
             self.server.stop()
         except Exception:
@@ -653,8 +668,11 @@ def main():
     parser.add_argument("--physics-mode", choices=["process", "thread"], default="process",
                         help="Run the 1 kHz physics loop in its own process (default) or in a thread")
     parser.add_argument("--physics-hz", type=float, default=1000.0, help="Physics loop rate (Hz)")
-    parser.add_argument("--tissue-backend", choices=["fem", "kelvinlet"], default="fem",
-                        help="Soft-tissue model: precomputed GPU FEM (default) or analytic Kelvinlet")
+    parser.add_argument("--tissue-backend", choices=list(TISSUE_BACKENDS), default="fem",
+                        help="Soft-tissue model: precomputed GPU FEM (default), analytic Kelvinlet, or mujoco-flex "
+                             "(DEMO ONLY, DEC-053: live MuJoCo 4 flex in .venv-mj4)")
+    parser.add_argument("--flex-element-mm", type=float, default=8.0,
+                        help="Element size of the mujoco-flex tissue mesh (mm; 8 runs near real time on the laptop)")
     parser.add_argument("--physics-backend", choices=list(BACKENDS), default="pybullet",
                         help="Rigid-body engine of the 1 kHz loop (robot, probe, fixtures, viewer)")
     parser.add_argument("--benchmark-seconds", type=float, default=0.0,
@@ -681,6 +699,7 @@ def main():
         physics_hz=args.physics_hz,
         tissue_backend=args.tissue_backend,
         physics_backend=args.physics_backend,
+        flex_element_mm=args.flex_element_mm,
     )
     if client is not None:
         t_wait = time.time()

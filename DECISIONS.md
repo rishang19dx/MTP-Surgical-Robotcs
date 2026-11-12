@@ -53,7 +53,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-053` | MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend | **Gate failed** (demo only) |
 | **Nov 2026** | `DEC-054` | Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained | **Accepted** |
 | **Nov 2026** | `DEC-055` | Superficial Fascia Layer in the B-mode Simulator (Literature Parameters) | **Accepted** |
-| **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **Pre-registered** |
+| **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **G and H4 pass, H5 fails** |
 
 ---
 
@@ -1725,3 +1725,46 @@ A chronological record of all architectural, research, algorithmic, and engineer
     simulator cannot reproduce. This is the DEC-054 target.
   - **H5 fails**: the compression at 1–5 N, about 1 mm, is too small for a force-aware correction to beat a constant
     bias correction by a pixel. That is reportable as such.
+* **Result (2026-11-12): G and H4 pass; H5 fails.** Source: `results/muscle_thickness_20261112_151349.md` / `.json`
+  (study at the pre-registration commit `563d540`; analysis by the frozen `muscle_thickness_analysis.py`).
+  - **Test patients scored.** s0029 and s0006 have 6 of 6 sites each and are measurable. s0034 has 2 scored sites
+    with detection 0.00 at ≤ 2 N: not measurable, reported only. s0030 has 0 scored sites (window rule). **H4
+    therefore rests on 2 held-out patients × 6 sites.**
+
+    | Criterion | Value | Verdict |
+    | :--- | :--- | :--- |
+    | G | detection 1.00; median \|error\| at ≤ 2 N 1.51 mm (s0029 0.75, s0006 2.26) | pass |
+    | H4a | image slope, deformable: s0029 −0.302, s0006 −0.245 mm/N | pass |
+    | H4b | image slope, rigid: +0.019, +0.038 mm/N | pass |
+    | H4c | tracking gap per patient 0.057, 0.094 mm/N; median 0.075 | pass |
+    | H5 | k = −0.087 mm/N (train fit). Test median \|error\|: uncorrected 0.75, intercept-only 1.32, force-aware 1.31 mm (gain 0.01) | **fail** |
+
+  - **Inference (H4).**
+    - On deformable tissue the paraspinal thickness read from the simulated B-mode falls by 0.25–0.30 mm per N
+      on unseen patients, and it tracks the true fascia-to-bone compression (true slopes −0.339 and −0.226 mm/N).
+    - With the same probe poses and rigid tissue, the reading does not change.
+    - Over 1–5 N that is about 1–1.2 mm, roughly 3 axial pixels. This is the first measurement in this project
+      whose result changes with soft-tissue deformation and that a rigid simulator does not reproduce. It is the
+      DEC-054 target.
+    - The rigid control is flat by construction; the falsifiable parts were measurability and tracking (G, H4a,
+      H4c).
+  - **Inference (H5): a population force correction does not transfer to unseen anatomy here.** Both fitted
+    corrections make the held-out readings worse than none, and force adds nothing over a constant.
+  - **Post-hoc diagnosis** (after the verdict; not a criterion, it does not change it):
+    - Within a site, the force effect has the expected sign: the median within-site slope of (ref − image) on the
+      33 train sites is +0.226 mm/N.
+    - The pooled fit has the wrong sign because the site-to-site measurement offsets (patient bias −0.57 to
+      +2.26 mm) are larger than the whole 1–5 N force effect (about 1 mm). A correction without a per-site
+      reference cannot separate them.
+    - Dropping s0024 moves k only to −0.020 mm/N.
+    - A per-site correction (for example a reading at minimal force as each site's own reference) would be a new
+      hypothesis with its own pre-registration.
+  - **Limits.**
+    - Two measurable held-out patients; one speckle seed.
+    - The fascia is placed from the segmentation label (DEC-055), so the superficial boundary is easier to find than
+      in real images.
+    - The deep fascia face is about twice as reflective as the literature value.
+    - The linear FEM at 1–5 N is within 5 % of Neo-Hookean only up to about 2 N (DEC-047).
+    - Thick backs (s0014, s0030, and s0024 and s0034 in practice) cannot be measured in a 75 mm image. That matches
+      clinical experience with deep paraspinals, but it removes the patients where compression is largest.
+    - No comparison with published probe-pressure effects yet: no verified source has been found.

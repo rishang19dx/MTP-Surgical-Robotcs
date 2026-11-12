@@ -54,7 +54,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-054` | Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained | **Accepted** |
 | **Nov 2026** | `DEC-055` | Superficial Fascia Layer in the B-mode Simulator (Literature Parameters) | **Accepted** |
 | **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **G and H4 pass, H5 fails** |
-| **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Neither gap counts: do not move on** |
 
 ---
 
@@ -1815,3 +1815,32 @@ A chronological record of all architectural, research, algorithmic, and engineer
   mean force. Path length is not recorded by the evaluator and is not reported.
 * **Limits stated now**: 2 seeds; 2 patients (the training patients); one task; laptop scale (300k steps). A null
   result says "no gap at this scale for navigation", not "no gap for any policy".
+
+* **Result** (12 Nov 2026; `results/nav_transfer_20261112_183531.md`, inputs `results/vec_eval_nav_20261112_183254.json`
+  (aware), `…_183417.json` (rigid), `…_183530.json` (kinematic)). The run finished without errors; all 4 trainings
+  completed within the 3 h timeout. Nothing in the plan was changed.
+  - **Deformation-only gap: −1.6 / +0.0 points (mean −0.8). Does not count.**
+  - **SonoGym gap: +18.8 / +4.7 points (mean +11.7). Does not count** (below 15 points on the mean; the seeds
+    disagree in size).
+  - **Decision (pre-registered rule): do not move on to policy outcomes for navigation.**
+  - Reported, not decisive:
+    - Kinematic-trained and aware-trained policies behave alike in **every** deployment condition. On deformable
+      tissue both reach 0.98–1.00 success, 1.2–2.0 mm final error and 5.1–6.3 steps.
+    - Rigid-trained policies lose 20.3 / 4.7 points on deformable tissue and 25.0 / 7.8 points on kinematic
+      tissue, so their drop comes from the indentation, not the warp. Seed 0 also needs 14.9 steps (vs 5–6) and
+      ends 5.9 mm off.
+    - In the other direction, aware- and kinematic-trained policies lose 4.7–26.6 points when deployed on the
+      skin (rigid).
+    - Mean force is 3.97–4.00 N for every policy, because the navigation task holds the 4 N target force and the
+      policy cannot change it (`mtp_gym/tasks/navigation.py`, `map_action`).
+  - **Limits, in addition to those stated above:**
+    - **Ceiling.** Aware- and kinematic-trained policies are at 0.98–1.00 on deformable tissue, so a positive
+      deformation-only gap of 15 points was not reachable. Any gap would have had to come from a kinematic-trained
+      policy that fails.
+    - **Fixed force.** At a fixed 4 N, the warp is a small, consistent image change (0.011 vs 0.068 mean
+      |B-mode difference|, see above). Navigation cannot show a policy choosing a force because of the tissue.
+  - **Reading.** For navigation on its training patients, at laptop scale, a policy trained on rigid tissue with
+    an indented probe behaves the same as one trained on deformable tissue. Indentation, which any rigid simulator
+    can model, accounts for the whole difference from SonoGym-style training (which is itself below the
+    threshold).
+

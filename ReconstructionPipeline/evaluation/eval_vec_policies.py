@@ -111,7 +111,7 @@ def main(argv=None):
     ap.add_argument("--patients", default="test")
     ap.add_argument("--episodes", type=int, default=16)
     ap.add_argument("--ppo", nargs="*", default=[])
-    ap.add_argument("--deformation", default="aware", choices=["aware", "unaware", "rigid"])
+    ap.add_argument("--deformation", default="aware", choices=["aware", "unaware", "rigid", "kinematic"])
     ap.add_argument("--bmode-physics", default="depth", choices=["depth", "legacy"])
     ap.add_argument("--seed", type=int, default=1000)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "results"))

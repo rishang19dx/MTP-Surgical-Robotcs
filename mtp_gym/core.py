@@ -12,6 +12,8 @@ is a batched tensor operation over the envs of one patient (and a Python loop ov
      the target force may come from the action (force-scan task) or a constant;
   4. tissue solve at the final indentation (`BatchedFEMSolver`), indented face pose, backward-warped CT
      slice; "rigid" mode slices the undeformed CT at the skin pose (SonoGym-style rigid patient);
+     "kinematic" mode slices the undeformed CT at the indented face pose (the probe presses into rigid tissue;
+     DEC-057 control that separates indentation from deformation);
   5. model-based B-mode, acoustic coupling kappa from force and beam tilt (dB loss before display),
      image-only confidence map.
 
@@ -224,8 +226,8 @@ class UltrasoundVectorEnv(VectorEnv):
         device: Optional[torch.device] = None,
         seed: Optional[int] = None,
     ):
-        if deformation_mode not in ("aware", "unaware", "rigid"):
-            raise ValueError(f"deformation_mode must be aware|unaware|rigid, got {deformation_mode}")
+        if deformation_mode not in ("aware", "unaware", "rigid", "kinematic"):
+            raise ValueError(f"deformation_mode must be aware|unaware|rigid|kinematic, got {deformation_mode}")
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_envs = int(num_envs)
         self.deformation_mode = deformation_mode
@@ -470,13 +472,18 @@ class UltrasoundVectorEnv(VectorEnv):
             it = self.approach_iters if approach else self.adm_iters
             es = self.e_scale[g]
             pre = None
-            if self.augment == "fem" and self.deformation_mode != "rigid":
+            if self.augment == "fem" and self.deformation_mode not in ("rigid", "kinematic"):
                 pre = self.preload[g, :3 * len(ps.model.free_skin)]
             d, d_fc = self._regulate(ps, t_skin, rel, self.target_force[g], es, it, pre)
             self.indent_rel[g] = (d - d_fc).double()
-            if self.deformation_mode == "rigid":
+            if self.deformation_mode in ("rigid", "kinematic"):
                 f = ps.solver.force(t_skin, d, e_scale=es)
-                t_img = t_skin
+                if self.deformation_mode == "rigid":
+                    t_img = t_skin
+                else:   # DEC-057: indented face as in "aware", but the tissue is not deformed
+                    t_img = t_skin.clone()
+                    b = t_skin[:, :3, 1] / t_skin[:, :3, 1].norm(dim=1, keepdim=True)
+                    t_img[:, :3, 3] = t_skin[:, :3, 3] + d.to(torch.float64)[:, None] * b
                 sl = ps.ct.extract_slices(t_img, interpolation="bilinear")
             else:
                 st = ps.solver.solve(t_skin, d, e_scale=es, stiffness=False, preload=pre,

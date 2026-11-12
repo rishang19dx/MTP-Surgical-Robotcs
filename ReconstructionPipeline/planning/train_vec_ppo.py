@@ -75,7 +75,7 @@ def main(argv=None):
     ap.add_argument("--num-envs", type=int, default=32)
     ap.add_argument("--timesteps", type=int, default=200_000)
     ap.add_argument("--max-steps", type=int, default=None)
-    ap.add_argument("--deformation", default="aware", choices=["aware", "unaware", "rigid"])
+    ap.add_argument("--deformation", default="aware", choices=["aware", "unaware", "rigid", "kinematic"])
     ap.add_argument("--bmode-physics", default="depth", choices=["depth", "legacy"])
     ap.add_argument("--e-scale-range", default="")
     ap.add_argument("--augment", default="none", choices=["none", "fem", "warp", "imaging"],

@@ -81,6 +81,32 @@ def test_rigid_mode_images_at_skin(patient):
     assert bool((fr.force_n > 1.0).all())                 # force is still simulated (controller in contact)
 
 
+def _frame(patient, mode):
+    env = UltrasoundVectorEnv(2, FreeScanTask(), [patient], deformation_mode=mode, seed=4)
+    env.reset(seed=4, options={"init_pose": [-20.0, -45.0, 0.0, 0.0]})
+    return env.last_frame
+
+
+def test_kinematic_mode_presses_into_rigid_tissue(patient):
+    """DEC-057 control: the probe face is indented as in "aware", but the CT is not warped. It isolates the
+    deformation from the indentation (kinematics)."""
+    aware, kin, rigid = _frame(patient, "aware"), _frame(patient, "kinematic"), _frame(patient, "rigid")
+    assert bool((kin.indentation_mm > 0).all())
+    assert torch.allclose(kin.t_img, aware.t_img)                       # same indented image plane as "aware"
+    assert not torch.allclose(kin.t_img, kin.t_skin)                    # ... unlike "rigid" (probe on the skin)
+    assert torch.equal(kin.t_backproject, kin.t_img)
+    assert torch.allclose(kin.force_n, rigid.force_n) and torch.allclose(kin.force_n, aware.force_n, rtol=1e-4)
+    d_warp = float((kin.bmode - aware.bmode).abs().mean())             # same pose, warp only
+    d_pose = float((kin.bmode - rigid.bmode).abs().mean())             # same tissue, indentation only
+    print(f"\n[kinematic] mean |B-mode diff| vs aware {d_warp:.4f}, vs rigid {d_pose:.4f}")
+    assert d_warp > 0.0 and d_pose > 0.0
+
+
+def test_unknown_deformation_mode_is_rejected(patient):
+    with pytest.raises(ValueError):
+        UltrasoundVectorEnv(1, FreeScanTask(), [patient], deformation_mode="kinematik")
+
+
 def test_stiffness_randomisation(patient):
     """Wider e_scale -> different forces at the same commanded indentation."""
     env = UltrasoundVectorEnv(8, FreeScanTask(), [patient], e_scale_range=(0.5, 2.0), seed=3)

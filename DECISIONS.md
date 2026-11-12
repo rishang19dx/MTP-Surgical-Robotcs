@@ -54,6 +54,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-054` | Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained | **Accepted** |
 | **Nov 2026** | `DEC-055` | Superficial Fascia Layer in the B-mode Simulator (Literature Parameters) | **Accepted** |
 | **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **G and H4 pass, H5 fails** |
+| **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -1768,3 +1769,49 @@ A chronological record of all architectural, research, algorithmic, and engineer
     - Thick backs (s0014, s0030, and s0024 and s0034 in practice) cannot be measured in a 75 mm image. That matches
       clinical experience with deep paraspinals, but it removes the patients where compression is largest.
     - No comparison with published probe-pressure effects yet: no verified source has been found.
+
+### `DEC-057`: Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED
+* **Date**: November 12, 2026 (branch `thread-b-muscle`). Committed **before** any of the training runs below.
+* **Context**: DEC-054 step 2. Before modelling policy outcomes, check whether a policy *behaves* differently
+  depending on the tissue model it was trained on. The user chose, in the interview of 12 Nov:
+  - a **transfer gap on the same patients** (train on one tissue model, deploy on another), so that anatomy
+    generalisation does not confound it;
+  - **three training conditions**, so that the gap can be split into indentation and deformation;
+  - **navigation**, the only task where laptop PPO learns (100 % on its training patients, DEC-045; reconstruction
+    and force-scan PPO do not beat random, DEC-051);
+  - the **strict decision rule** below.
+* **New gym mode `kinematic`** (`mtp_gym/core.py`):
+  - the probe face is indented exactly as in `aware`, and the force comes from the FEM, but the CT is sliced
+    **unwarped**: the probe presses into rigid tissue;
+  - `rigid` (SonoGym-style) puts the probe on the skin, with no indentation;
+  - `aware` is the deformable default.
+  - Tests: `test_gym_api.py::test_kinematic_mode_presses_into_rigid_tissue`. Same image plane and force as
+    `aware`; the B-mode differs from `aware` by the warp only and from `rigid` by the indentation only.
+  - **Already known before the runs:** at one pose, the mean |B-mode difference| is 0.011 for warp only and 0.068
+    for indentation only (printed by that test). Indentation dominates the image, as in DEC-051. The expectation is
+    therefore a small deformation-only gap; it is stated here so that it cannot be claimed as a surprise.
+* **Training**: navigation (`MTP/Nav-v0`, hidden offset DEC-045), patients sample and s0015, 300k steps, 32 envs,
+  depth B-mode, no augmentation, seeds 0 and 1 (the DEC-049 settings).
+  - **aware**: the existing `nav_aware_depth_s{0,1}_laptop2p_offset` checkpoints (DEC-049; commits `dc4abd5`,
+    `6420d21`). They are not retrained: since then the environment changed only by opt-in features (augmentation,
+    DEC-049; fascia, DEC-055, tested as unchanged when off), and every policy is evaluated at one commit.
+  - **rigid** and **kinematic**: new runs `nav_{rigid,kinematic}_depth_s{0,1}_laptop2p_transfer`.
+* **Evaluation**: every policy is deployed in all three conditions on the same 2 patients, 32 episodes each
+  (64 per policy and condition), evaluation seed 1000, with the random, blind and oracle baselines
+  (`eval_vec_policies.py`).
+  - Script: `scripts/run_nav_transfer.sh`.
+  - Analysis: `ReconstructionPipeline/evaluation/nav_transfer_analysis.py`, frozen at this commit; writes
+    `results/nav_transfer_<stamp>.md`.
+* **Primary metric**: success when deployed on **deformable** tissue.
+  - SonoGym gap_s = success(aware-trained, seed s) − success(rigid-trained, seed s).
+  - Deformation-only gap_s = success(aware-trained, seed s) − success(kinematic-trained, seed s).
+  - A gap **counts** if |mean over the 2 seeds| ≥ 15 points and both seeds have the same sign.
+* **Decision rule**: move on to policy outcomes (step 3) **only if the deformation-only gap counts**.
+  - If only the SonoGym gap counts, the finding is "indentation matters". Any rigid simulator can fix that by
+    letting the probe sink in, so it does not justify soft tissue.
+  - If neither counts: for navigation, training on a rigid simulator transfers to deformable tissue on the same
+    patients.
+* **Reported, not decisive**: the other two deployment conditions, final position and yaw error, episode length,
+  mean force. Path length is not recorded by the evaluator and is not reported.
+* **Limits stated now**: 2 seeds; 2 patients (the training patients); one task; laptop scale (300k steps). A null
+  result says "no gap at this scale for navigation", not "no gap for any policy".

@@ -51,6 +51,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-041`–`DEC-051` | RSS direction, gym, B-mode physics, pre-registered studies and their outcomes | see each record |
 | **Nov 2026** | `DEC-052` | MuJoCo Rigid-Body Backend Beside PyBullet (Stage 1); MuJoCo Flex Tissue Gated Behind a Study (Stage 2) | **Accepted** (Stage 1 done) |
 | **Nov 2026** | `DEC-053` | MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend | **Gate failed** (demo only) |
+| **Nov 2026** | `DEC-054` | Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained | **Accepted** (study not yet pre-registered) |
 
 ---
 
@@ -1567,3 +1568,45 @@ A chronological record of all architectural, research, algorithmic, and engineer
   project's standard 4 mm mesh to match DEC-047; a finer mesh might reduce the inversion but would raise G4's
   already-failing cost further). Re-opening Stage 2 would need a new pre-registered study, not a rerun of this
   one.
+
+### `DEC-054`: Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained
+* **Date**: November 12, 2026 (branch `thread-b-muscle`, from `mujoco-bridge`).
+* **Context**: after the MuJoCo flex gate failed (DEC-053), the user asked "what do we do now?" and was grilled
+  (QUIZME, interview). The goal, confirmed: SonoGym's tasks with soft-tissue deformation added, and *findings*
+  about what deformation changes ("observations" in the scientific sense, not the RL observation space). No task has
+  yet shown such a change (DEC-048, DEC-051).
+* **User decisions (2026-11-12)**:
+  1. **Measurement outcome first.** The paper's deformation finding starts with a measurement the robot makes
+     (paraspinal muscle thickness read from the B-mode under probe force), not a learned policy's outcome. At laptop
+     scale PPO does not learn yet (DEC-051), and the server is not reachable.
+  2. **Then a check of policy behaviour, deformable vs rigid tissue.** Only if policies behave differently does the
+     work move on to modelling the policy outcome (thread A at scale). The task and design of that check are decided
+     after the measurement study. One data point exists: reconstruction policies scored almost the same on deformable
+     and rigid tissue (`results/vec_eval_recon_20261108_020410.md` vs `_020617.md`).
+  3. **A fascia layer in the B-mode is accepted.** The 8 Nov study failed only on measurability, because the CT-derived
+     B-mode does not render the fascia (DEC-051). A thin echogenic layer will be added at the boundary of the
+     TotalSegmentator muscle label, identical in the rigid and deformable runs. Its thickness and brightness come
+     from literature values fixed before the run. The detector is re-frozen on training patients only.
+  - Out of scope for now: thread A at scale, MuJoCo flex, any new physics engine, tuning on held-out patients.
+  - Deadline: the study done by about 22 Nov, so the Stage 1 abstract (4 Dec) can be written.
+* **Erratum to DEC-051 (the "negative compression" anomaly): explained, a measurement artefact, not the FEM.**
+  Source: `results/muscle_window_check_20261112_142624.md` (`ReconstructionPipeline/evaluation/muscle_window_check.py`).
+  - The ground-truth thickness counts muscle-label pixels in the image window, which ends 75 mm below the probe
+    face.
+  - In the three thick backs the muscle's deep edge reaches the end of the window. As the probe presses in, the
+    window moves deeper and more muscle comes into view, so the count grows with force.
+  - A (pose, force) counts as truncated when at least half of the central columns have muscle in the last 3 rows.
+    The truncated share is 87 % for s0030, 60 % for s0014, 43 % for s0024, and 0 % for the other nine patients.
+  - Over the poses that are untruncated at every force, the compression is positive: s0024 +0.75 mm, s0014
+    +0.19 mm. s0030 has no such pose. The nine untruncated patients compress by 0.57–1.32 mm from 1 to 5 N.
+  - The same truncation also hid the bone: in those poses the bone lies below the window too, which is why the image
+    detection rate was 0 in these backs.
+* **Decision for the new study: a window rule, not a deeper image.** A pose is scored only if the ground-truth
+  muscle is untruncated at every force; poses that fail the rule are reported, not scored. Expected effect: s0030
+  drops out, and s0014 and s0024 contribute 2 and 3 of 6 poses.
+  - *Alternative rejected:* a deeper image for this study. It would change the simulated depth range (attenuation,
+    TGC) and the detector, so the study would no longer measure the gym's B-mode.
+* **Next**:
+  1. Fascia layer (literature parameters, sourced).
+  2. Detector v3, developed on training patients only, then frozen.
+  3. Pre-register the study (gate, H4, H5, the window rule) as its own DEC entry before running it.

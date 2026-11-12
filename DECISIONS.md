@@ -1389,7 +1389,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
     parent commit and the refactor, run back to back on the same day, showed no difference, but it is not in
     `results/`. The JSON was also taken from the tree before the commit. Repeat on an idle machine at the
     commit, with the parent commit alongside.
-  - **Data bug found, not fixed**: `meshes/patient_l4_vertebra.obj` is in frame P (mm) while the other PyBullet
+  - **Data bug found (fixed in addendum 2)**: `meshes/patient_l4_vertebra.obj` is in frame P (mm) while the other PyBullet
     meshes are in the PB frame (metres). PyBullet draws it about 1000× too large. The MuJoCo viewer skips it.
 * **Consequences / limitations**:
   - The physics process pins itself to the highest-numbered CPU. On the i5-1240P that is an efficiency core.
@@ -1433,6 +1433,23 @@ A chronological record of all architectural, research, algorithmic, and engineer
      idle-machine re-measurement above is still owed and must now include this control change.
   7. Full suite after the review: 195 passed, 3 xfailed (before: 184 passed, 2 xfailed). The new xfail is the
      strict PyBullet case of item 1.
+* **Addendum 2 (2026-11-12, "fix all")** — the open items of Stage 1:
+  1. **Concave fixtures.** Each fixture triangle is now its own convex prism (`FIXTURE_SHELL_M` = 4 mm thick,
+     centred on the triangle), so the union follows the surface. This replaces "concave fixtures collide as their
+     convex hull".
+     - `test_concave_fixture_leaves_its_opening_free` (U-channel, probe descends into the opening) failed on
+       MuJoCo before the change and passes on both engines after it.
+     - `test_flat_fixture_blocks_the_probe` replaces the test that pinned MuJoCo's rejection of a flat sheet.
+     - Limits: one geom per triangle, at most 2,000 triangles per fixture (larger meshes are refused with a
+       message), and the shell is 4 mm thick, not a solid. The recompile cost for large fixtures was not measured.
+  2. **L4 mesh frame bug fixed.**
+     - `patient_l4_vertebra.obj` was a frame-P (mm) copy of `patient_l4_vertebra_ras.obj`, and no script wrote
+       it.
+     - `prepare_patient_assets.export_patient_meshes` now writes the PyBullet copy of every other `*_ras.obj`
+       with `patient_to_pybullet_points` (`write_pybullet_copy`), and the sample patient's file was regenerated.
+     - `test_pybullet_meshes_are_in_the_pybullet_frame` failed before and passes now. Both viewers draw L4 in
+       place.
+  3. **Rate** after the control change: see the DEC-053 results (measured once the flex study had finished).
 
 ### `DEC-053`: MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend
 * **Date**: November 12, 2026 (branch `mujoco-bridge`). This entry is committed **before** the study is run on any

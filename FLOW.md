@@ -29,7 +29,7 @@ before you change an entry point or a data route. All paths are relative to the 
 
 Server `--mode` choices are `orbital_l4` (default), `raster_l4`, `orbital`, `raster`, `nbv`, `diffusion`, `cfm` and
 `interactive` (hold pose). Other server flags: `--port` (18944), `--urdf` (default Franka Panda), `--patient-dir`,
-`--gui`, `--fps`, `--physics-mode {process,thread}`, `--physics-hz`, `--tissue-backend {fem,kelvinlet}`,
+`--gui`, `--fps`, `--physics-mode {process,thread}`, `--physics-hz`, `--tissue-backend {fem,kelvinlet,mujoco-flex}` (mujoco-flex: demo only, DEC-053), `--flex-element-mm`,
 `--physics-backend {pybullet,mujoco}` (default `pybullet`),
 `--benchmark-seconds` and `--no-benchmark-client`.
 
@@ -98,7 +98,8 @@ sequenceDiagram
   messages. They differ in these ways:
   - PyBullet drives the arm with position motors (kinematic in effect); MuJoCo uses torque control, so the
     tissue force deflects the arm.
-  - A MuJoCo fixture costs one model recompile and collides as a convex hull.
+  - A MuJoCo fixture costs one model recompile; each triangle is a 4 mm convex prism, so concave and flat
+    keep-out surfaces collide as the surface (at most 2000 triangles).
   - The MuJoCo viewer is `mujoco.viewer.launch_passive`; it updates the skin mesh in place.
   - Torque limits: PyBullet's motors allow 150 N·m per joint; MuJoCo uses the URDF limits (87 / 12 N·m) and
     adds 0.1 kg·m² of joint armature.
@@ -318,6 +319,11 @@ cp demonstrations/demo_fem_soft_body.mp4 demonstrations/report/
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20 --physics-backend mujoco
 MTP_VIEWER_SNAPSHOT_DIR=.agents/shots MTP_VIEWER_SNAPSHOT_S=5 \
   ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui --physics-backend mujoco
+
+# 14. MuJoCo flex tissue (DEC-053): worker tests, gate study, live demo with Slicer (needs .venv-mj4)
+./.venv/bin/python -m pytest ReconstructionPipeline/tests/test_mujoco_flex.py -q
+./.venv/bin/python ReconstructionPipeline/evaluation/mujoco_flex_fidelity.py        # results/mujoco_flex_fidelity_*
+bash scripts/demo_mujoco_flex_slicer.sh --seconds 60                                # demonstrations/mujoco_flex/
 
 # 9. Remote GPU host (must be inside */workspace/rishang/*)
 rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/

@@ -14,15 +14,16 @@
 - **Run Tests**: `./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -v`
 - **Run 6-Policy Benchmark**: `./.venv/bin/python ReconstructionPipeline/evaluation/benchmark_runner.py --patient-dir data/sample_totalsegmentator_patient --num-trials 3 --policies raster,orbital,nbv,ppo,cfm,diffusion --soft-body`. Without `--patient-dir` the runner uses a synthetic phantom. A missing checkpoint for a requested learned policy is an error; use `--heuristics-only` if no checkpoints exist.
 - **Generate Patient Assets**: `./.venv/bin/python -m ReconstructionPipeline.data.prepare_patient_assets --export-totalseg data/sample_totalsegmentator_patient`. Without arguments it only builds the synthetic phantom smoke check.
-- **Launch Server**: `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 [--gui] [--tissue-backend fem|kelvinlet] [--physics-backend pybullet|mujoco] [--urdf <robot.urdf>]`
+- **Launch Server**: `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 [--gui] [--tissue-backend fem|kelvinlet|mujoco-flex] [--physics-backend pybullet|mujoco] [--urdf <robot.urdf>]`
 - **Measure Physics Rate**: `./.venv/bin/python surgical_physics_bridge/src/unified_server.py --benchmark-seconds 20 [--physics-backend pybullet|mujoco]`
+- **MuJoCo flex demo (DEC-053, demo only)**: `bash scripts/demo_mujoco_flex_slicer.sh --seconds 60` (server + live flex tissue in `.venv-mj4` + Slicer; writes `demonstrations/mujoco_flex/`). Gate study: `./.venv/bin/python ReconstructionPipeline/evaluation/mujoco_flex_fidelity.py`.
 - **Slicer Bridge**: `Slicer --python-script Slicer/slicer_surgical_physics_bridge.py`. To start the server and Slicer together: `bash scripts/launch_dual_pybullet_slicer.sh`.
 - **Train Submodular PPO**: `./.venv/bin/python ReconstructionPipeline/planning/train_submodular_ppo.py` (`--dry-run` for a smoke test)
 - **Train CFM + Diffusion Policy**: `./.venv/bin/python ReconstructionPipeline/planning/train_diffusion_policy.py`
 
 ## Invariants & Critical Boundaries
 1. **Python Environment**: ALWAYS use `./.venv/bin/python` (Python 3.10). Never use the global `/usr/bin/python`, which lacks PyTorch and pyigtl.
-   - One exception (DEC-052): the MuJoCo flex tissue process and its study (Stage 2, not started) will run in `./.venv-mj4` (Python 3.11, MuJoCo 4.x), because MuJoCo 4 does not support Python 3.10. Nothing else may use it. It is local and gitignored: `uv venv --python 3.11 .venv-mj4 && uv pip install --python .venv-mj4/bin/python mujoco==4.0.0 numpy`.
+   - One exception (DEC-052, DEC-053): the MuJoCo flex tissue worker (`surgical_physics_bridge/src/mujoco_flex_worker.py`, started by the server or the study) runs in `./.venv-mj4` (Python 3.11, MuJoCo 4.x), because MuJoCo 4 does not support Python 3.10. Nothing else may use it. It is local and gitignored: `uv venv --python 3.11 .venv-mj4 && uv pip install --python .venv-mj4/bin/python mujoco==4.0.0 numpy`.
 2. **Clock Decoupling**: Physics MUST step at 1000 Hz, decoupled from streaming (30 Hz) and visualization.
    - Only the physics loop calls the rigid-body engine (PyBullet or MuJoCo). In `--physics-mode process` (default) the streaming process never loads an engine (tests check the module import); `thread` and `inline` load it in-process.
    - The physics loop never waits on the FEM solver.

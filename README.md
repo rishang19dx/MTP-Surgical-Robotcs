@@ -58,6 +58,7 @@ deformed) and the force/indentation trace.*
 | Physics loop (1 kHz) | `surgical_physics_bridge/src/physics_common.py` (`run_physics_loop`) with `pybullet_backend.py` (default) or `mujoco_backend.py` (`--physics-backend mujoco`, DEC-052) | Makes every engine call. Runs in its own process by default (`--physics-mode process`), so the US/streaming work cannot take its GIL. The torso is visual-only: there is no rigid probe–torso collision, and the probe force comes from the tissue model. |
 | Streaming / US loop (30 Hz) | `surgical_physics_bridge/src/unified_server.py` | Steps the env, sends targets to the physics loop and publishes to Slicer. Loads no engine in `process` mode (default). |
 | GPU FEM tissue service | `ReconstructionPipeline/simulation/fem_tissue.py`, `tet_mesh.py` | Called synchronously by the env on the streaming side. The 1 kHz loop never waits on it. |
+| MuJoCo flex tissue (demo only, DEC-053) | `ReconstructionPipeline/simulation/mujoco_flex_tissue.py`, `surgical_physics_bridge/src/mujoco_flex_worker.py` (`.venv-mj4`) | `--tissue-backend mujoco-flex`: a live MuJoCo 4 flex of the patient mesh in its own process; backs no metric. Demo: `bash scripts/demo_mujoco_flex_slicer.sh`. |
 | Kelvinlet tissue model (alternative) | `ReconstructionPipeline/simulation/tissue_model.py`, `kelvinlet_deformation.py` | `--tissue-backend kelvinlet`. Kept for comparison. |
 | Viewer (optional) | `physics_common.viewer_process_main` | Separate process with its own engine instance (PyBullet GUI client or MuJoCo passive viewer), so rendering cost never lands on the 1 kHz loop. |
 | Slicer bridge | `Slicer/slicer_surgical_physics_bridge.py` | Python script run inside Slicer. Uses the order-preserving `surgical_physics_bridge/src/obj_io.py`. |
@@ -172,7 +173,7 @@ Other flags are `--tissue-backend {fem,kelvinlet}`, `--soft-body-only`, `--no-ke
 
 # Live server; --mode {orbital_l4,raster_l4,orbital,raster,nbv,diffusion,cfm,interactive}
 ./.venv/bin/python surgical_physics_bridge/src/unified_server.py --mode raster_l4 --fps 30 --gui
-#   other flags: --port 18944 --physics-mode {process,thread} --physics-hz 1000 --tissue-backend {fem,kelvinlet} --urdf --patient-dir
+#   other flags: --port 18944 --physics-mode {process,thread} --physics-hz 1000 --tissue-backend {fem,kelvinlet,mujoco-flex} --urdf --patient-dir
 
 # In another terminal: 3D Slicer 5.x with the bridge script
 Slicer --python-script Slicer/slicer_surgical_physics_bridge.py

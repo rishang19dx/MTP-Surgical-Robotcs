@@ -51,7 +51,9 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-041`–`DEC-051` | RSS direction, gym, B-mode physics, pre-registered studies and their outcomes | see each record |
 | **Nov 2026** | `DEC-052` | MuJoCo Rigid-Body Backend Beside PyBullet (Stage 1); MuJoCo Flex Tissue Gated Behind a Study (Stage 2) | **Accepted** (Stage 1 done) |
 | **Nov 2026** | `DEC-053` | MuJoCo Flex Tissue (Stage 2): Pre-Registered Gate, Study and Demo-Only Backend | **Gate failed** (demo only) |
-| **Nov 2026** | `DEC-054` | Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained | **Accepted** (study not yet pre-registered) |
+| **Nov 2026** | `DEC-054` | Measurement First: Thread B Restarted with a Fascia Layer; DEC-051 Anomaly Explained | **Accepted** |
+| **Nov 2026** | `DEC-055` | Superficial Fascia Layer in the B-mode Simulator (Literature Parameters) | **Accepted** |
+| **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **Pre-registered** |
 
 ---
 
@@ -1610,3 +1612,116 @@ A chronological record of all architectural, research, algorithmic, and engineer
   1. Fascia layer (literature parameters, sourced).
   2. Detector v3, developed on training patients only, then frozen.
   3. Pre-register the study (gate, H4, H5, the window rule) as its own DEC entry before running it.
+
+### `DEC-055`: Superficial Fascia Layer in the B-mode Simulator (Literature Parameters)
+* **Date**: November 12, 2026 (branch `thread-b-muscle`). Implements DEC-054 decision 3.
+* **Context**: the CT cannot resolve the thoracolumbar fascia over the erector spinae, so the CT-derived B-mode shows
+  no fascia echo, and muscle thickness could not be read from the image (DEC-051).
+* **Decision**: `simulate_bmode(fascia_mask=...)` (`simulation/ultrasound_model_based.py`), opt-in, default off,
+  so every existing result is unchanged (test). `superficial_fascia_mask(muscle_label_slice)` places the layer
+  directly on the beam-facing side of the first muscle pixel of each column, with sub-pixel coverage. It is built
+  from the warped label slice, so it moves with the tissue in deformable runs and is identical in rigid ones.
+
+  | Parameter | Value | Source |
+  | :--- | :--- | :--- |
+  | Thickness | 1.65 mm | Pirri et al. 2023, *Diagnostics* 13:1436, Table 3: healthy adults, L3, 2–3 cm lateral, transverse axis, 1.6 ± 0.4 (R) and 1.7 ± 0.51 mm (L). The paper's text quotes other values; the table is used. |
+  | Sound speed across collagen fibres | 1650 m/s | Miles 1996, *J Acoust Soc Am* 99:3225: equine deep digital flexor tendon, "C" direction, 0 °C, 1650 ± 5 m/s |
+  | Attenuation | 1.61 dB/(cm·MHz) | Miles 1996: 11.3 dB/cm at 7 MHz, "C" direction |
+  | Density | 1.11 g/cm³ | tendon, about 1.10–1.12 as used in the tendon literature (secondary citations; not checked against a primary source) |
+  | Impedance | 1.83 MRayl | 1.650 km/s × 1.11 g/cm³ |
+  | Appearance (qualitative check) | "multilayer, linear, hyperechogenic" | Pirri 2023; "echo-rich layers (mainly dense connective tissue)" (Langevin et al. 2009, *BMC Musculoskelet Disord* 10:151) |
+
+* **Known deviation, stated rather than fixed**: the simulator maps CT numbers to impedance at 1 MRayl per
+  1000 HU, so its muscle is about 1.55 MRayl, below textbook values (about 1.65–1.70). Against that scale:
+  - the superficial face (fat → fascia) reflects with R ≈ 0.13, close to the literature-derived 0.14;
+  - the deep face (fascia → muscle) reflects with R ≈ 0.08, about twice the literature-derived ≈ 0.04.
+
+  The detector uses the superficial echo. Rescaling the whole soft-tissue impedance map would change every result
+  since DEC-034 and is out of scope.
+* **Tests**: `tests/test_fascia_layer.py`.
+  - The constants match the sources.
+  - The mask covers exactly the layer thickness, per column, and nothing inside the muscle.
+  - Leaving the mask out leaves the output unchanged.
+  - The fat/muscle boundary becomes echogenic, with the expected reflection ratio.
+  - The layer attenuates what lies below it.
+  - The echo test fails when the fascia impedance is set to the muscle's (mutation check).
+* **Scope**: used by the thread B v2 study only. The gym does not load muscle labels, so the gym's B-mode is
+  unchanged.
+
+### `DEC-056`: Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen)
+* **Date**: November 12, 2026. Committed **before** the study is run on any held-out (test) patient.
+* **Question**: does probe force change the paraspinal muscle thickness read from the B-mode on deformable tissue
+  (and not on rigid tissue), does the image track the true change, and does knowing the force help correct the
+  reading on unseen patients?
+* **Script**: `ReconstructionPipeline/evaluation/muscle_thickness_study.py` at this commit. It writes
+  `results/muscle_thickness_<stamp>.json`; the analysis below is computed from that file by
+  `ReconstructionPipeline/evaluation/muscle_thickness_analysis.py`, written next and also frozen before the run.
+* **Design**:
+  - **Patients**: the 12 SonoGym subjects, with the split of `data/splits.json`.
+    - **Primary: the 4 TEST patients** (s0029, s0006, s0034, s0030).
+    - The train patients are the development set and are reported separately.
+  - **Sites and forces**: the 6 DEC-050 sites (x ±20 mm; z −45, −32.5, −20 mm), untilted. Forces 1–5 N are
+    primary; 8 and 10 N are reported only, with the DEC-047 caveat. Indentation per force by bisection on the batched
+    FEM (shared moduli).
+  - **Conditions**: deformable (CT, label and fascia through the FEM warp) and rigid (the same indented face poses,
+    tissue not warped).
+  - **Imaging**: the gym's default, i.e. the depth-physics B-mode (DEC-042/043) plus the fascia layer (DEC-055).
+    Perception uses the DEC-044 "depth" preset unchanged. Speckle seed 0.
+  - **Ground truth (metric only)**: fascia-to-bone thickness. This is the muscle-label top to the CT bone surface
+    (HU > 300) along the beam, median over the central ±5 mm columns. It follows the clinical definition
+    ("the tip of the L4-5 facet joint and thoracolumbar fascia", 2 cm lateral; Thu et al. 2022, *J Pain Res*
+    15:1457–1463). The reference is the same quantity at first contact.
+  - **Window rule (DEC-054)**: a site is scored only if, at every force and in both conditions, the muscle is not
+    cut off by the 75 mm window and bone is present in at least half of the central columns.
+  - **Detector v3, frozen**: the DEC-050 v2 settings unchanged (fascia search from 5 mm, ±10 mm lateral average,
+    5-pixel smoothing, 5 mm margin above the bone; strongest local maximum), on the imaging above.
+* **Development history (disclosed)**. Everything below was done on TRAIN patients only, except where noted.
+  1. **Legacy imaging.** With the legacy B-mode and legacy perception, the fascia echo lowered the image-only
+     confidence below the bone gate, and bone was not detected (s0015: confidence at 40 mm 0.21 → 0.07). The study
+     moved to the gym's depth imaging and the DEC-044 preset, which were selected on 7 Nov for other reasons.
+     Nothing was tuned for this study.
+  2. **Ground-truth definition.** The DEC-050 ground truth (count of muscle-label pixels) left out 3–10 mm of
+     non-labelled soft tissue between the label and the bone (−27 to +108 HU), so the image read 3.4–7.9 mm thicker.
+     The definition was changed to fascia-to-bone, the clinical one. Afterwards the median |error| at ≤ 2 N on the
+     6 scorable train patients was 0.38–1.32 mm, with detection 0.92–1.00 and a bias of about +0.8 mm (the detector
+     locks on the fascia centre). The bias is **not** corrected in the detector.
+  3. **Exposure of a test patient.** Test patient **s0006** was rendered once (one site, 1 and 5 N) to check the
+     look of the fascia layer, before any detector work. No parameter was chosen from it.
+  4. Development outputs were written to `.agents/` (scratch) and are not cited.
+* **Criteria** (computed on scored test sites; per patient, the median over its scored sites):
+
+  | | Criterion | Pass |
+  | :-- | :--- | :--- |
+  | **G** | Measurable on unseen patients | Over test patients with at least one scored site: median detection rate at ≤ 2 N (deformable) ≥ 0.5 **and** median of per-patient median \|image − GT\| at ≤ 2 N < 3 mm (the DEC-050 thresholds) |
+  | **H4a** | The reading falls with force on deformable tissue | image slope over 1–5 N < 0 in **every** measurable test patient |
+  | **H4b** | The rigid control does not change | \|rigid image slope\| ≤ 0.15 mm/N in every measurable test patient |
+  | **H4c** | The image tracks the true change | median over measurable test patients of \|image slope − GT slope\| (deformable) ≤ 0.10 mm/N |
+  | **H5** | Knowing the force helps on unseen anatomy | see below |
+
+  - **H4** holds only if H4a, H4b and H4c all hold.
+  - **Measurable** means a scored test patient whose detection rate at ≤ 2 N is at least 0.5, the bar of G. A slope
+    means nothing where the thickness cannot be read. Patients below the bar are reported, not scored; if no test
+    patient is measurable, H4 fails.
+    - *Disclosed:* this rule was added after the train dry run of the analysis. There, s0024 (2 scored sites,
+      detection 0.00 at ≤ 2 N) had an image slope of +0.188 mm/N from a few high-force frames and failed H4a, while
+      the 6 measurable train patients had slopes from −0.113 to −0.339 mm/N.
+  - The thresholds 0.15 and 0.10 mm/N were set from the train data: rigid |slope| ≤ 0.094 and tracking gaps 0–0.08
+    mm/N, excluding s0024 (2 sites). They are not adjusted after the run.
+  - **H5 definition.** On TRAIN scored sites, deformable, 1–5 N, fit by least squares
+    `ref − img = a + k (F − 1 N)` (force-aware) and `ref − img = a0` (intercept-only: a population bias correction
+    that ignores force). On TEST scored sites at 1–5 N, compare the median \|corrected − ref\| of the two
+    corrections. H5 holds if the force-aware correction is better by at least one axial pixel (0.377 mm).
+* **Reported, not scored**:
+  - all metrics on the train patients;
+  - forces 8 and 10 N;
+  - the excluded sites per patient;
+  - the bias;
+  - a comparison with published probe-pressure effects on paraspinal muscle thickness, if a verified source is
+    found.
+* **What each outcome means**:
+  - **G fails**: the muscle is not measurable from the simulated image even with the fascia, and thread B stops.
+  - **G holds, H4 fails**: no force effect is measurable at 1–5 N.
+  - **G and H4 hold**: a SonoGym-style measurement whose result changes with soft-tissue deformation, which a rigid
+    simulator cannot reproduce. This is the DEC-054 target.
+  - **H5 fails**: the compression at 1–5 N, about 1 mm, is too small for a force-aware correction to beat a constant
+    bias correction by a pixel. That is reportable as such.

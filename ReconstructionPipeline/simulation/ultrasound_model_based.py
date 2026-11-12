@@ -30,6 +30,38 @@ import torch.nn.functional as F
 
 DB_TO_NEPER = math.log(10.0) / 20.0  # 0.1151 Np per dB (amplitude)
 
+# Superficial fascia (thoracolumbar fascia over the erector spinae), DEC-055. A CT cannot resolve this thin
+# dense-collagen layer, so a CT-derived B-mode shows no fascia echo (DEC-051). Literature values:
+#   thickness 1.65 mm: healthy adults at L3, 2-3 cm lateral to the spinous process, transverse axis,
+#     1.6 +- 0.4 mm (right) and 1.7 +- 0.51 mm (left) (Pirri et al. 2023, Diagnostics 13:1436, Table 3);
+#   sound speed across collagen fibres 1650 +- 5 m/s and attenuation 11.3 dB/cm at 7 MHz
+#     (Miles 1996, J Acoust Soc Am 99:3225, equine deep digital flexor tendon, "C" direction, 0 C);
+#   density 1.11 g/cm^3 (tendon, ~1.10-1.12 as used in the tendon literature).
+# Impedance = 1.650 km/s x 1.11 g/cm^3 = 1.83 MRayl.
+FASCIA_THICKNESS_MM = 1.65
+FASCIA_IMPEDANCE_MRAYL = 1.650 * 1.11
+FASCIA_ALPHA_DB = 11.3 / 7.0          # dB / (cm MHz), amplitude
+
+
+def superficial_fascia_mask(muscle: torch.Tensor, axial_resolution_mm: float,
+                            thickness_mm: float = FASCIA_THICKNESS_MM) -> torch.Tensor:
+    """(B, H, W) or (H, W) fractional fascia occupancy in [0, 1]: a layer `thickness_mm` thick directly above (on the
+    probe side of) the first muscle pixel of every image column, measured along the beam. Columns without muscle get
+    none. `muscle` is the (warped) muscle label slice, so the layer moves with the tissue."""
+    m = muscle.bool()
+    single = m.ndim == 2
+    if single:
+        m = m.unsqueeze(0)
+    h = m.shape[1]
+    has = m.any(1)                                                      # (B, W)
+    r0 = torch.argmax(m.to(torch.uint8), dim=1).to(torch.float32)       # first muscle row per column
+    tp = float(thickness_mm) / float(axial_resolution_mm)
+    y = torch.arange(h, device=m.device, dtype=torch.float32).view(1, -1, 1)
+    lo, hi = (r0 - tp).unsqueeze(1), r0.unsqueeze(1)
+    cover = torch.clamp(torch.minimum(y + 1.0, hi) - torch.maximum(y, lo), 0.0, 1.0)
+    cover = cover * has.unsqueeze(1)
+    return cover[0] if single else cover
+
 
 class ModelBasedUltrasoundSimulator:
     """
@@ -183,6 +215,7 @@ class ModelBasedUltrasoundSimulator:
         label_slice: Optional[torch.Tensor] = None,
         bone_label_id: int = 1,
         generator: Optional[torch.Generator] = None,
+        fascia_mask: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Simulates a B-mode ultrasound image from a 2D CT slice and optional anatomical label map.
@@ -193,6 +226,9 @@ class ModelBasedUltrasoundSimulator:
             bone_label_id: Label value of bone.
             generator: Optional torch.Generator (on self.device) for the speckle; falls back to the
                        internal seeded generator, then to the global torch RNG.
+            fascia_mask: Optional (H, W) / (B, H, W) fractional fascia occupancy (`superficial_fascia_mask`).
+                       Inside it the impedance is FASCIA_IMPEDANCE_MRAYL and the attenuation FASCIA_ALPHA_DB
+                       (DEC-055). None (default) leaves the simulator unchanged.
 
         Returns dict (privileged keys `energy`, `effective_energy`, `bone_mask` are simulator internals
         and must not be consumed by the perception pipeline):
@@ -222,6 +258,11 @@ class ModelBasedUltrasoundSimulator:
         z_tissue = 1.54 + torch.clamp(ct_c - 40.0, -500.0, 200.0) / 1000.0
         z_bone = 6.5 + torch.clamp(ct_c - 300.0, 0.0, 1500.0) / 750.0
         impedance = torch.where(bone_mask, z_bone, z_tissue)
+        fas = None
+        if fascia_mask is not None:
+            fas = fascia_mask.to(self.device).float()
+            fas = (fas.unsqueeze(0) if fas.ndim == 2 else fas).clamp(0.0, 1.0) * (1.0 - bone_mask.float())
+            impedance = impedance * (1.0 - fas) + FASCIA_IMPEDANCE_MRAYL * fas
 
         # 3. Interface reflection coefficient at the boundary between row y and y+1 (assigned to row y+1,
         #    i.e. the first pixel of the deeper medium where the echo returns from).
@@ -235,6 +276,8 @@ class ModelBasedUltrasoundSimulator:
             alpha_soft = torch.where(ct < self.fat_hu_threshold, self.alpha_fat_db, self.alpha_muscle_db)
         else:
             alpha_soft = self.alpha_soft_tissue_db
+        if fas is not None:
+            alpha_soft = alpha_soft * (1.0 - fas) + FASCIA_ALPHA_DB * fas
         alpha_np_per_cm = DB_TO_NEPER * self.frequency * (alpha_soft * (1.0 - bone_f) + self.alpha_bone_db * bone_f)
         path_np = 2.0 * alpha_np_per_cm * self.delta_y_cm
         att_np = torch.cumsum(path_np, dim=1) - path_np

@@ -56,6 +56,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **G and H4 pass, H5 fails** |
 | **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Neither gap counts: do not move on** |
 | **Nov 2026** | `DEC-058` | P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound | **Not trained; headroom 0.3–1.1 mm, tracks detector bias** |
+| **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -1895,4 +1896,80 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Speckle seed 0 only.
   - Forces on a 1 N grid, so the "best force" is coarse.
   - The noise floor uses rigid tissue, whose image differs from deformable tissue by more than the force alone.
+
+### `DEC-059`: Liver Target-Shift Headroom Bound — PRE-REGISTERED
+* **Date**: November 16, 2026 (branch `thread-b-muscle`). Committed **before** any liver import, mesh or
+  displacement was computed.
+* **Context**:
+  - The RSS draft's Stage 2 P1 (DEC-058) trains a force-choosing policy only on a soft target whose headroom
+    clears a gate fixed in advance.
+  - The spine failed the spirit of that gate (DEC-058), so the liver is the first candidate.
+  - User decisions, 16 Nov:
+    - the outcome is the **target shift**, physics only, with no detector;
+    - liver stiffness **4.1 kPa, with a sweep at 2.3 and 5.9 kPa**;
+    - the gate is **≥ 2 mm in ≥ 2/3 of patients**.
+* **Data**:
+  - The 12 SonoGym subjects' full CTs and TotalSegmentator label maps, from the same archive as DEC-041
+    (`yunkao/SonoGym_assets_models`, `assets.tar.gz`).
+  - Liver = TotalSegmentator v2 `total` label 5. Before use, it is checked against SonoGym's `liver.stl` for every
+    subject (centroid distance), as was done for L4.
+  - A subject is **measurable** if at least one valid site exists (below) and the liver does not touch the CT
+    field-of-view boundary within 10 mm of any of its sites.
+* **Geometry**:
+  - An abdominal crop of the same size as the lumbar grid (140 × 170 × 175 mm, 1 mm), centred on the right
+    subcostal region.
+  - It is rotated 180° about the cranio-caudal axis (x → −x, y → −y; a proper rotation, det +1), so that the
+    anterior abdominal skin takes the place of the dorsal skin. The existing FEM, contact and probe code then run
+    unchanged. Patients are scanned supine for the abdomen, so the supine CT posture matches.
+* **Tissue model**:
+  - The DEC-040/041 linear FEM, 4 mm elements, bone (HU > 250, i.e. ribs and spine) fixed, shared fat/muscle
+    moduli as for the lumbar patients (e_scale 1.0958).
+  - Cells whose centre lies in the liver label get the liver modulus E_L, so that the **effective** E_L after the
+    shared scale is 2.3, 4.1 (primary) or 5.9 kPa. These are the healthy-adult transient-elastography range and
+    mean of Fung et al. 2013 (PLoS ONE 8:e85067, doi 10.1371/journal.pone.0085067).
+  - No organ sliding: the liver is tied to its neighbours. That probably *under*-states its motion, so a pass is
+    robust and a fail is inconclusive about real livers.
+  - No disk cache is written (`cache_dir=None`).
+* **Sites** (fixed rule, no tuning):
+  - Candidate probe positions lie on a 10 mm grid over the anterior skin of the crop, with the probe untilted
+    (the existing `dorsal_pose`).
+  - A candidate is **valid** if, along the central beam:
+    - no bone (HU > 250) lies between the skin and the first liver voxel;
+    - the first liver voxel is 10–50 mm deep;
+    - the liver extends at least 20 mm along the beam inside the 75 mm image window.
+  - Up to 6 sites per subject are selected by farthest-point sampling from the valid candidate closest to the
+    crop centre.
+* **Targets**: liver points on the central beam (±0 mm lateral), every 5 mm from 5 mm below the liver's first voxel
+  down to the liver's last voxel or 70 mm, whichever is shallower.
+* **Outcome**:
+  - For each site, force and target, the **deformation-only target shift** is |u(x)|, the FEM displacement of the
+    material point x at the indented probe pose.
+  - In kinematic mode the same point does not move. The shift is therefore exactly the difference between where
+    the deformable and the kinematic simulator put the target, for the same probe pose.
+  - The in-plane (axial and lateral) and out-of-plane parts are reported separately.
+  - The force for each site is set by bisection on the FEM, as in DEC-056.
+  - Forces: 1, 2, 3, 4, 5 N (primary); 8 and 10 N are reported only (DEC-047 caveat).
+* **Gate (pass/fail)**:
+  - Per patient, the statistic is the median over sites and targets of |u| at 5 N.
+  - **Pass** if it is ≥ 2.0 mm in ≥ 2/3 of the measurable patients, **at each of** E_L = 2.3, 4.1 and 5.9 kPa.
+  - Reported, not decisive:
+    - 1 axial pixel (0.377 mm) as a resolution reference;
+    - the lumbar muscle's force effect from DEC-056;
+    - the shift by depth and by force;
+    - patients that are not measurable.
+* **Consequence**:
+  - **Pass**: a force-choosing liver-targeting policy test becomes the candidate for Stage 2 P1, under its own
+    pre-registration.
+  - **Fail**: the bound itself is the result ("even the liver offers less than 2 mm under this model"), and the
+    soft-organ question goes back to the supervisor.
+* **Development**: the importer and geometry are developed and sanity-checked on **training** patients only (one
+  subject for visual checks). The frozen script then runs all 12. Any deviation from this entry is disclosed in the
+  Result.
+* **Limits stated now**:
+  - Linear, quasi-static, frictionless, tied organs.
+  - No breathing.
+  - The liver modulus comes from dynamic elastography; the quasi-static modulus may be lower, so motion may be larger.
+  - Shared moduli for the other tissues.
+  - Untilted probes only.
+  - Physics only: whether a 2 mm shift is visible and exploitable in the image is not tested here.
 

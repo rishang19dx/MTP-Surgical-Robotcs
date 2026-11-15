@@ -1972,4 +1972,19 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Shared moduli for the other tissues.
   - Untilted probes only.
   - Physics only: whether a 2 mm shift is visible and exploitable in the image is not tested here.
+* **Addendum (16 Nov, before any liver displacement was viewed; a deviation from the registered site rule)**:
+  - **Change.** A site is also invalid if **air (HU < −200)** lies on the central beam between the skin and the first
+    liver voxel.
+  - **Why.** The development check (training subjects only) found that the registered rule (bone only) selected
+    sites whose beam crosses lung at the top of the crop or bowel gas at the bottom: 8 of 48 selected sites, in 6 of
+    8 training subjects.
+    - Ultrasound cannot image through air, so these sites are physically impossible.
+    - The FEM treats air as a void, so pressing over it would inflate the shift. The change can only make the gate
+      harder to pass.
+  - **Timing.** A development run on s0015 (training) under the old rule had been started for timing and memory; its
+    displacement output was not read before this change.
+  - **Label check.** The registered centroid check against SonoGym's `liver.stl` cannot work, because the STL frame
+    is undocumented: centroids are 100–770 mm apart in both RAS and LPS. It is replaced by a position-free shape
+    check. In all 12 subjects, the STL and label 5 have the same shape up to one uniform scale: volume ratio
+    0.30–0.32 and extents differing by 32–33 %, i.e. lengths × about 0.68. So label 5 is the liver.
 

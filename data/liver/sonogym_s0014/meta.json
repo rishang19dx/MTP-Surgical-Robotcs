@@ -1,0 +1,60 @@
+{
+  "subject": "s0014",
+  "study": "DEC-059 liver headroom",
+  "source": "huggingface.co/datasets/yunkao/SonoGym_assets_models (assets.tar.gz)",
+  "licence": "CC BY 4.0 (SonoGym assets); CTs and labels from TotalSegmentator (Wasserthal et al. 2023)",
+  "frame": "Q (mm): Q = RAS - c_ras; +x right, +y anterior, +z superior (P rotated 180 deg about z)",
+  "c_ras_mm": [
+    81.17294871273003,
+    207.3012751156836,
+    172.99562148951713
+  ],
+  "grid_mm": {
+    "x": [
+      -70.0,
+      70.0
+    ],
+    "y": [
+      -50.0,
+      120.0
+    ],
+    "z": [
+      -90.0,
+      85.0
+    ],
+    "spacing": 1.0
+  },
+  "source_spacing_mm": [
+    1.5,
+    1.5,
+    1.5
+  ],
+  "source_shape": [
+    286,
+    286,
+    308
+  ],
+  "qa": {
+    "liver_voxels_source": 418207,
+    "liver_centroid_ras_mm": [
+      81.17294871273003,
+      150.3012751156836,
+      172.99562148951713
+    ],
+    "stl_volume_ratio": 0.32104569162055047,
+    "stl_extent_mm": [
+      114.0,
+      139.0,
+      174.0
+    ],
+    "label_extent_mm": [
+      151.5,
+      205.5,
+      252.0
+    ],
+    "stl_extent_max_rel_diff": 0.3236009732360097,
+    "liver_voxels_in_crop": 569466,
+    "liver_fraction_in_crop": 0.4034620813775634,
+    "outside_fov_voxels": 96444
+  }
+}

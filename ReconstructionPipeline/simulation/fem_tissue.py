@@ -219,6 +219,7 @@ class FEMTissueModel:
         cache_dir: Optional[str] = DEFAULT_CACHE_DIR,
         device: Optional[torch.device] = None,
         verbose: bool = True,
+        region_modulus: Optional[Tuple[np.ndarray, float]] = None,
     ):
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.verbose = verbose
@@ -228,6 +229,12 @@ class FEMTissueModel:
         self.e_fat = float(e_fat_kpa)
         self.e_muscle = float(e_muscle_kpa)
         self.fat_hu = float(fat_hu_threshold)
+        # (mask, E kPa): soft cells whose centre voxel lies in `mask` (same (z,y,x) grid as ct_volume) get modulus E
+        # instead of the HU rule (before e_scale, like e_fat / e_muscle).  DEC-059: the liver.  None = HU rule only.
+        self._region_mask = None if region_modulus is None else np.asarray(region_modulus[0], dtype=bool)
+        self.e_region = None if region_modulus is None else float(region_modulus[1])
+        self._region_origin = np.asarray(patient_data["origin_mm"], dtype=np.float64)
+        self._region_spacing = np.asarray(patient_data["spacing_mm"], dtype=np.float64)
         self.e_scale = float(e_scale)
         self.beta = float(beta_per_mm)
         self.face_dims = (float(face_dims_mm[0]), float(face_dims_mm[1]))
@@ -267,6 +274,9 @@ class FEMTissueModel:
         key_params = dict(v=_CACHE_VERSION, vol=volume_hash(patient_data), roi=[*self.roi_min, *self.roi_max],
                           h=self.h, nu=self.nu, ef=self.e_fat, em=self.e_muscle, fhu=self.fat_hu,
                           bhu=body_hu, bone=bone_hu, rtol=pcg_rtol)
+        if self._region_mask is not None:   # opt-in: existing cache keys are unchanged
+            key_params.update(er=self.e_region,
+                              rm=hashlib.sha1(np.packbits(self._region_mask).tobytes()).hexdigest()[:16])
         self.cache_key = hashlib.sha1(json.dumps(key_params, sort_keys=True).encode()).hexdigest()[:20]
         loaded = False
         path = None
@@ -317,6 +327,20 @@ class FEMTissueModel:
         oy, sy = float(patient_data["origin_mm"][1]), float(patient_data["spacing_mm"][1])
         return np.where(bone.any(axis=1), oy + top * sy, np.nan)
 
+    def cells_in_region(self) -> Optional[np.ndarray]:
+        """(Nc,) bool: soft cells whose centre voxel lies in the `region_modulus` mask (None without a region)."""
+        if self._region_mask is None:
+            return None
+        m = self.mesh
+        c = m.lattice_origin[None, :] + (m.cell_ijk + 0.5) * self.h                      # (Nc,3) P mm
+        ijk = np.rint((c - self._region_origin) / self._region_spacing).astype(np.int64)  # (x,y,z) voxel
+        nz, ny, nx = self._region_mask.shape
+        ok = (ijk[:, 0] >= 0) & (ijk[:, 0] < nx) & (ijk[:, 1] >= 0) & (ijk[:, 1] < ny) & (ijk[:, 2] >= 0) & \
+            (ijk[:, 2] < nz)
+        out = np.zeros(len(c), dtype=bool)
+        out[ok] = self._region_mask[ijk[ok, 2], ijk[ok, 1], ijk[ok, 0]]
+        return out
+
     def _precompute(self) -> torch.Tensor:
         m = self.mesh
         dev = self.device
@@ -325,6 +349,10 @@ class FEMTissueModel:
         corners = CUBE_CORNERS.astype(np.float64) * self.h
         Kref = np.stack([_tet_stiffness(corners[k], 1.0, self.nu) for k in KUHN_TETS])  # (6,12,12), E=1
         E_cell = np.where(m.cell_hu < self.fat_hu, self.e_fat, self.e_muscle) * 1e-3     # kPa -> N/mm^2
+        in_region = self.cells_in_region()
+        if in_region is not None:
+            E_cell = np.where(in_region, self.e_region * 1e-3, E_cell)
+            self.timings["region_cells"] = float(in_region.sum())
         Ke = Kref[m.tet_ref] * E_cell[m.tet_cell][:, None, None]
         dofs = (m.tets[:, :, None] * 3 + np.arange(3)).reshape(-1, 12)
         rows = np.repeat(dofs, 12, axis=1).ravel()

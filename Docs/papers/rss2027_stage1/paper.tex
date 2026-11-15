@@ -43,8 +43,9 @@ one positive and one negative answer. (i)~A soft-tissue \emph{measurement} depen
 thickness read from the image falls by 0.25--0.30\,mm/N on held-out patients, tracking the true compression, while
 the rigid control stays within $\pm$0.04\,mm/N. (ii)~\emph{Policy behaviour} in navigation does not: policies trained
 with and without deformation differ by $-0.8$ success points, and the residual gap to rigid training is explained
-by indentation. We propose to test whether deformation changes behaviour once the policy controls the contact force,
-and to scale the measurement result to many patients.
+by indentation. A force-choosing policy on the spine could gain at most 0.3--1.1\,mm, in large part by cancelling
+the detector's bias. We propose a headroom test that decides, before any training, where a policy-level effect is
+possible, and to scale the measurement result to many patients.
 \end{abstract}
 
 \IEEEpeerreviewmaketitle
@@ -77,7 +78,8 @@ checked against a large-strain reference in its working range (Sec.~\ref{sec:sim
 outcomes (Sec.~\ref{sec:hyp}).
 (3)~Preliminary evidence that deformation changes a soft-tissue measurement but not navigation behaviour, and a
 simple account of when deformation should matter (Sec.~\ref{sec:results}).
-(4)~A plan for Stage~2 that tests this account where it predicts an effect (Sec.~\ref{sec:plan}).
+(4)~A headroom bound that predicts, before training, whether a force-choosing policy can show a deformation effect,
+and a Stage~2 plan that uses it (Secs.~\ref{sec:headroom},~\ref{sec:plan}).
 
 % =====================================================================================================
 \section{Related Work}
@@ -276,6 +278,18 @@ bone surface with a tracked probe (coverage 88.0 vs 88.8\,\%), and the shift of 
 with and without the deformation field in 11 of 12 patients, i.e.\ it was caused by indentation. Navigation policies
 reached 100\,\% success on training patients but at most 14.1\,\% on held-out patients.
 
+\subsection{Headroom for a force-choosing policy (post hoc)}
+\label{sec:headroom}
+Would a policy that \emph{chooses} the force behave differently with deformation? Before training one, we bounded the
+answer from the H1 data. Per measurable patient, the \emph{headroom} is the range over 1--5\,N of the median
+measurement error against the \emph{uncompressed} thickness in \DM; the \emph{noise floor} is the same range in \KM,
+where thickness does not depend on force. The headroom is 0.28--0.94\,mm on training patients (median 0.57, noise
+floor 0.38--0.47) and 0.75 and 1.13\,mm on the held-out ones; it exceeds the noise floor in 5 of 8 patients. The
+error-minimising force, however, is not ``press lightly'': it is 5\,N for three patients and follows the detector's
+constant bias (Spearman $\rho=+0.80$, 8 patients), since compressing the muscle cancels an over-read. A
+force-choosing policy on the spine would thus mainly learn to compensate the detector, so we did not train one. This
+analysis was not pre-registered.
+
 % =====================================================================================================
 \section{Discussion: When Should Deformation Matter?}
 
@@ -288,8 +302,10 @@ the tissue deforms.
 
 This account suggests a practical rule for simulator builders: for bony targets at regulated force, a rigid
 simulator that moves the image plane by the indentation is enough; deformation must be simulated when the task
-measures or targets soft structures, and especially when the policy chooses the force. It also predicts where policy
-behaviour \emph{should} differ, which Stage~2 tests.
+measures or targets soft structures. Even then, a policy-level effect needs headroom: on the spine, the change that
+deformation offers a force-choosing policy (0.3--1.1\,mm) is comparable to the measurement error, and the optimum is
+set by perception bias rather than by the tissue (Sec.~\ref{sec:headroom}). The account therefore predicts policy-level
+effects only for targets whose motion under the probe is large relative to the sensing error, which Stage~2 tests.
 
 % =====================================================================================================
 \section{Stage 2 Plan}
@@ -297,11 +313,12 @@ behaviour \emph{should} differ, which Stage~2 tests.
 
 Each item will be pre-registered in the same way before it runs.
 
-\textbf{P1: force-choosing measurement task (tests the account).} The policy places the probe and selects the target
-force (1--5\,N), then reports the muscle thickness; reward is the negative error against the \emph{uncompressed}
-thickness plus an image-quality term. Prediction: \KM- and \RM-trained policies, which are never penalised for pressing
-harder, select higher forces than \DM-trained ones and have a larger negative bias when deployed in \DM. Primary
-metric: the same deformation-only gap as H2, applied to measurement error, with the threshold fixed before training.
+\textbf{P1: headroom-gated policy test (tests the account).} For each candidate soft target, first compute the
+headroom of Sec.~\ref{sec:headroom}, now pre-registered: the range of the outcome over the force range in \DM, against
+the noise floor in \KM, with the detector's bias removed on training patients. A force-choosing policy is trained in
+\DM\ and \KM\ only where the headroom exceeds the noise floor by a margin fixed in advance; the primary metric is then
+the deformation-only gap of H2 applied to the task outcome. Where no target passes the gate, the bound itself is the
+result.
 
 \textbf{P2: H1 at scale.} Repeat H1 on more TotalSegmentator patients to give a confidence interval for the slope
 across anatomies, and report how it varies with fat and muscle thickness.
@@ -309,7 +326,7 @@ across anatomies, and report how it varies with fat and muscle thickness.
 \textbf{P3: navigation without a ceiling.} Repeat H2 on held-out patients and with more training patients, so that a
 deformation-only gap is not hidden by perfect success.
 
-\textbf{P4: sensitivity.} Repeat H1 and P1 with randomised tissue moduli, to test whether conclusions depend on the
+\textbf{P4: sensitivity.} Repeat H1 and the headroom bound with randomised tissue moduli, to test whether conclusions depend on the
 shared moduli.
 
 % =====================================================================================================
@@ -325,8 +342,9 @@ Learned policies do not yet generalise across patients, so policy results are fo
 \section{Conclusion}
 We separated the effect of soft-tissue deformation from that of probe indentation in a patient-specific
 robotic-ultrasound simulator. Deformation changes a soft-tissue measurement in a way a rigid simulator cannot
-reproduce, but it does not change navigation behaviour at a regulated force. Stage~2 will test whether it changes
-behaviour when the policy controls the force.
+reproduce, but it does not change navigation behaviour at a regulated force, and it offers a force-choosing policy
+on the spine little more than the measurement error. Stage~2 will test, with a headroom gate fixed in advance,
+where deformation can change what a policy does.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

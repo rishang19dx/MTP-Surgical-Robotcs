@@ -63,6 +63,11 @@ For each question: why I'm asking, what I would suggest, and what the answer cha
 - **What it changes.** The whole direction for the final paper.
 
 ### Q3. Should I try one more policy-level test on the spine, where the policy chooses the force?
+- **Update 16 Nov (DEC-058).** The force-choosing policy on the spine is not trained.
+  - **Headroom.** A post-hoc check (`results/force_headroom_20261116_011855.md`) shows that any choice of force can change the measurement error by only 0.3–1.1 mm per patient. That is about the size of the measurement error.
+  - **The best force is set by the detector, not the tissue.** It tracks the detector's constant bias (ρ = +0.80): pressing harder cancels an over-read. So a trained policy would mainly learn to correct our detector.
+  - **What the RSS draft says now.** Stage 2's P1 is a headroom-gated test: train only where the bound says an effect is possible.
+  - **What's left to ask:** which soft target should be tried first (see Q2)?
 - **Why.** Navigation could not show a deformation effect because the task fixes the force at 4 N. In a measurement task where the policy chooses the force, a rigid-trained policy is never penalised for pressing hard, so it should press harder and measure the muscle thinner.
 - **Risk.**
   - Our measurement result already predicts the size of the effect without any RL (about 0.9 mm from 1 to 4 N), so a reviewer may say the policy adds nothing.

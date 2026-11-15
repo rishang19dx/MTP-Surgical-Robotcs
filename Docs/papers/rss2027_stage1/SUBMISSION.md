@@ -24,7 +24,7 @@ Rules (from the RSS 2027 call for papers):
 
 ## Before submitting (checklist)
 
-- [ ] **Compile and check the length.** The paper has not been compiled yet, because there is no LaTeX on the dev laptop. The text is about 2,600 words, with 1 full-width figure, 3 column figures and 2 tables, which should fit in 5 pages. Check it.
+- [ ] **Compile and check the length.** The paper has not been compiled yet, because there is no LaTeX on the dev laptop. The text is about 2,850 words (after the 16 Nov headroom section), with 1 full-width figure, 3 column figures and 2 tables, which should fit in 5 pages. Check it.
 - [ ] **Paper-ID.** Replace `Paper-ID [add your ID here]` with the OpenReview ID once it is assigned.
 - [ ] **Fonts.** In the PDF, open Document Properties → Fonts. Everything must be embedded, with no Type 3. The figures embed TrueType (matplotlib `pdf.fonttype 42`).
 - [ ] **Anonymity.**
@@ -33,7 +33,7 @@ Rules (from the RSS 2027 call for papers):
   - Patient IDs (s0006, s0029, ...) are public TotalSegmentator subject IDs, which is fine.
 - [ ] **Supervisor sign-off** on:
   - the framing;
-  - the Stage 2 plan (P1–P4), because Stage 2 is judged on carrying out the Extension Charter, so promise only what can be delivered by 16 Apr 2027.
+  - the Stage 2 plan (P1–P4; P1 was rewritten on 16 Nov as a headroom-gated test, DEC-058), because Stage 2 is judged on carrying out the Extension Charter, so promise only what can be delivered by 16 Apr 2027.
 - [ ] **Liver / abdomen.** Deliberately *not* in the Stage 2 plan; it is still open with the supervisor. If it is added, it becomes a Charter obligation.
 - [ ] **Authorship.** Set the author list in OpenReview now: changes between stages need Program Chair approval.
 - [ ] **Institutional email.** OpenReview profiles without one can take up to 2 weeks to be moderated, so create the profile early.
@@ -44,11 +44,11 @@ Rules (from the RSS 2027 call for papers):
 
 **Abstract** (plain text):
 
-> Robot-learning simulators for ultrasound treat the patient as rigid, although a probe can only image by pressing on soft tissue. Whether this simplification matters has not been measured. We pose it as a falsifiable question and answer it with a simulator in which each of 13 CT patients has a GPU-batched finite-element model of the soft tissue, a force-controlled probe, and B-mode images rendered from the deformed anatomy. The key methodological device is a kinematic control mode that presses the probe into undeformed tissue; it splits any rigid-versus-deformable difference into a part due to probe indentation, which a rigid simulator can reproduce, and a part due to deformation, which it cannot. All hypotheses, thresholds and analysis scripts are fixed before each run. Preliminary results give one positive and one negative answer. (i) A soft-tissue measurement depends on deformation: paraspinal muscle thickness read from the image falls by 0.25-0.30 mm/N on held-out patients, tracking the true compression, while the rigid control stays within ±0.04 mm/N. (ii) Policy behaviour in navigation does not: policies trained with and without deformation differ by -0.8 success points, and the residual gap to rigid training is explained by indentation. We propose to test whether deformation changes behaviour once the policy controls the contact force, and to scale the measurement result to many patients.
+> Robot-learning simulators for ultrasound treat the patient as rigid, although a probe can only image by pressing on soft tissue. Whether this simplification matters has not been measured. We pose it as a falsifiable question and answer it with a simulator in which each of 13 CT patients has a GPU-batched finite-element model of the soft tissue, a force-controlled probe, and B-mode images rendered from the deformed anatomy. The key methodological device is a kinematic control mode that presses the probe into undeformed tissue; it splits any rigid-versus-deformable difference into a part due to probe indentation, which a rigid simulator can reproduce, and a part due to deformation, which it cannot. All hypotheses, thresholds and analysis scripts are fixed before each run. Preliminary results give one positive and one negative answer. (i) A soft-tissue measurement depends on deformation: paraspinal muscle thickness read from the image falls by 0.25-0.30 mm/N on held-out patients, tracking the true compression, while the rigid control stays within ±0.04 mm/N. (ii) Policy behaviour in navigation does not: policies trained with and without deformation differ by -0.8 success points, and the residual gap to rigid training is explained by indentation. A force-choosing policy on the spine could gain at most 0.3-1.1 mm, in large part by cancelling the detector's bias. We propose a headroom test that decides, before any training, where a policy-level effect is possible, and to scale the measurement result to many patients.
 
 **Keywords:** robotic ultrasound; soft-tissue simulation; finite element method; reinforcement learning; sim-to-real; pre-registration; medical robotics
 
-**TL;DR:** Separating probe indentation from tissue deformation shows that soft tissue changes an ultrasound measurement but not navigation behaviour; Stage 2 tests force-choosing policies.
+**TL;DR:** Separating probe indentation from tissue deformation shows that soft tissue changes an ultrasound measurement but not navigation behaviour; a headroom bound decides where force-choosing policies can show an effect.
 
 ## Where each number comes from
 
@@ -65,4 +65,5 @@ Rules (from the RSS 2027 call for papers):
 | Reconstruction 88.0 vs 88.8 % | DEC-048 |
 | Echo shift is kinematic (11 of 12) | `results/kinematic_vs_deformation_20261108_020955` |
 | Navigation 100 % vs at most 14.1 % held out | `results/vec_eval_nav_20261107_223741`, `results/vec_eval_nav_20261108_075931` |
+| Headroom 0.28–0.94 / 0.75, 1.13 mm; noise floor; best force; ρ = +0.80 (post hoc) | `results/force_headroom_20261116_011855.md` (DEC-058) |
 | Fascia 1.65 mm, 1650 m/s, 1.61 dB/(cm MHz) | DEC-055 (Pirri 2023 Table 3; Miles 1996) |

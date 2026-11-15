@@ -55,6 +55,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-055` | Superficial Fascia Layer in the B-mode Simulator (Literature Parameters) | **Accepted** |
 | **Nov 2026** | `DEC-056` | Thread B v2 Muscle-Thickness Study — PRE-REGISTERED (detector frozen) | **G and H4 pass, H5 fails** |
 | **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Neither gap counts: do not move on** |
+| **Nov 2026** | `DEC-058` | P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound | **Not trained; headroom 0.3–1.1 mm, tracks detector bias** |
 
 ---
 
@@ -1843,4 +1844,55 @@ A chronological record of all architectural, research, algorithmic, and engineer
     an indented probe behaves the same as one trained on deformable tissue. Indentation, which any rigid simulator
     can model, accounts for the whole difference from SonoGym-style training (which is itself below the
     threshold).
+
+### `DEC-058`: P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound
+* **Date**: November 16, 2026 (branch `thread-b-muscle`).
+* **Context**: P1 is in the Stage 2 plan of the RSS draft (`Docs/papers/rss2027_stage1/paper.tex`). The policy
+  chooses the probe force for a muscle-thickness measurement, scored against the uncompressed thickness. The
+  prediction was that kinematic- or rigid-trained policies would press harder than deformable-trained ones.
+  Before writing the pre-registration, I checked on the existing thread B data (DEC-056) whether the task had room
+  for an effect.
+* **Check before the decision** (training patients, pooled over all their scored sites):
+  - The muscle is measurable at 1 N on 6 of 8 training patients. On the 2 thick backs (s0024, s0014), detection
+    improves with force identically in both tissue modes, so in this simulator there is no imaging reason to press.
+  - The pooled median error against the uncompressed thickness goes from 0.75 mm at 1 N to 0.94 mm at 5 N.
+  - Two consequences followed:
+    - any gap would mostly be set by the reward's force-cost weight, i.e. true by construction (invariant 6);
+    - I reported the headroom to the user as "at most about 0.2 mm".
+* **Decision (user, 16 Nov)**:
+  - P1 is **not trained** on the spine.
+  - It is replaced by a headroom bound: the most that any force choice can change the measurement error, per
+    patient, against a noise floor.
+  - The policy-level test moves to a softer organ in the Stage 2 plan, pending the supervisor meeting.
+* **Analysis** (`ReconstructionPipeline/evaluation/force_headroom_analysis.py`):
+  - **POST HOC.** It reads the existing DEC-056 output, its thresholds were not fixed in advance, and it is not a
+    pass/fail test.
+  - Coverage: measurable patients only, scored sites, 1–5 N.
+  - Per patient:
+    - headroom = span over force of the median |image − uncompressed| in deformable tissue;
+    - noise floor = the same span in rigid tissue, where thickness does not depend on force.
+* **Result** (`results/force_headroom_20261116_011855.md`):
+  - **Erratum to the check above.** Per patient the headroom is larger than the pooled figure; pooling hid it,
+    because the per-patient effects have opposite signs.
+    - Training: 0.28–0.94 mm, median 0.57 mm, against a noise floor of 0.38–0.47 mm.
+    - Held out: 0.75 and 1.13 mm, against 0.38 and 0.19 mm.
+    - Above the noise floor in 5 of 8 patients.
+  - **The best force is not "press lightly".** It is 1 N for one patient, 2–3 N for four and 5 N for three. It
+    follows the detector's constant bias (image − truth at ≤ 2 N, from DEC-056): Spearman ρ = +0.80 over 8 patients,
+    descriptive only. Where the detector over-reads, compressing the muscle cancels the over-read.
+* **Reading**:
+  - On the spine, a force-choosing policy scored against the uncompressed thickness would mainly learn to cancel
+    the detector's per-site offset. DEC-056 H5 already showed that offset is site-specific, so the result would be
+    about this detector, not about tissue deformation.
+  - In rigid or kinematic tissue the lever does not exist at all, because thickness does not depend on force. Any
+    deformable-vs-kinematic gap would therefore measure "deformation × detector bias".
+  - The decision to not train P1 on the spine stands, for this reason rather than the pooled "0.2 mm".
+  - For the paper: deformation gives a force-choosing policy a lever of about 0.3–1.1 mm on this measurement,
+    comparable to the measurement error. That is consistent with the account "deformation matters when the soft
+    change exceeds the sensing error", here only marginally.
+* **Limits**:
+  - 8 patients, 2 of them held out (already seen in the DEC-056 result).
+  - Speckle seed 0 only.
+  - Forces on a 1 N grid, so the "best force" is coarse.
+  - The noise floor uses rigid tissue, whose image differs from deformable tissue by more than the force alone.
 

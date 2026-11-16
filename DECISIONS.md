@@ -58,6 +58,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-058` | P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound | **Not trained; headroom 0.3–1.1 mm, tracks detector bias** |
 | **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2046,4 +2047,77 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Normals from a voxel mask.
   - No breathing, no organ separation.
   - All the DEC-059 limits apply.
+
+### `DEC-061`: Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED
+* **Date**: November 16, 2026 (branch `liver-sliding`). Committed **before** the lumen calibration ran and before
+  any patient vein force was computed.
+* **Context**:
+  - The user wants a positive result and chose vein compression as the second route.
+  - In compression ultrasound, a healthy vein collapses under the probe and a thrombosed one does not, so
+    deformation is the diagnostic outcome itself.
+  - A rigid or kinematic simulator cannot collapse a vein. A clot / no-clot policy gap between deformable and
+    kinematic training would therefore be **true by construction** (invariant 6), and that is not tested.
+  - The non-trivial question, chosen by the user, is whether **the force needed varies enough between patients**
+    that a single fixed protocol force is a poor choice. If so, an adaptive, deformation-aware policy has something
+    real to learn.
+  - User decisions (16 Nov): physics-only patient variation first; soft lumen in the FEM; calibration on the popliteal
+    probe data; gate P90/P10 ≥ 2.
+* **Literature** (16 Nov):
+  - **Sato & Karino 2022** (*Cureus* 14:e32596, doi 10.7759/cureus.32596; one subject): popliteal vein 11.5 mm deep,
+    5.0 mm in diameter, halved at 191 ± 65 g. This is the only direct probe measurement found.
+  - **Eitminavičius et al. 2026** (*Ann Biomed Eng* 54:2209–2219, doi 10.1007/s10439-026-04014-y; n = 30): femoral
+    vein under external thigh compression, collapsed 30 % at a median of 23 mmHg, 70 % at 44.5 mmHg, 100 % at
+    82 mmHg (range 43–130).
+  - **Urevc et al. 2026** (*Ann Biomed Eng*, doi 10.1007/s10439-026-04362-9; paywalled): an FEM digital twin of
+    internal-jugular-vein compression tuned to 9 healthy subjects. It is precedent for a calibrated FEM vein.
+* **Data**:
+  - The 12 SonoGym subjects × 2 sides. TotalSegmentator v2 labels: iliac_vena_left 67 / right 68, iliac_artery
+    65 / 66.
+  - The label check on s0015 matches SonoGym's STLs: the uniform 0.67–0.68 extent scale on all axes; the next-best
+    label is clearly worse.
+  - `ReconstructionPipeline/data/import_vein_subjects.py`:
+    - crop 80 × 85 × 80 mm in frame Q (anterior skin on +y), centred on the centroid of the vein's lowest 15 mm
+      (the common femoral end);
+    - the skin top at y = 95, so the crop reaches 80 mm deep.
+* **Calibration** (`ReconstructionPipeline/evaluation/vein_calibration.py`, phantom only, no patient data):
+  - Geometry: a fat block (HU −100), flat skin, and a 5 mm lumen whose **centre** is 11.5 mm deep. The paper does
+    not say whether depth is to the top or the centre; this is an assumption.
+  - Model: h = 1 mm, lumen Poisson ratio 0, the same FEM and contact as the patients.
+  - The effective lumen modulus is bisected in log space until the AP diameter ratio on the central beam is
+    0.50 ± 0.01 at 1.87 N.
+* **Patient model** (`ReconstructionPipeline/evaluation/vein_compress_study.py`, frozen with this commit):
+  - Linear FEM at h = 2 mm, with ROI x = site ± 35 mm, z ± 17.5 mm, and the full crop depth. Bone fixed, shared
+    e_scale, and no cache.
+  - The vein label is a region with the calibrated modulus and Poisson ratio 0. The artery is ordinary tissue.
+  - Site: x = the vein centroid in the slice z = 0. The probe is untilted, transverse to the vein.
+* **Measurable vein**:
+  - the central beam crosses the vein;
+  - no bone and no air lie above it;
+  - the top is ≤ 60 mm deep and the bottom is inside the 75 mm window;
+  - the vein does not touch the CT field of view within 10 mm of the probe footprint.
+* **Outcome**:
+  - The AP diameter ratio on the central beam, at forces 0.25–20 N in steps of 0.25 N.
+  - **F50** = the smallest force with ratio ≤ 0.5 (interpolated); it is ∞ if not reached by 20 N.
+  - Fc (ratio ≤ 0.1) is reported only, because a linear model is far outside small strain there.
+* **Gate**: S = P90/P10 of F50 over the measurable veins. **PASS iff S ≥ 2.0 with ≥ 8 measurable veins**; with
+  fewer than 8 the result is **INCONCLUSIVE**.
+* **Reported**:
+  - Spearman correlation of F50 with vein depth and with the fat on the path;
+  - the femoral cross-check: median Fc divided by the face area (450 mm²) against 82 mmHg (10.9 kPa); within a
+    factor of 2 is "plausible";
+  - per-vein curves.
+* **Development so far** (training subjects only; geometry, no forces):
+  - 12 of 16 training veins are measurable: depth 16–40 mm, AP diameter 12–15 mm, fat on the path 13–38 mm;
+  - s0014 and s0030 have no vein voxel in the site slice; s0024's veins are 61–68 mm deep.
+* **Consequence**:
+  - **PASS**: register the adaptive compression-ultrasound policy test (Stage 2 P1 candidate). The question is
+    whether a deformation-trained policy reaches F50 on every vein with less over-pressing than the best fixed
+    force.
+  - **FAIL**: one fixed force suffices across these anatomies, and the vein task offers no policy-level positive
+    under this model.
+* **Limits**:
+  - Linear and small-strain, while a 50 % collapse is large strain, so F50 is calibrated rather than predicted.
+  - A one-subject, different-vein calibration; the lumen modelled as a solid with ν = 0.
+  - No venous pressure, no artery pressure, no clot.
+  - Supine CT; untilted probe; the 2 mm mesh gives 6–7 cells across the vein.
 

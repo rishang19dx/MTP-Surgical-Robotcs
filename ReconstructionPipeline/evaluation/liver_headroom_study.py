@@ -23,6 +23,11 @@ Per subject, as registered:
   * gate: per patient median over sites x targets of |u| at 5 N; PASS iff >= 2.0 mm in >= 2/3 of the measurable
     patients at EACH E_L.
 `--dev` writes to .agents/liver/ (never results/) and is meant for TRAINING subjects only (DEC-059 development rule).
+
+`--sliding` (DEC-060, pre-registered separately): the liver slides without friction against the abdominal wall
+(`FEMTissueModel(sliding_region=liver)`, normal-only penalty tie, k_n = PENALTY x E_muscle x h); targets read the
+liver-side field. Everything else, including the gate, is unchanged. `--penalty` (sensitivity runs only) changes PENALTY.
+Without `--sliding` the script does exactly what DEC-059 registered.
 """
 
 from __future__ import annotations
@@ -51,6 +56,8 @@ from ReconstructionPipeline.simulation.fem_batched import BatchedFEMSolver  # no
 from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel  # noqa: E402
 
 PREREGISTRATION = "DEC-059"
+PREREGISTRATION_SLIDING = "DEC-060"
+PENALTY = 100.0
 E_LIVER_KPA = (2.3, 4.1, 5.9)          # effective; primary 4.1 (Fung et al. 2013, healthy range and mean)
 FORCES = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 8.0, 10.0])
 GATE_MM, GATE_FRACTION, GATE_FORCE = 2.0, 2.0 / 3.0, 5.0
@@ -155,7 +162,7 @@ def targets_for(prof, x, z):
 
 
 @torch.no_grad()
-def run_modulus(data, liver, sites, targets, e_liver, dev):
+def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalty=PENALTY):
     xs = [s[0] for s in sites]
     zs = [s[1] for s in sites]
     ct = data["ct_volume"]
@@ -165,8 +172,9 @@ def run_modulus(data, liver, sites, targets, e_liver, dev):
     hi = np.array([min(max(xs) + FACE_HALF[0] + ROI_MARGIN_MM, 70.0), top + 4.0,
                    min(max(zs) + FACE_HALF[1] + ROI_MARGIN_MM, 85.0)])
     t0 = time.perf_counter()
+    slide = dict(sliding_region=liver, sliding_penalty=penalty) if sliding else {}
     model = FEMTissueModel(data, roi_min_mm=lo, roi_max_mm=hi, cache_dir=None, device=dev, verbose=False,
-                           region_modulus=(liver, e_liver / SHARED_E_SCALE))
+                           region_modulus=(liver, e_liver / SHARED_E_SCALE), **slide)
     model.set_parameters(e_scale=SHARED_E_SCALE)
     build_s = time.perf_counter() - t0
     solver = BatchedFEMSolver(model)
@@ -182,7 +190,7 @@ def run_modulus(data, liver, sites, targets, e_liver, dev):
         P = np.array([t[:3] for t in targets[i]])
         P = np.concatenate([P, np.repeat(P[-1:], nT - len(P), 0)], 0)
         X[i * nF:(i + 1) * nF] = P[None]
-    u = st.displacement(torch.as_tensor(X, dtype=torch.float32, device=dev)).double().cpu().numpy()   # (B,nT,3)
+    u = st.displacement(torch.as_tensor(X, dtype=torch.float32, device=dev), inner=sliding).double().cpu().numpy()
     # sanity (reported only): displacement of the skin point under the face centre, 1 mm below the skin
     Xs = T[:, None, :3, 3].float().clone()
     Xs[..., 1] -= 1.0
@@ -190,6 +198,7 @@ def run_modulus(data, liver, sites, targets, e_liver, dev):
     R = T[:, :3, :3].cpu().numpy()
     lat, beam, elev = (np.einsum("btk,bk->bt", u, R[:, :, j]) for j in range(3))
     res = {"build_s": build_s, "region_cells": int(model.cells_in_region().sum()),
+           "interface_nodes": int(len(model.if_pairs)),
            "roi_min_mm": lo.tolist(), "roi_max_mm": hi.tolist(),
            "force_n": st.reaction_force_n.view(nS, nF).cpu().numpy().tolist(),
            "indent_mm": (d - d0).view(nS, nF).cpu().numpy().tolist(),
@@ -222,11 +231,16 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--subjects", default="")
     ap.add_argument("--dev", action="store_true")
-    ap.add_argument("--moduli", default=",".join(str(v) for v in E_LIVER_KPA), help="(dev only) subset of E_L")
+    ap.add_argument("--moduli", default=",".join(str(v) for v in E_LIVER_KPA), help="(dev/sensitivity) subset of E_L")
+    ap.add_argument("--sliding", action="store_true", help="DEC-060: liver slides against the abdominal wall")
+    ap.add_argument("--penalty", type=float, default=PENALTY, help="(sensitivity runs only) sliding penalty factor")
+    ap.add_argument("--sensitivity", action="store_true", help="DEC-060 penalty sensitivity: reported, never the gate")
     args = ap.parse_args(argv)
     moduli = [float(v) for v in args.moduli.split(",")]
-    if not args.dev and moduli != list(E_LIVER_KPA):
-        raise SystemExit("the registered run uses all three moduli")
+    if not (args.dev or args.sensitivity) and (moduli != list(E_LIVER_KPA) or args.penalty != PENALTY):
+        raise SystemExit("the registered run uses all three moduli and the registered penalty")
+    if args.sensitivity and not args.sliding:
+        raise SystemExit("--sensitivity is a DEC-060 (sliding) option")
     base = os.path.join(ROOT, "data", "liver")
     names = [s for s in args.subjects.split(",") if s] or sorted(os.listdir(base))
     split = json.load(open(os.path.join(ROOT, "data", "splits.json")))
@@ -254,7 +268,7 @@ def main(argv=None):
                 sites, tg = [sites[i] for i in keep], [tg[i] for i in keep]
             row["by_modulus"] = {}
             for e in moduli:
-                r = run_modulus(data, liver, sites, tg, e, dev)
+                r = run_modulus(data, liver, sites, tg, e, dev, sliding=args.sliding, penalty=args.penalty)
                 r.update(patient_stat(r))
                 row["by_modulus"][str(e)] = r
                 print(f"{n} ({row['split']}) E_L {e} kPa: {len(sites)} sites, median |u| at 5 N "
@@ -281,14 +295,18 @@ def main(argv=None):
     stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = os.path.join(ROOT, ".agents", "liver") if args.dev else os.path.join(ROOT, "results")
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"liver_headroom_{'dev_' if args.dev else ''}{stamp}")
+    tag = ("sliding_" if args.sliding else "") + ("sens_" if args.sensitivity else "") + ("dev_" if args.dev else "")
+    path = os.path.join(out_dir, f"liver_headroom_{tag}{stamp}")
     meta = {"script": "ReconstructionPipeline/evaluation/liver_headroom_study.py", "commit": commit,
-            "preregistration": PREREGISTRATION, "dev": bool(args.dev), "moduli_kpa": moduli,
+            "preregistration": PREREGISTRATION_SLIDING if args.sliding else PREREGISTRATION, "dev": bool(args.dev),
+            "sliding": bool(args.sliding), "penalty": args.penalty, "sensitivity": bool(args.sensitivity),
+            "moduli_kpa": moduli,
             "forces_n": FORCES.tolist(), "gate": {"mm": GATE_MM, "fraction": GATE_FRACTION, "force_n": GATE_FORCE},
             "shared_e_scale": SHARED_E_SCALE}
     json.dump({"meta": meta, "gate": gate, "pass": overall, "patients": rows}, open(path + ".json", "w"), indent=1)
-    L = [f"# Liver target-shift headroom ({stamp})", "",
-         f"pre-registration {PREREGISTRATION} · commit `{commit}` · deformation-only shift |u| of liver targets "
+    L = [f"# Liver target-shift headroom{' — SLIDING liver (DEC-060)' if args.sliding else ''}"
+         f"{' — penalty sensitivity ' + str(args.penalty) if args.sensitivity else ''} ({stamp})", "",
+         f"pre-registration {meta['preregistration']} · commit `{commit}` · deformation-only shift |u| of liver targets "
          f"(deformable − kinematic) · gate: median at {GATE_FORCE:.0f} N ≥ {GATE_MM} mm in ≥ 2/3 of measurable patients at "
          "every liver modulus", "", "## Gate", "", "| Liver E (kPa) | Measurable patients | ≥ 2 mm | Pass |",
          "| ---: | ---: | ---: | :---: |"]

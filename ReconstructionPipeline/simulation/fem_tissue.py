@@ -55,7 +55,7 @@ import hashlib
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -219,7 +219,10 @@ class FEMTissueModel:
         cache_dir: Optional[str] = DEFAULT_CACHE_DIR,
         device: Optional[torch.device] = None,
         verbose: bool = True,
-        region_modulus: Optional[Tuple[np.ndarray, float]] = None,
+        region_modulus: Optional[Tuple] = None,
+        sliding_region: Optional[np.ndarray] = None,
+        sliding_penalty: float = 100.0,
+        sliding_mode: str = "normal",
     ):
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.verbose = verbose
@@ -231,8 +234,20 @@ class FEMTissueModel:
         self.fat_hu = float(fat_hu_threshold)
         # (mask, E kPa): soft cells whose centre voxel lies in `mask` (same (z,y,x) grid as ct_volume) get modulus E
         # instead of the HU rule (before e_scale, like e_fat / e_muscle).  DEC-059: the liver.  None = HU rule only.
+        # An optional third entry gives the region its own Poisson ratio (DEC-060 vein lumen: compressible).
         self._region_mask = None if region_modulus is None else np.asarray(region_modulus[0], dtype=bool)
         self.e_region = None if region_modulus is None else float(region_modulus[1])
+        self.nu_region = None if region_modulus is None or len(region_modulus) < 3 else float(region_modulus[2])
+        # Sliding interface (DEC-060): the soft cells inside `sliding_region` (same (z,y,x) grid as ct_volume; the
+        # liver) slide without friction against the "wall" cells, i.e. the soft cells above the region's top cell in
+        # their column. Interface nodes are duplicated (region side / wall side) and each pair is tied along the
+        # interface normal only, with a penalty spring k_n = sliding_penalty x E_muscle x h. Linear, so the
+        # precomputed Green's functions still apply.
+        self._slide_mask = None if sliding_region is None else np.asarray(sliding_region, dtype=bool)
+        self.sliding_penalty = float(sliding_penalty)
+        if sliding_mode not in ("normal", "tied"):    # "tied" (all directions) is the test control: = no split
+            raise ValueError(f"sliding_mode must be normal|tied, got {sliding_mode}")
+        self.sliding_mode = sliding_mode
         self._region_origin = np.asarray(patient_data["origin_mm"], dtype=np.float64)
         self._region_spacing = np.asarray(patient_data["spacing_mm"], dtype=np.float64)
         self.e_scale = float(e_scale)
@@ -260,6 +275,11 @@ class FEMTissueModel:
         self.mesh: TetMesh = build_tet_mesh(patient_data, self.roi_min, self.roi_max, h=element_size_mm,
                                             body_hu=body_hu, bone_hu=bone_hu)
         self.timings["mesh_s"] = time.perf_counter() - t0
+        self.n_base_nodes = self.mesh.num_nodes
+        self.if_pairs = np.zeros((0, 2), dtype=np.int64)
+        self.if_normals = np.zeros((0, 3))
+        if self._slide_mask is not None:
+            self._split_sliding_interface()
         m = self.mesh
         self.h = m.h
         self.NX, self.NY, self.NZ = m.lattice_shape
@@ -274,12 +294,19 @@ class FEMTissueModel:
         key_params = dict(v=_CACHE_VERSION, vol=volume_hash(patient_data), roi=[*self.roi_min, *self.roi_max],
                           h=self.h, nu=self.nu, ef=self.e_fat, em=self.e_muscle, fhu=self.fat_hu,
                           bhu=body_hu, bone=bone_hu, rtol=pcg_rtol)
+        if self.nu_region is not None:
+            key_params.update(nur=self.nu_region)
+        if self._slide_mask is not None:
+            key_params.update(slide=hashlib.sha1(np.packbits(self._slide_mask).tobytes()).hexdigest()[:16],
+                              kpen=self.sliding_penalty, smode=self.sliding_mode)
         if self._region_mask is not None:   # opt-in: existing cache keys are unchanged
             key_params.update(er=self.e_region,
                               rm=hashlib.sha1(np.packbits(self._region_mask).tobytes()).hexdigest()[:16])
         self.cache_key = hashlib.sha1(json.dumps(key_params, sort_keys=True).encode()).hexdigest()[:20]
         loaded = False
         path = None
+        if self._slide_mask is not None:
+            cache_dir = None            # the interface field G_if is not part of the cache format
         if cache_dir:
             path = os.path.join(cache_dir, f"fem_{self.cache_key}.pt")
             if os.path.exists(path):
@@ -305,6 +332,11 @@ class FEMTissueModel:
         self.skin_to_free = -np.ones(len(m.skin_nodes), dtype=np.int64)
         self.skin_to_free[self.free_skin] = np.arange(len(self.free_skin))
         self.G_lat = G_lat.to(self.device, self.field_dtype).contiguous()   # (Sf, 3*NZ*NY*NX)
+        if not hasattr(self, "G_if"):
+            self.G_if = torch.zeros(G_lat.shape[0], 0, dtype=torch.float16)
+        self.G_if = self.G_if.to(self.device, self.field_dtype).contiguous()  # (Sf, 3*n_if) region-side copies
+        if not hasattr(self, "if_lat_zyx"):
+            self.if_lat_zyx = np.zeros(0, dtype=np.int64)
         self._lat_origin_t = torch.tensor(m.lattice_origin, dtype=torch.float32, device=self.device)
         self._lat_ext_t = torch.tensor([(self.NX - 1) * self.h, (self.NY - 1) * self.h, (self.NZ - 1) * self.h],
                                        dtype=torch.float32, device=self.device)
@@ -327,19 +359,72 @@ class FEMTissueModel:
         oy, sy = float(patient_data["origin_mm"][1]), float(patient_data["spacing_mm"][1])
         return np.where(bone.any(axis=1), oy + top * sy, np.nan)
 
+    def _cells_in(self, mask: np.ndarray) -> np.ndarray:
+        """(Nc,) bool: soft cells whose centre voxel lies in `mask` ((z,y,x) grid of ct_volume)."""
+        m = self.mesh
+        c = m.lattice_origin[None, :] + (m.cell_ijk + 0.5) * m.h
+        ijk = np.rint((c - self._region_origin) / self._region_spacing).astype(np.int64)
+        nz, ny, nx = mask.shape
+        ok = (ijk[:, 0] >= 0) & (ijk[:, 0] < nx) & (ijk[:, 1] >= 0) & (ijk[:, 1] < ny) & (ijk[:, 2] >= 0) & \
+            (ijk[:, 2] < nz)
+        out = np.zeros(len(c), dtype=bool)
+        out[ok] = mask[ijk[ok, 2], ijk[ok, 1], ijk[ok, 0]]
+        return out
+
+    def _split_sliding_interface(self):
+        """Duplicate the nodes shared by sliding-region cells and wall cells (see __init__)."""
+        from scipy.ndimage import gaussian_filter, map_coordinates
+        m = self.mesh
+        inside = self._cells_in(self._slide_mask)
+        ci = m.cell_ijk
+        # wall cells: soft, not inside, above the topmost inside cell of their (i, k) column
+        top = {}
+        for (i, j, k) in ci[inside]:
+            top[(i, k)] = max(top.get((i, k), -1), j)
+        top_j = np.array([top.get((i, k), 10 ** 9) for (i, _, k) in ci])
+        wall = (~inside) & (ci[:, 1] > top_j)
+        corner = ci[:, None, :] + CUBE_CORNERS[None]                                     # (Nc,8,3)
+        NX, NY, NZ = m.lattice_shape
+        lat = (corner[..., 0] * NY + corner[..., 1]) * NZ + corner[..., 2]
+        node_of_lat = -np.ones(NX * NY * NZ, dtype=np.int64)
+        node_of_lat[(m.node_ijk[:, 0] * NY + m.node_ijk[:, 1]) * NZ + m.node_ijk[:, 2]] = np.arange(m.num_nodes)
+        nodes_in = np.unique(node_of_lat[lat[inside]].ravel())
+        nodes_wall = np.unique(node_of_lat[lat[wall]].ravel())
+        shared = np.intersect1d(nodes_in, nodes_wall)
+        shared = shared[(shared >= 0) & ~m.fixed[shared]]
+        n0 = m.num_nodes
+        dup = n0 + np.arange(len(shared))
+        remap = np.arange(n0 + len(shared))
+        remap[shared] = dup
+        tets = m.tets.copy()
+        in_tet = inside[m.tet_cell]
+        tets[in_tet] = remap[tets[in_tet]]
+        # outward normal of the region at each interface node: -grad of the smoothed mask
+        sm = gaussian_filter(self._slide_mask.astype(np.float32), 2.0)
+        P = m.nodes[shared]
+        v = (P - self._region_origin) / self._region_spacing                              # (x,y,z) voxel
+        grads = []
+        for ax_zyx in (2, 1, 0):                                                          # d/dx, d/dy, d/dz
+            g = np.gradient(sm, axis=ax_zyx)
+            grads.append(map_coordinates(g, [v[:, 2], v[:, 1], v[:, 0]], order=1, mode="nearest"))
+        nrm = -np.stack(grads, 1)
+        ln = np.linalg.norm(nrm, axis=1, keepdims=True)
+        nrm = np.where(ln > 1e-6, nrm / np.maximum(ln, 1e-12), np.array([0.0, 1.0, 0.0]))
+        self.mesh = replace(m, tets=tets, nodes=np.concatenate([m.nodes, P]),
+                            node_ijk=np.concatenate([m.node_ijk, m.node_ijk[shared]]),
+                            fixed=np.concatenate([m.fixed, np.zeros(len(shared), bool)]),
+                            bone_node=np.concatenate([m.bone_node, np.zeros(len(shared), bool)]))
+        self.if_pairs = np.stack([shared, dup], 1)
+        self.if_normals = nrm
+        self.timings["interface_nodes"] = float(len(shared))
+        self.timings["sliding_cells"] = float(inside.sum())
+        self.timings["wall_cells"] = float(wall.sum())
+
     def cells_in_region(self) -> Optional[np.ndarray]:
         """(Nc,) bool: soft cells whose centre voxel lies in the `region_modulus` mask (None without a region)."""
         if self._region_mask is None:
             return None
-        m = self.mesh
-        c = m.lattice_origin[None, :] + (m.cell_ijk + 0.5) * self.h                      # (Nc,3) P mm
-        ijk = np.rint((c - self._region_origin) / self._region_spacing).astype(np.int64)  # (x,y,z) voxel
-        nz, ny, nx = self._region_mask.shape
-        ok = (ijk[:, 0] >= 0) & (ijk[:, 0] < nx) & (ijk[:, 1] >= 0) & (ijk[:, 1] < ny) & (ijk[:, 2] >= 0) & \
-            (ijk[:, 2] < nz)
-        out = np.zeros(len(c), dtype=bool)
-        out[ok] = self._region_mask[ijk[ok, 2], ijk[ok, 1], ijk[ok, 0]]
-        return out
+        return self._cells_in(self._region_mask)
 
     def _precompute(self) -> torch.Tensor:
         m = self.mesh
@@ -354,11 +439,27 @@ class FEMTissueModel:
             E_cell = np.where(in_region, self.e_region * 1e-3, E_cell)
             self.timings["region_cells"] = float(in_region.sum())
         Ke = Kref[m.tet_ref] * E_cell[m.tet_cell][:, None, None]
+        if in_region is not None and self.nu_region is not None:
+            Kref_r = np.stack([_tet_stiffness(corners[k], 1.0, self.nu_region) for k in KUHN_TETS])
+            rt = in_region[m.tet_cell]
+            Ke[rt] = Kref_r[m.tet_ref[rt]] * E_cell[m.tet_cell[rt]][:, None, None]
         dofs = (m.tets[:, :, None] * 3 + np.arange(3)).reshape(-1, 12)
         rows = np.repeat(dofs, 12, axis=1).ravel()
         cols = np.tile(dofs, (1, 12)).ravel()
         n = 3 * m.num_nodes
         K = sps.coo_matrix((Ke.ravel(), (rows, cols)), shape=(n, n)).tocsr()
+        if len(self.if_pairs):
+            k_n = self.sliding_penalty * self.e_muscle * 1e-3 * self.h                      # N/mm
+            nn = k_n * (np.einsum("pi,pj->pij", self.if_normals, self.if_normals) if self.sliding_mode == "normal"
+                        else np.broadcast_to(np.eye(3), (len(self.if_pairs), 3, 3)))         # (P,3,3)
+            a, b_ = self.if_pairs[:, 0], self.if_pairs[:, 1]
+            da, db = a[:, None] * 3 + np.arange(3), b_[:, None] * 3 + np.arange(3)
+            R, Cn, V = [], [], []
+            for (r_, c_, sgn) in ((da, da, 1), (db, db, 1), (da, db, -1), (db, da, -1)):
+                R.append(np.repeat(r_, 3, axis=1).ravel())
+                Cn.append(np.tile(c_, (1, 3)).ravel())
+                V.append(sgn * nn.ravel())
+            K = K + sps.coo_matrix((np.concatenate(V), (np.concatenate(R), np.concatenate(Cn))), shape=(n, n)).tocsr()
         free_dof = np.repeat(~m.fixed, 3)
         fidx = np.nonzero(free_dof)[0]
         Kff = K[fidx][:, fidx].tocsr()
@@ -385,7 +486,8 @@ class FEMTissueModel:
         NX, NY, NZ = self.NX, self.NY, self.NZ
         lat_src = -np.ones((NX, NY, NZ), dtype=np.int64)
         ijk = m.node_ijk
-        lat_src[ijk[:, 0], ijk[:, 1], ijk[:, 2]] = np.arange(m.num_nodes)
+        nb0 = self.n_base_nodes                     # duplicated (region-side) nodes never feed the main lattice
+        lat_src[ijk[:nb0, 0], ijk[:nb0, 1], ijk[:nb0, 2]] = np.arange(nb0)
         jj = np.arange(NY)[None, :, None]
         skin_j = -np.ones((NX, NZ), dtype=np.int64)
         skin_node_of_col = -np.ones((NX, NZ), dtype=np.int64)
@@ -403,6 +505,13 @@ class FEMTissueModel:
         Sf3 = 3 * len(free_skin)
         Nlat = NX * NY * NZ
         G_lat = torch.zeros(Sf3, 3 * Nlat, dtype=torch.float16)
+        n_if = len(self.if_pairs)
+        G_if = torch.zeros(Sf3, 3 * n_if, dtype=torch.float16)
+        if n_if:
+            dup_dof = torch.from_numpy(dof_to_free[(self.if_pairs[:, 1][None, :] * 3 +
+                                                    np.arange(3)[:, None])]).to(dev)          # (3, n_if), comp-major
+            ij = m.node_ijk[self.if_pairs[:, 1]]
+            self.if_lat_zyx = (ij[:, 2] * NY + ij[:, 1]) * NX + ij[:, 0]                       # flat (z,y,x) index
         C = np.zeros((Sf3, Sf3), dtype=np.float64)
         rows_t = torch.from_numpy(rhs_rows).to(dev)
         t1 = time.perf_counter()
@@ -424,6 +533,9 @@ class FEMTissueModel:
                 fr = free_of_node_dof[src_c * 3 + c]
                 fr = torch.where(valid & (fr >= 0), fr, torch.full_like(fr, nf))
                 G_lat[sl, c * Nlat:(c + 1) * Nlat] = Xp[fr, :].t().half().cpu()
+            if n_if:
+                fr_if = torch.where(dup_dof >= 0, dup_dof, torch.full_like(dup_dof, nf)).reshape(-1)
+                G_if[sl] = Xp[fr_if, :].t().half().cpu()
             del X, B, Xp
         if dev.type == "cuda":
             torch.cuda.synchronize()
@@ -433,6 +545,7 @@ class FEMTissueModel:
         # Maxwell-Betti: K symmetric -> C symmetric; the residual asymmetry measures assembly + PCG error
         self.timings["compliance_asymmetry"] = float(np.linalg.norm(C - C.T) / np.linalg.norm(C))
         self.C_base = 0.5 * (C + C.T)
+        self.G_if = G_if
         del A
         return G_lat
 

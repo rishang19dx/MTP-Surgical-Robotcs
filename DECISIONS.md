@@ -57,6 +57,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Neither gap counts: do not move on** |
 | **Nov 2026** | `DEC-058` | P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound | **Not trained; headroom 0.3–1.1 mm, tracks detector bias** |
 | **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -1987,4 +1988,62 @@ A chronological record of all architectural, research, algorithmic, and engineer
     is undocumented: centroids are 100–770 mm apart in both RAS and LPS. It is replaced by a position-free shape
     check. In all 12 subjects, the STL and label 5 have the same shape up to one uniform scale: volume ratio
     0.30–0.32 and extents differing by 32–33 %, i.e. lengths × about 0.68. So label 5 is the liver.
+
+### `DEC-060`: Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED
+* **Date**: November 16, 2026 (branch `liver-sliding`, worktree `../MTP-sliding`, so that the DEC-059 run's commit
+  stamp stays clean). Committed **before** any sliding-liver displacement was computed on a patient.
+* **Context**:
+  - The user wants a positive result: a task in which deformation changes what a robot does.
+  - Under DEC-059's tied-organ model, the first two (training) patients gave about 1 mm at 5 N, half the gate.
+  - The tied model welds the liver to the abdominal wall, which is 2–5 times stiffer. In anatomy the liver is
+    separated from the wall by a serous film and slides.
+  - User decisions (16 Nov):
+    - add frictionless sliding (**option B**: normal tie, tangential freedom; still linear);
+    - **against the abdominal wall only**;
+    - first, a literature search for a realistic magnitude.
+* **Literature** (16 Nov, recorded for the Result):
+  - **No study was found that measures how far a liver target moves under ultrasound probe pressure.**
+    - Byenfeldt et al. 2019 (*Ultrasound Med Biol* 45:411–428, n = 112) report that maximum intercostal probe
+      pressure significantly reduces the skin-to-liver-capsule distance, but its mm values are behind a paywall.
+    - The sliding model can therefore be called plausible, not validated, against the liver's response to a probe.
+  - **Precedent.** A HIFU liver simulation split its mesh at the abdominal wall so that the liver slides along it
+    (Schwenke et al. 2015, *J Ther Ultrasound* 3:P51).
+* **Model** (`FEMTissueModel(sliding_region=liver)`; tests `ReconstructionPipeline/tests/test_fem_sliding.py`):
+  - **Interface.** Wall cells are the soft non-liver cells above the topmost liver cell of their column. The nodes
+    shared by liver cells and wall cells (not fixed) are duplicated. Liver-cell tets use the copy.
+  - **Coupling.** Each pair is tied only along the interface normal n (−∇ of the liver mask smoothed with σ = 2 mm),
+    by a penalty spring k_n = 100 × E_muscle × h. No tangential coupling, no friction, no separation.
+  - **Tests.** A control with all three directions tied reproduces the unsplit mesh. On a slab, the normal gap is
+    at most 0.004 mm against a tangential slip of up to 0.36 mm.
+  - **The outcome is not predetermined.** On that slab, sliding *reduced* the motion at one region point
+    (0.079 → 0.035 mm), because the wall no longer drags the region sideways.
+  - **Geometry check** (training subjects s0015 and s0010; CPU, no displacement computed):
+    - about 2,450 and 2,650 interface node pairs;
+    - 61–66 % of the normals face anterior (n_y > 0.5), 3 % face posterior.
+  - The liver stays tied to all non-wall neighbours, so this is a lower bound on the sliding effect.
+  - Targets read the liver-side field (`displacement(..., inner=True)`), which is exact inside liver cells.
+* **Everything else is unchanged from DEC-059, including its addendum**:
+  - data, crop, sites (with no bone and no air on the path), targets, forces, moduli (2.3 / 4.1 / 5.9 kPa);
+  - outcome: |u| at the target material point; in kinematic mode the target does not move;
+  - **gate**: per patient, the median over sites and targets of |u| at 5 N must be ≥ 2.0 mm in ≥ 2/3 of the
+    measurable patients, **at each modulus**.
+  - Script: `liver_headroom_study.py --sliding`, frozen with this commit.
+* **Reported, not decisive**:
+  - the per-patient difference from the DEC-059 tied result;
+  - a penalty sensitivity (k_n factor 30 and 300, E_L = 4.1 kPa) on training subjects s0004, s0010 and s0015
+    (`--sliding --sensitivity`).
+* **What was known at registration**:
+  - DEC-059 tied results for s0004 and s0010 (both training): 0.84–1.12 mm.
+  - The decision to add sliding was made on anatomical grounds after those two values were seen. That is disclosed
+    here, and the gate was not changed.
+* **Consequence**:
+  - **Pass** (sliding liver ≥ 2 mm): a liver-targeting, force-choosing policy test, using the sliding model, becomes
+    the Stage 2 P1 candidate, under its own pre-registration.
+  - **Fail**: "even with the liver sliding against the wall, a 5 N probe moves liver targets by less than 2 mm under
+    this model". The policy-level positive then rests on the vein (DEC-061, to be registered).
+* **Limits**:
+  - Wall-only sliding; linear; a penalty approximation of the tie.
+  - Normals from a voxel mask.
+  - No breathing, no organ separation.
+  - All the DEC-059 limits apply.
 

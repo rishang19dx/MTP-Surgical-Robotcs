@@ -61,6 +61,7 @@ class BatchedFEMState:
     u_grid: Optional[torch.Tensor]        # (B,3,NZ,NY,NX) float32, or None if field not requested
     grid_origin_mm: torch.Tensor          # (3,)
     grid_extent_mm: torch.Tensor          # (3,)
+    u_grid_inner: Optional[torch.Tensor] = None   # DEC-060: field with the sliding region's side at interface nodes
 
     def probe_face_poses(self, poses_P: torch.Tensor) -> torch.Tensor:
         """(B,4,4) skin probe poses -> poses of the indented face (image plane), as
@@ -81,14 +82,15 @@ class BatchedFEMState:
             X = x - self.displacement(X)
         return X
 
-    def displacement(self, X: torch.Tensor) -> torch.Tensor:
+    def displacement(self, X: torch.Tensor, inner: bool = False) -> torch.Tensor:
         """Displacement (mm) at reference points X (B, N, 3) in frame P -> (B, N, 3).  Zero outside the ROI
         is NOT applied here; `padding_mode='border'` matches the single-env `_make_displacement_fn`."""
         if self.u_grid is None:
             raise ValueError("solve(..., field=True) is required for displacement()")
         B, N, _ = X.shape
+        grid = self.u_grid_inner if (inner and self.u_grid_inner is not None) else self.u_grid
         g = (2.0 * (X.to(self.u_grid) - self.grid_origin_mm) / self.grid_extent_mm - 1.0).view(B, N, 1, 1, 3)
-        u = F.grid_sample(self.u_grid, g, mode="bilinear", padding_mode="border", align_corners=True)
+        u = F.grid_sample(grid, g, mode="bilinear", padding_mode="border", align_corners=True)
         return u.view(B, 3, N).transpose(1, 2)
 
 
@@ -353,9 +355,9 @@ class BatchedFEMSolver:
         contact = Fs > 0
         K_c = torch.where(contact, K_c, torch.zeros_like(K_c))
 
-        u_grid = None
+        u_grid = u_inner = None
         if field:
-            u_grid = self._field(f, fr, b, es_env, Wbg)
+            u_grid, u_inner = self._field(f, fr, b, es_env, Wbg)
 
         z = torch.zeros_like(Fs)
         return BatchedFEMState(
@@ -365,7 +367,7 @@ class BatchedFEMSolver:
             compression_mm=torch.where(contact, fo["comp"], z), contact_stiffness_n_per_mm=K_c,
             force_vec_n=fo["Fvec"] * contact[:, None], torque_nmm=fo["tau"] * contact[:, None],
             in_contact=contact, num_active_nodes=(f > 0).sum(1), active_set_iters=it,
-            active_set_converged=conv, u_grid=u_grid,
+            active_set_converged=conv, u_grid=u_grid, u_grid_inner=u_inner,
             grid_origin_mm=self.lat_origin.float(),
             grid_extent_mm=torch.tensor([(m.NX - 1) * h, (m.NY - 1) * h, (m.NZ - 1) * h],
                                         dtype=torch.float32, device=dev),
@@ -398,4 +400,12 @@ class BatchedFEMSolver:
         if Wbg is not None:
             W[:, :-1] += Wbg
         u = W[:, :-1].to(m.G_lat.dtype) @ m.G_lat                                          # (B, 3 N_lat)
-        return u.float().view(B, 3, m.NZ, m.NY, m.NX)
+        u = u.float().view(B, 3, m.NZ, m.NY, m.NX)
+        G_if = getattr(m, "G_if", None)
+        if G_if is None or G_if.shape[1] == 0:
+            return u, None
+        ui = (W[:, :-1].to(G_if.dtype) @ G_if).float().view(B, 3, -1)                       # (B, 3, n_if)
+        inner = u.clone().view(B, 3, -1)
+        idx = torch.as_tensor(m.if_lat_zyx, device=u.device)
+        inner[:, :, idx] = ui
+        return u, inner.view_as(u)

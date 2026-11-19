@@ -58,7 +58,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-058` | P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound | **Not trained; headroom 0.3–1.1 mm, tracks detector bias** |
 | **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
-| **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
+| **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2120,4 +2121,52 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - A one-subject, different-vein calibration; the lumen modelled as a solid with ν = 0.
   - No venous pressure, no artery pressure, no clot.
   - Supine CT; untilted probe; the 2 mm mesh gives 6–7 cells across the vein.
+* **Result: the registered calibration is unreachable** (19–20 Nov; diagnostic runs, not a `results/` file):
+  - The lumen-fit calibration was started on 19 Nov. It made no progress in about 5 h, and the laptop then rebooted.
+    The first bracket value, 0.05 kPa, is 220× softer than the surrounding fat, which leaves the PCG badly
+    conditioned.
+  - Single phantom solves at 1.87 N (h = 1 mm, fat at the shared 10.96 kPa) give the AP diameter ratio:
+
+    | Lumen (kPa) | 11 | 2 | 0.5 | 0.1 (CPU) |
+    | --- | --- | --- | --- | --- |
+    | Ratio | 0.915 | 0.844 | 0.815 | 0.804 |
+
+  - The ratio saturates near 0.80 as the lumen empties. With the model's fat modulus, even an empty 5 mm vein 11.5 mm
+    deep narrows by only about 20 % at the measured 1.87 N, against 50 % in the one direct measurement (Sato & Karino
+    2022). Linearly, halving would take roughly 4–5 N.
+  - **Reading.** The model's soft tissue is roughly 2–3× too stiff for this measurement. This is the first check of
+    the tissue against a measured force–deformation pair, and it agrees with the DEC-048 caveat (fat 11 kPa vs the
+    1–2 kPa a literature search reported). Every deformation magnitude reported so far (DEC-056, DEC-058, DEC-059,
+    DEC-060) may therefore be understated.
+  - The vein study was not run.
+
+### `DEC-062`: Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver — PRE-REGISTERED
+* **Date**: November 20, 2026 (branch `liver-sliding`). Committed before the fat fit ran.
+* **Decision (user, 19 Nov)**: calibrate the **fat** rather than the lumen. Then re-run the vein study and the liver
+  bound at the fitted fat.
+* **Fit** (`vein_calibration.py --fit fat`):
+  - The DEC-061 phantom (5 mm vein, centre 11.5 mm deep, fat block, h = 1 mm) with the lumen held near-empty
+    (0.1 kPa effective, ν = 0).
+  - The effective fat modulus is bisected in log space over [0.3, 12] kPa until the AP ratio is 0.50 ± 0.01 at
+    1.87 N.
+  - Muscle keeps its modulus (21.9 kPa effective). The run uses the GPU, or the CPU when the GPU is occupied (another
+    project is using it).
+* **Checks, not fitted**:
+  - **Literature range.** A web search on 19 Nov found subcutaneous fat moduli from about 1 kPa (quasi-static
+    compression) to about 26 kPa (in vivo, gluteal, 1 N load), strongly dependent on load and strain rate. The fitted
+    value is reported against that range; the sources are to be verified before they are cited in the paper.
+  - **The femoral cross-check of DEC-061**, after the vein study.
+* **Re-runs at the fitted fat, with the protocols and gates unchanged**:
+  1. **Vein**: the DEC-061 study, with the near-empty lumen and the fitted fat. Gate: P90/P10 of F50 ≥ 2 over
+     ≥ 8 measurable veins.
+  2. **Liver, tied**: the DEC-059 study (`--fat-calibration`). Gate: ≥ 2 mm in ≥ 2/3 of patients at every liver
+     modulus.
+  - The original results stand alongside, and nothing is replaced.
+* **Not re-run now (listed)**: the muscle study (DEC-056), the navigation transfer (DEC-057), the force headroom
+  (DEC-058), the sliding liver (DEC-060).
+* **Known conflict, disclosed**:
+  - The shared e_scale was fitted on 5 Nov to a literature force–indentation curve (k0 = 0.5 N/mm, β = 0.15/mm).
+    Softer fat makes the model's force–indentation relation softer than that curve.
+  - A single subject's popliteal-fossa fat is applied to the groin and to the abdominal wall.
+  - The linear FEM is only validated to about 5 N against a reference with the old moduli.
 

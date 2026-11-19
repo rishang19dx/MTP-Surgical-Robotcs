@@ -162,7 +162,7 @@ def targets_for(prof, x, z):
 
 
 @torch.no_grad()
-def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalty=PENALTY):
+def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalty=PENALTY, e_fat=None):
     xs = [s[0] for s in sites]
     zs = [s[1] for s in sites]
     ct = data["ct_volume"]
@@ -173,6 +173,8 @@ def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalt
                    min(max(zs) + FACE_HALF[1] + ROI_MARGIN_MM, 85.0)])
     t0 = time.perf_counter()
     slide = dict(sliding_region=liver, sliding_penalty=penalty) if sliding else {}
+    if e_fat is not None:                       # DEC-062: fat modulus from the vein calibration (effective kPa)
+        slide["e_fat_kpa"] = e_fat / SHARED_E_SCALE
     model = FEMTissueModel(data, roi_min_mm=lo, roi_max_mm=hi, cache_dir=None, device=dev, verbose=False,
                            region_modulus=(liver, e_liver / SHARED_E_SCALE), **slide)
     model.set_parameters(e_scale=SHARED_E_SCALE)
@@ -235,8 +237,15 @@ def main(argv=None):
     ap.add_argument("--sliding", action="store_true", help="DEC-060: liver slides against the abdominal wall")
     ap.add_argument("--penalty", type=float, default=PENALTY, help="(sensitivity runs only) sliding penalty factor")
     ap.add_argument("--sensitivity", action="store_true", help="DEC-060 penalty sensitivity: reported, never the gate")
+    ap.add_argument("--fat-calibration", default="", help="DEC-062: results/vein_calibration_fat_<stamp>.json")
     args = ap.parse_args(argv)
     moduli = [float(v) for v in args.moduli.split(",")]
+    e_fat = None
+    if args.fat_calibration:
+        cal = json.load(open(args.fat_calibration))
+        if cal.get("meta", {}).get("fit") != "fat" or not cal.get("converged"):
+            raise SystemExit("--fat-calibration needs a converged DEC-062 fat fit")
+        e_fat = float(cal["fat_e_eff_kpa"])
     if not (args.dev or args.sensitivity) and (moduli != list(E_LIVER_KPA) or args.penalty != PENALTY):
         raise SystemExit("the registered run uses all three moduli and the registered penalty")
     if args.sensitivity and not args.sliding:
@@ -268,7 +277,7 @@ def main(argv=None):
                 sites, tg = [sites[i] for i in keep], [tg[i] for i in keep]
             row["by_modulus"] = {}
             for e in moduli:
-                r = run_modulus(data, liver, sites, tg, e, dev, sliding=args.sliding, penalty=args.penalty)
+                r = run_modulus(data, liver, sites, tg, e, dev, sliding=args.sliding, penalty=args.penalty, e_fat=e_fat)
                 r.update(patient_stat(r))
                 row["by_modulus"][str(e)] = r
                 print(f"{n} ({row['split']}) E_L {e} kPa: {len(sites)} sites, median |u| at 5 N "
@@ -295,11 +304,13 @@ def main(argv=None):
     stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = os.path.join(ROOT, ".agents", "liver") if args.dev else os.path.join(ROOT, "results")
     os.makedirs(out_dir, exist_ok=True)
-    tag = ("sliding_" if args.sliding else "") + ("sens_" if args.sensitivity else "") + ("dev_" if args.dev else "")
+    tag = ("fatcal_" if e_fat is not None else "") + ("sliding_" if args.sliding else "") + ("sens_" if args.sensitivity else "") + ("dev_" if args.dev else "")
     path = os.path.join(out_dir, f"liver_headroom_{tag}{stamp}")
     meta = {"script": "ReconstructionPipeline/evaluation/liver_headroom_study.py", "commit": commit,
-            "preregistration": PREREGISTRATION_SLIDING if args.sliding else PREREGISTRATION, "dev": bool(args.dev),
-            "sliding": bool(args.sliding), "penalty": args.penalty, "sensitivity": bool(args.sensitivity),
+            "preregistration": ("DEC-062" if e_fat is not None else PREREGISTRATION_SLIDING if args.sliding else
+                                PREREGISTRATION), "dev": bool(args.dev),
+            "sliding": bool(args.sliding), "penalty": args.penalty, "fat_e_eff_kpa": e_fat,
+            "fat_calibration": os.path.relpath(args.fat_calibration, ROOT) if args.fat_calibration else None, "sensitivity": bool(args.sensitivity),
             "moduli_kpa": moduli,
             "forces_n": FORCES.tolist(), "gate": {"mm": GATE_MM, "fraction": GATE_FRACTION, "force_n": GATE_FORCE},
             "shared_e_scale": SHARED_E_SCALE}

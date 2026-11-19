@@ -119,13 +119,14 @@ def site_and_path(data, vein, fov):
 
 
 @torch.no_grad()
-def measure(data, vein, site, e_lumen, dev):
+def measure(data, vein, site, e_lumen, dev, e_fat=None):
     ox, oy, oz = data["origin_mm"]
     ct = data["ct_volume"]
     lo = np.array([max(site["x"] - ROI_HALF_X, ox), oy, -ROI_HALF_Z])
     hi = np.array([min(site["x"] + ROI_HALF_X, ox + ct.shape[2] - 1), oy + ct.shape[1] - 1 + 4.0, ROI_HALF_Z])
+    fat = {} if e_fat is None else {"e_fat_kpa": e_fat / SHARED_E_SCALE}
     model = FEMTissueModel(data, roi_min_mm=lo, roi_max_mm=hi, element_size_mm=H_MM, cache_dir=None, device=dev,
-                           verbose=False, region_modulus=(vein, e_lumen / SHARED_E_SCALE, NU_LUMEN))
+                           verbose=False, region_modulus=(vein, e_lumen / SHARED_E_SCALE, NU_LUMEN), **fat)
     model.set_parameters(e_scale=SHARED_E_SCALE)
     s = BatchedFEMSolver(model)
     nF = len(FORCES)
@@ -167,6 +168,8 @@ def main(argv=None):
     if not cal.get("converged"):
         raise SystemExit("calibration did not converge")
     e_lumen = float(cal["lumen_e_eff_kpa"])
+    # DEC-062: a fat-fit calibration also sets the (effective) fat modulus of the patient models
+    e_fat = float(cal["fat_e_eff_kpa"]) if cal.get("meta", {}).get("fit") == "fat" else None
     base = os.path.join(ROOT, "data", "vein")
     names = [s for s in args.veins.split(",") if s] or sorted(os.listdir(base))
     split = json.load(open(os.path.join(ROOT, "data", "splits.json")))
@@ -183,7 +186,7 @@ def main(argv=None):
             row.update(measurable=False, reason=why)
             print(f"{n} ({row['split']}): not measurable ({why})", flush=True)
         else:
-            row.update(measurable=True, site=site, **measure(data, vein, site, e_lumen, dev))
+            row.update(measurable=True, site=site, **measure(data, vein, site, e_lumen, dev, e_fat=e_fat))
             print(f"{n} ({row['split']}): depth {site['depth_top_mm']:.0f} mm, d0 {site['d0_mm']:.0f} mm, fat "
                   f"{site['fat_on_path_mm']:.0f} mm -> F50 {row['F50_n']:.2f} N, Fc {row['Fc_n']:.2f} N", flush=True)
         rows[n] = row
@@ -218,7 +221,7 @@ def main(argv=None):
     path = os.path.join(out_dir, f"vein_compress_{'dev_' if args.dev else ''}{stamp}")
     meta = {"script": "ReconstructionPipeline/evaluation/vein_compress_study.py", "commit": commit,
             "preregistration": PREREGISTRATION, "dev": bool(args.dev), "calibration": os.path.relpath(args.calibration, ROOT),
-            "lumen_e_eff_kpa": e_lumen, "h_mm": H_MM, "forces_n": [float(FORCES[0]), float(FORCES[-1]), 0.25]}
+            "lumen_e_eff_kpa": e_lumen, "fat_e_eff_kpa": e_fat, "h_mm": H_MM, "forces_n": [float(FORCES[0]), float(FORCES[-1]), 0.25]}
     gate = {"P10_F50_n": p10, "P90_F50_n": p90, "spread": S, "measurable": len(meas), "verdict": verdict}
     json.dump({"meta": meta, "gate": gate, "reported": rep, "veins": rows}, open(path + ".json", "w"), indent=1)
     L = [f"# Vein compressibility across patients ({stamp})", "",

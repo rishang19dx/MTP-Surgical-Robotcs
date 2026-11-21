@@ -1,0 +1,387 @@
+<meta charset="utf-8">
+<title>Soft-Tissue Probe Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Layout: an instrument console. A full-bleed 3D viewport with the probe controls docked beside the live B-mode,
+   the way a scanner puts the image next to its knobs. Single dark look by choice (imaging displays are dark). */
+:root {
+  --bg: #0d1016;
+  --panel: #151a22;
+  --line: #262e3a;
+  --fg: #e6e9ee;
+  --muted: #8e98a8;
+  --accent: #4fb3e8;      /* probe / image plane */
+  --force: #ffc93c;       /* force arrow and trace */
+  --heat: #e8553a;        /* displacement */
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--body); font-size: 14px; line-height: 1.5; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 28px; max-width: 1500px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px 24px; }
+h1 { font-family: var(--display); font-weight: 600; font-size: 1.7rem; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); max-width: 70ch; margin: 2px 0 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { font: 500 0.92rem var(--body); color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.tabs button:focus-visible, .ctl button:focus-visible, input:focus-visible { outline: 2px solid var(--force); outline-offset: 2px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; }
+.view { position: relative; min-width: 0; background: radial-gradient(120% 90% at 50% 0%, #1b2230 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 10; max-width: 100%; }
+#gl { width: 100%; height: 100%; display: block; touch-action: none; }
+.hud { position: absolute; left: 12px; top: 10px; font-family: var(--mono); font-size: 0.86rem; background: rgba(8, 10, 14, 0.66); border-radius: 6px; padding: 8px 10px; pointer-events: none; display: grid; gap: 1px; font-variant-numeric: tabular-nums; }
+.hud b { font-family: var(--display); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
+.key { position: absolute; right: 12px; bottom: 10px; background: rgba(8, 10, 14, 0.66); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); display: grid; gap: 4px; pointer-events: none; }
+.bar { width: 160px; height: 10px; border-radius: 2px; }
+.key .ticks { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-family: var(--mono); }
+aside { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.card h2 { font: 600 0.78rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.us { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: stretch; }
+#us { width: 100%; image-rendering: auto; background: #000; border-radius: 4px; aspect-ratio: 150 / 200; max-width: 100%; }
+.depth { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); display: flex; flex-direction: column; justify-content: space-between; text-align: right; }
+.ctl { display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 64px; align-items: center; gap: 8px; }
+.row label { color: var(--muted); font-size: 0.86rem; }
+.row output { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+#force { accent-color: var(--force); }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctl button { font: 500 0.86rem var(--body); color: var(--fg); background: #1d2430; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.ctl button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#trace { width: 100%; height: 90px; display: block; }
+.legend { display: flex; gap: 14px; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.notes p { margin: 0; color: var(--muted); max-width: 70ch; }
+.notes strong { color: var(--fg); font-weight: 500; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } .view { aspect-ratio: 4 / 3; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Soft-Tissue Probe Lab</h1>
+      <p class="sub">Press an ultrasound probe into patient-specific soft tissue. Skin, fat, muscle and organs deform under a linear finite-element model of the patient's CT, and the B-mode is formed from the deformed tissue.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Scene" id="tabs"></nav>
+  </header>
+
+  <section class="main">
+    <div class="view">
+      <canvas id="gl" aria-label="3D view of the body with the probe"></canvas>
+      <div class="hud" id="hud"><b id="h-title">Loading</b><span id="h-force"></span><span id="h-indent"></span><span id="h-u"></span></div>
+      <div class="key"><span>tissue displacement |u|</span><canvas class="bar" id="bar" width="160" height="10"></canvas><div class="ticks"><span>0</span><span id="k-mid"></span><span id="k-max"></span></div></div>
+      <div class="loading" id="loading">loading scene&hellip;</div>
+    </div>
+    <aside>
+      <div class="card">
+        <h2>B-mode at the probe</h2>
+        <div class="us"><div class="depth"><span>0 mm</span><span>25</span><span>50</span><span>75 mm</span></div><canvas id="us" width="150" height="200"></canvas></div>
+      </div>
+      <div class="card ctl">
+        <h2>Probe</h2>
+        <div class="row"><label for="pos">Position</label><input id="pos" type="range" min="0" max="1000" value="500"><output id="pos-o">0 mm</output></div>
+        <div class="row"><label for="force">Force</label><input id="force" type="range" min="0" max="1000" value="600"><output id="force-o">4.0 N</output></div>
+        <div class="toggles">
+          <button id="play" aria-pressed="true">Animate sweep + press</button>
+          <button id="cut" aria-pressed="true">Cut open at image plane</button>
+          <button id="mag" aria-pressed="false">Magnify &times;1</button>
+          <button id="skin" aria-pressed="true">Skin</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Force and indentation</h2>
+        <canvas id="trace" width="660" height="180"></canvas>
+        <div class="legend"><span><i style="background: var(--force)"></i>force (N)</span><span><i style="background: var(--accent)"></i>indentation (mm)</span><span><i style="background: var(--heat)"></i>max |u| (mm)</span></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="notes">
+    <p id="caption"></p>
+    <p><strong>What is computed.</strong> Each scene holds exact FEM solutions on a grid of probe positions along the path and forces of 1, 3.5 and 6 N; between grid points the page interpolates bilinearly. The force is the reaction force of the tissue on the probe face, found by bisection on the indentation. Displacements are shown at true scale unless magnified.</p>
+    <p><strong>Model and limits.</strong> Linear tetrahedral FEM with precomputed Green's functions, 2 mm elements, shared tissue stiffness with the fat fitted to a popliteal-vein compression measurement (3.4 kPa). Small-strain physics, no hyperelasticity; the B-mode is a model-based simulation from CT, not a recorded scan. Source CT: SonoGym / TotalSegmentator (CC BY 4.0).</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+const SCENES = [
+  { id: "spine", label: "Lumbar spine" },
+  { id: "muscle", label: "Paraspinal muscle" },
+  { id: "liver", label: "Liver" },
+  { id: "vein", label: "Groin vein" },
+];
+const CAPTIONS = {
+  spine: "<strong>Lumbar spine (L4).</strong> A transverse sweep across the back. The probe compresses skin, fat and the paraspinal muscles; the bright vertebra echo in the B-mode moves toward the probe as the tissue above it thins.",
+  muscle: "<strong>Paraspinal muscle.</strong> A sweep along the erector spinae. The bright fascia line over the muscle moves up as the fat above it compresses; muscle thickness under the probe is the measured quantity in our study.",
+  liver: "<strong>Liver.</strong> A sweep over the right upper abdomen. The liver (4.1 kPa) slides under the abdominal wall at a normal-only interface, so it can move sideways relative to the wall; the bright line in the B-mode is the liver capsule.",
+  vein: "<strong>Groin vessels.</strong> A transverse view of the femoral vein and artery. The lumen is modelled as nearly empty. In this linear model the lumen narrows only slightly by 6 N; real femoral veins collapse fully near 82 mmHg, so this model under-compresses veins.",
+};
+const RAMP = [[0.0, null], [0.06, null], [0.25, [1.0, 0.92, 0.35]], [0.5, [1.0, 0.55, 0.12]], [0.75, [0.88, 0.15, 0.15]], [1.0, [0.55, 0.0, 0.55]]];
+
+const $ = (id) => document.getElementById(id);
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.localClippingEnabled = true;
+const scene3 = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1.6, 1, 5000);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true;
+scene3.add(new THREE.HemisphereLight(0xdfe8ff, 0x302820, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(0.4, 1, 0.6); scene3.add(sun);
+const fill = new THREE.DirectionalLight(0xffffff, 0.3); fill.position.set(-0.6, 0.3, -0.8); scene3.add(fill);
+
+const clip = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+let S = null;            // current scene data
+let cache = {};
+const state = { play: true, cut: true, mag: 1, skin: true, t: 0, pos: 0.5, force: 4.0, hist: [] };
+
+function ramp(x, base, out) {
+  x = Math.max(0, Math.min(1, x));
+  for (let i = 1; i < RAMP.length; i++) {
+    if (x <= RAMP[i][0]) {
+      const [f0, c0r] = RAMP[i - 1], [f1, c1r] = RAMP[i];
+      const c0 = c0r || base, c1 = c1r || base, w = f1 === f0 ? 0 : (x - f0) / (f1 - f0);
+      out[0] = c0[0] + w * (c1[0] - c0[0]); out[1] = c0[1] + w * (c1[1] - c0[1]); out[2] = c0[2] + w * (c1[2] - c0[2]);
+      return out;
+    }
+  }
+  return out;
+}
+function drawBar(range) {
+  const c = $("bar").getContext("2d"), tmp = [0, 0, 0];
+  for (let i = 0; i < 160; i++) { ramp(i / 159, [0.82, 0.66, 0.58], tmp); c.fillStyle = `rgb(${tmp.map((v) => Math.round(v * 255)).join(",")})`; c.fillRect(i, 0, 1, 10); }
+  $("k-mid").textContent = (range / 2).toFixed(1); $("k-max").textContent = range.toFixed(1) + " mm";
+}
+
+async function load(id) {
+  if (cache[id]) return cache[id];
+  const base = `data/${id}/`;
+  const [meta, mesh, disp, bm] = await Promise.all([
+    fetch(base + "scene.json").then((r) => { if (!r.ok) throw new Error("scene.json " + r.status); return r.json(); }),
+    fetch(base + "mesh.bin").then((r) => r.arrayBuffer()),
+    fetch(base + "disp.bin").then((r) => r.arrayBuffer()),
+    fetch(base + "bmode.bin").then((r) => r.arrayBuffer()),
+  ]);
+  const d = { meta, mesh, disp: new Int8Array(disp), bmode: new Uint8Array(bm) };
+  cache[id] = d;
+  return d;
+}
+
+function build(d) {
+  const group = new THREE.Group();
+  const meta = d.meta, nF = meta.forces.length, nP = meta.positions;
+  let movOff = 0;
+  const parts = [];
+  for (const m of meta.meshes) {
+    const v = new Float32Array(d.mesh, m.v_off, m.nv * 3);
+    const f = new Uint32Array(d.mesh, m.f_off, m.nf * 3);
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(v);
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setIndex(new THREE.BufferAttribute(f, 1));
+    const col = new Float32Array(m.nv * 3);
+    for (let i = 0; i < m.nv; i++) { col[3 * i] = m.color[0]; col[3 * i + 1] = m.color[1]; col[3 * i + 2] = m.color[2]; }
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    const isSkin = m.name === "skin", bone = m.category === "bone";
+    const mat = new THREE.MeshPhongMaterial({
+      vertexColors: true, side: THREE.DoubleSide, shininess: bone ? 18 : 30,
+      transparent: isSkin || m.opacity < 1, opacity: isSkin ? 0.72 : (bone ? 1 : Math.max(0.55, m.opacity)),
+      depthWrite: !isSkin, clippingPlanes: [clip],
+    });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.renderOrder = isSkin ? 2 : 1;
+    group.add(mesh);
+    const part = { m, mesh, base: v, pos, col, isSkin };
+    if (m.moving) { part.idx = Int32Array.from(m.moving); part.off = movOff; movOff += m.moving.length; }
+    parts.push(part);
+  }
+  // probe, image plane, force arrow
+  const probe = new THREE.Mesh(new THREE.BoxGeometry(45, 60, 10).translate(0, -30, 0),
+    new THREE.MeshPhongMaterial({ color: 0x2f8fe0, transparent: true, opacity: 0.55, shininess: 60 }));
+  probe.add(new THREE.LineSegments(new THREE.EdgesGeometry(probe.geometry), new THREE.LineBasicMaterial({ color: 0x9fd6ff })));
+  probe.matrixAutoUpdate = false;
+  const usCanvas = document.createElement("canvas"); usCanvas.width = 150; usCanvas.height = 200;
+  const tex = new THREE.CanvasTexture(usCanvas);
+  const planeG = new THREE.PlaneGeometry(50, 75).translate(0, -37.5, 0).rotateX(Math.PI);   // y: 0 .. +75 (beam), facing +z
+  const plane = new THREE.Mesh(planeG, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  plane.matrixAutoUpdate = false;
+  const outline = new THREE.LineSegments(new THREE.EdgesGeometry(planeG), new THREE.LineBasicMaterial({ color: 0x4fb3e8 }));
+  plane.add(outline);
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 40, 0xffc93c, 10, 7);
+  group.add(probe, plane, arrow);
+  const umax = Math.max(...meta.states.map((s) => s.max_u_mm));
+  const range = Math.max(2, Math.ceil(umax * 0.6));
+  return { d, meta, group, parts, probe, plane, tex, usCanvas, arrow, nF, nP, Nm: movOff, range, umax };
+}
+
+function setScene(id) {
+  document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.id === id)));
+  $("loading").hidden = false; $("loading").textContent = "loading scene\u2026";
+  load(id).then((d) => {
+    if (S) scene3.remove(S.group);
+    S = build(d); S.id = id;
+    scene3.add(S.group);
+    drawBar(S.range);
+    $("caption").innerHTML = CAPTIONS[id] || "";
+    const st = S.meta.states, p0 = st[0].pose, p1 = st[st.length - 1].pose;
+    const c = new THREE.Vector3((p0[0][3] + p1[0][3]) / 2, (p0[1][3] + p1[1][3]) / 2 - 30, (p0[2][3] + p1[2][3]) / 2);
+    controls.target.copy(c);
+    camera.position.set(c.x + 140, c.y + 170, c.z + 230);
+    controls.update();
+    state.hist = [];
+    $("loading").hidden = true;
+    try { localStorage.setItem("stl-scene", id); } catch (e) { /* storage unavailable */ }
+  }).catch((e) => { $("loading").textContent = "Could not load this scene's data (" + e.message + "). Reload the page to try again."; });
+}
+
+// bilinear interpolation over (position, force) states
+function weights(pos, force) {
+  const nP = S.nP, F = S.meta.forces;
+  const x = Math.max(0, Math.min(1, pos)) * (nP - 1), i0 = Math.min(nP - 2, Math.floor(x)), wx = x - i0;
+  let j0 = 0; while (j0 < F.length - 2 && force > F[j0 + 1]) j0++;
+  const wy = Math.max(0, Math.min(1, (force - F[j0]) / (F[j0 + 1] - F[j0])));
+  const idx = (i, j) => i * S.nF + j;
+  return [[idx(i0, j0), (1 - wx) * (1 - wy)], [idx(i0 + 1, j0), wx * (1 - wy)], [idx(i0, j0 + 1), (1 - wx) * wy], [idx(i0 + 1, j0 + 1), wx * wy]];
+}
+
+const tmpc = [0, 0, 0];
+const usImg = { data: null };
+function apply() {
+  const W = weights(state.pos, state.force), Nm = S.Nm, disp = S.d.disp, mag = state.mag, range = S.range;
+  const st = S.meta.states;
+  for (const p of S.parts) {
+    if (!p.idx) continue;
+    const base = p.m.color;
+    for (let k = 0; k < p.idx.length; k++) {
+      const vi = p.idx[k], o = (p.off + k) * 3;
+      let ux = 0, uy = 0, uz = 0;
+      for (const [s, w] of W) {
+        if (w === 0) continue;
+        const sc = st[s].disp_scale_mm * w, b = s * Nm * 3 + o;
+        ux += disp[b] * sc; uy += disp[b + 1] * sc; uz += disp[b + 2] * sc;
+      }
+      p.pos[3 * vi] = p.base[3 * vi] + mag * ux; p.pos[3 * vi + 1] = p.base[3 * vi + 1] + mag * uy; p.pos[3 * vi + 2] = p.base[3 * vi + 2] + mag * uz;
+      ramp(Math.hypot(ux, uy, uz) / range, base, tmpc);
+      p.col[3 * vi] = tmpc[0]; p.col[3 * vi + 1] = tmpc[1]; p.col[3 * vi + 2] = tmpc[2];
+    }
+    const g = p.mesh.geometry;
+    g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true;
+    g.computeVertexNormals();
+  }
+  // pose, force, readouts
+  const M = new THREE.Matrix4(), pose = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 1]];
+  let force = 0, indent = 0, umax = 0;
+  for (const [s, w] of W) {
+    const P = st[s].pose;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) pose[r][c] += w * P[r][c];
+    force += w * st[s].force_n; indent += w * st[s].indent_mm; umax += w * st[s].max_u_mm;
+  }
+  M.set(...pose[0], ...pose[1], ...pose[2], 0, 0, 0, 1);
+  S.probe.matrix.copy(M); S.plane.matrix.copy(M);
+  const o = new THREE.Vector3(pose[0][3], pose[1][3], pose[2][3]);
+  const beam = new THREE.Vector3(pose[0][1], pose[1][1], pose[2][1]).normalize();
+  const elev = new THREE.Vector3(pose[0][2], pose[1][2], pose[2][2]).normalize();
+  S.arrow.position.copy(o.clone().addScaledVector(beam, -60 - 10 * force));
+  S.arrow.setDirection(beam); S.arrow.setLength(10 * force, 10, 7);
+  // cut away the half of the body on the camera's side of the image plane
+  const side = camera.position.clone().sub(o).dot(elev) > 0 ? -1 : 1;
+  clip.normal.copy(elev).multiplyScalar(side); clip.constant = -clip.normal.dot(o) + 0.5;
+  for (const p of S.parts) { p.mesh.material.clippingPlanes = state.cut ? [clip] : []; p.mesh.visible = !(p.isSkin && !state.skin); }
+  // B-mode
+  const ctx = S.usCanvas.getContext("2d"), n = 200 * 150;
+  if (!usImg.data || usImg.data.width !== 150) usImg.data = ctx.createImageData(150, 200);
+  const px = usImg.data.data, bm = S.d.bmode;
+  for (let i = 0; i < n; i++) {
+    let v = 0; for (const [s, w] of W) if (w) v += w * bm[s * n + i];
+    px[4 * i] = px[4 * i + 1] = px[4 * i + 2] = v; px[4 * i + 3] = 255;
+  }
+  ctx.putImageData(usImg.data, 0, 0); S.tex.needsUpdate = true;
+  $("us").getContext("2d").drawImage(S.usCanvas, 0, 0);
+  // HUD
+  const path = st[st.length - 1].pose, p0 = st[0].pose;
+  const len = Math.hypot(path[0][3] - p0[0][3], path[2][3] - p0[2][3]);
+  $("h-title").textContent = S.meta.title;
+  $("h-force").textContent = `force        ${force.toFixed(1).padStart(4)} N`;
+  $("h-indent").textContent = `indentation  ${indent.toFixed(1).padStart(4)} mm`;
+  $("h-u").textContent = `max |u|      ${umax.toFixed(2).padStart(5)} mm` + (mag !== 1 ? `  (shown \u00d7${mag})` : "");
+  $("pos-o").textContent = `${((state.pos - 0.5) * len).toFixed(0)} mm`;
+  $("force-o").textContent = `${state.force.toFixed(1)} N`;
+  state.hist.push([force, indent, umax]); if (state.hist.length > 240) state.hist.shift();
+  drawTrace();
+}
+
+function drawTrace() {
+  const c = $("trace"), g = c.getContext("2d"), W = c.width, H = c.height, h = state.hist;
+  g.clearRect(0, 0, W, H);
+  const ymax = Math.max(7, ...h.map((r) => Math.max(...r))) * 1.1;
+  g.strokeStyle = "#262e3a"; g.lineWidth = 1; g.fillStyle = "#8e98a8"; g.font = "20px IBM Plex Mono, monospace";
+  for (let y = 0; y <= ymax; y += ymax > 14 ? 5 : 2) { const yy = H - 6 - (H - 12) * y / ymax; g.beginPath(); g.moveTo(40, yy); g.lineTo(W, yy); g.stroke(); g.fillText(String(y), 2, yy + 6); }
+  const cols = ["#ffc93c", "#4fb3e8", "#e8553a"];
+  for (let k = 0; k < 3; k++) {
+    g.strokeStyle = cols[k]; g.lineWidth = 3; g.beginPath();
+    h.forEach((r, i) => { const x = 40 + (W - 44) * i / 239, y = H - 6 - (H - 12) * r[k] / ymax; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+}
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+
+let last = performance.now();
+const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (S) {
+    if (state.play) {
+      state.t += dt;
+      const ph = (state.t % 16) / 16, a = ph < 0.5 ? 2 * ph : 2 - 2 * ph;
+      state.pos = 0.5 - 0.5 * Math.cos(Math.PI * a);
+      state.force = 1 + 5 * (0.5 - 0.5 * Math.cos(2 * Math.PI * state.t / 4));
+      $("pos").value = Math.round(state.pos * 1000); $("force").value = Math.round((state.force - 1) / 5 * 1000);
+    }
+    apply();
+  }
+  controls.update();
+  renderer.render(scene3, camera);
+  requestAnimationFrame(frame);
+}
+
+// controls
+for (const s of SCENES) {
+  const b = document.createElement("button"); b.textContent = s.label; b.dataset.id = s.id; b.setAttribute("role", "tab");
+  b.addEventListener("click", () => setScene(s.id)); $("tabs").appendChild(b);
+}
+const stopPlay = () => { state.play = false; $("play").setAttribute("aria-pressed", "false"); };
+$("pos").addEventListener("input", (e) => { stopPlay(); state.pos = e.target.value / 1000; });
+$("force").addEventListener("input", (e) => { stopPlay(); state.force = 1 + 5 * e.target.value / 1000; });
+$("play").addEventListener("click", (e) => { state.play = !state.play; e.currentTarget.setAttribute("aria-pressed", String(state.play)); });
+$("cut").addEventListener("click", (e) => { state.cut = !state.cut; e.currentTarget.setAttribute("aria-pressed", String(state.cut)); });
+$("skin").addEventListener("click", (e) => { state.skin = !state.skin; e.currentTarget.setAttribute("aria-pressed", String(state.skin)); });
+$("mag").addEventListener("click", (e) => {
+  state.mag = state.mag === 1 ? 3 : state.mag === 3 ? 5 : 1;
+  e.currentTarget.textContent = `Magnify \u00d7${state.mag}`; e.currentTarget.setAttribute("aria-pressed", String(state.mag !== 1));
+});
+if (reduce) { state.play = false; $("play").setAttribute("aria-pressed", "false"); }
+
+let first = "spine";
+try { const s = localStorage.getItem("stl-scene"); if (SCENES.some((x) => x.id === s)) first = s; } catch (e) { /* storage unavailable */ }
+resize(); setScene(first); requestAnimationFrame(frame);
+</script>

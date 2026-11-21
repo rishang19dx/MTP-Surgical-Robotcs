@@ -1,0 +1,91 @@
+{
+ "meta": {
+  "script": "ReconstructionPipeline/evaluation/vein_calibration.py",
+  "commit": "f617d26",
+  "preregistration": "DEC-062",
+  "fit": "fat",
+  "lumen_e_void_kpa": 0.1,
+  "device": "cuda",
+  "target": {
+   "force_n": 1.87307015,
+   "ratio": 0.5,
+   "depth_mm": 11.5,
+   "diameter_mm": 5.0
+  },
+  "phantom": {
+   "half_x": 32.5,
+   "half_z": 10.0,
+   "skin_y": 30.0,
+   "h_mm": 1.0,
+   "nu_lumen": 0.0,
+   "tissue_hu": -100.0
+  },
+  "shared_e_scale": 1.0958
+ },
+ "converged": true,
+ "lumen_e_eff_kpa": 0.1,
+ "fat_e_eff_kpa": 3.376549524851371,
+ "log": [
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 0.3,
+   "ratio": -0.346484375,
+   "force_n": 1.8730705976486206,
+   "indent_mm": 15.5670804977417,
+   "build_s": 242.47039533699717
+  },
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 12.0,
+   "ratio": 0.81923828125,
+   "force_n": 1.8730723857879639,
+   "indent_mm": 1.499018669128418,
+   "build_s": 177.11351688599825
+  },
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 1.8973665961010275,
+   "ratio": 0.28193359375,
+   "force_n": 1.873070478439331,
+   "indent_mm": 6.160399436950684,
+   "build_s": 216.3992128069949,
+   "fitted_e_kpa": 1.8973665961010275
+  },
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 4.771624372602304,
+   "ratio": 0.614306640625,
+   "force_n": 1.873070240020752,
+   "indent_mm": 3.1943066120147705,
+   "build_s": 575.0086165680041,
+   "fitted_e_kpa": 4.771624372602304
+  },
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 3.008906893494236,
+   "ratio": 0.4626953125,
+   "force_n": 1.8730703592300415,
+   "indent_mm": 4.5047101974487305,
+   "build_s": 246.96163413699833,
+   "fitted_e_kpa": 3.008906893494236
+  },
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 3.7891124907936136,
+   "ratio": 0.5427734375,
+   "force_n": 1.8730714321136475,
+   "indent_mm": 3.806838035583496,
+   "build_s": 225.526941170996,
+   "fitted_e_kpa": 3.7891124907936136
+  },
+  {
+   "e_eff_kpa": 0.1,
+   "e_fat_eff_kpa": 3.376549524851371,
+   "ratio": 0.503564453125,
+   "force_n": 1.873070478439331,
+   "indent_mm": 4.144998073577881,
+   "build_s": 231.44802903300297,
+   "fitted_e_kpa": 3.376549524851371
+  }
+ ]
+}

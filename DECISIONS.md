@@ -59,7 +59,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
-| **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver pending** |
 
 ---
 
@@ -2170,3 +2170,25 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - A single subject's popliteal-fossa fat is applied to the groin and to the abdominal wall.
   - The linear FEM is only validated to about 5 N against a reference with the old moduli.
 
+* **Result — fat fit** (`results/vein_calibration_fat_20261121_012534.json`): converged at **3.38 kPa effective**
+  fat (AP ratio 0.50 at 1.87 N). This is inside the unverified literature range of about 1–26 kPa, at its soft end, and
+  about 3× softer than the shared fat (10.96 kPa effective).
+* **Result — vein re-run: FAIL** (`results/vein_compress_20261121_013705.json` / `.md`, 18 measurable veins of 22):
+  - **No vein reaches 50 % AP diameter by 20 N**, so every F50 is inf and P90/P10 is undefined (printed nan). The gate
+    fails by its own rule: an undefined spread is not ≥ 2.
+  - AP ratio at 20 N: min 0.55, median 0.85, max 0.93. At 5 N: median 0.93. Indentation at 20 N: 21.5–27.6 mm.
+  - **The femoral cross-check fails too.** Femoral veins collapse fully at a median of 82 mmHg (Eitminavičius 2026),
+    about 4.9 N over a 45 × 10 mm probe face. The model needs more than 20 N for half compression.
+* **Diagnosis (not a fitted claim; not tested further).** Calibration and study use the same solver, including
+  strain stiffening, so the mismatch is geometric. The calibration vein is small and shallow (5 mm, 11.5 mm deep, all
+  fat). The patient femoral veins are 12–17 mm wide and 17–40 mm deep, with stiffer muscle (21.9 kPa) around them.
+  - In small-strain linear FEM with stiffening (β = 0.15/mm at 20–28 mm indentation), stress spreads with depth.
+  - The near-void lumen cannot buckle: there is no contact or collapse mechanics.
+  - So one fat modulus cannot reproduce both the popliteal and the femoral data. Vein collapse needs large-strain
+    (hyperelastic) mechanics with self-contact of the vein wall, which this model does not have.
+* **Consequence.** The vein direction is closed for the linear model. The interactive demos (`demos/`) show the vein
+  scene with this limitation stated in its caption.
+* **Liver, tied, at the fitted fat**: pending.
+  - The first attempt was killed by a reboot after s0004: medians at 5 N of 1.10 / 0.90 / 0.80 mm at 2.3 / 4.1 /
+    5.9 kPa, and s0010 1.33 mm at 2.3 kPa.
+  - These are partial and not a result. The full re-run is in progress.

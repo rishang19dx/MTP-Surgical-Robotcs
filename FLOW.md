@@ -329,3 +329,29 @@ bash scripts/demo_mujoco_flex_slicer.sh --seconds 60                            
 rsync -avz --exclude '.venv' --exclude '__pycache__' --exclude '.agents' ./ user@172.18.17.35:/home/user/workspace/rishang/MTP/
 ssh user@172.18.17.35 'cd /home/user/workspace/rishang/MTP && bash scripts/run_remote_totalsegmentator.sh --mode all'
 ```
+
+## Deformation demos (`demos/`, demonstration only)
+Not part of the benchmark or any gated study. They show the patient FEM deforming under a moving, pressing probe in
+3D Slicer, PyBullet and the browser.
+- **Scenes**: `demos/build_scenes.py` extracts the full SonoGym CT, label map and STLs for one subject. It builds
+  whole-body display meshes and writes `demos/scenes/<scene>/{scene.json, display/*.obj}`.
+  - The scenes are spine, muscle, liver and vein.
+  - Frame P is used for the lumbar crops, frame Q for the liver and vein crops; `scene.json` holds `to_ras`.
+- **Physics**: `demos/engine.py` `DemoEngine` builds the FEM on the study crop. Options:
+  - the fitted fat (`--fat-calibration`, DEC-062);
+  - the liver region modulus with a sliding interface (DEC-060);
+  - a near-void vein lumen.
+
+  It produces frames: a probe sweep plus a 1–6 N press, with force by bisection, display-mesh displacements inside
+  the FEM ROI, and a B-mode from the warped CT.
+- **Live**: `bash demos/launch_demo.sh <scene>` starts `demos/run_demo.py`, which streams over OpenIGTLink on port
+  18945, separate from the bridge's 18944. It also starts Slicer with `demos/slicer_demo.py`, which uses in-place VTK
+  buffers and a clip-node cutaway at the image plane.
+- **Recorded**:
+  1. `run_demo.py --cache demos/cache/<scene>.npz --cache-only` computes and stores the frames.
+  2. `MTP_DEMO_OFFLINE=<npz> MTP_DEMO_SNAPSHOT_DIR=<dir> Slicer --python-script demos/slicer_demo.py` renders every
+     frame.
+  3. `run_demo.py --from-cache <npz> --no-slicer --record <dir>` writes the PyBullet whole-body and cutaway frames.
+  4. `demos/make_video.py --scene <scene>` assembles the video.
+- **Web**: `demos/export_web.py --scene <scene>` writes exact FEM states on a positions × forces grid to
+  `demos/web/data/<scene>/`. `demos/web/index.html` (three.js) interpolates bilinearly between them.

@@ -1,0 +1,7 @@
+# derived from the SonoGym CT archive or produced by the demo scripts; rebuild with build_scenes.py,
+# run_demo.py --cache, slicer_demo.py offline mode, make_video.py and export_web.py
+scenes/
+cache/
+out/
+web/data/
+__pycache__/

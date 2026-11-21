@@ -3,7 +3,7 @@ Export a demo scene for the interactive web viewer: meshes plus a grid of exact 
 
     ./.venv/bin/python -m demos.export_web --scene liver [--fat-calibration ...] [--positions 33] [--forces 1,2,3,4,5,6]
 
-Writes `demos/web/data/<scene>/`:
+Writes `demos/web/data/<scene>/` (each .bin also as base64 .txt, which the viewer loads):
   scene.json   meshes (name, colour, opacity, deforms, vertex/face counts, offsets into mesh.bin), the moving-vertex
                index lists, the state grid (positions x forces) with probe pose, force, indentation, max |u|, and the
                physics settings;
@@ -94,6 +94,10 @@ def main(argv=None):
                       "roi_mm": [eng.roi[0].tolist(), eng.roi[1].tolist()]},
           "subject": eng.sc["subject"], "source": "SonoGym / TotalSegmentator CT (CC BY 4.0)"}
     json.dump(sc, open(os.path.join(out, "scene.json"), "w"))
+    import base64                     # the viewer loads base64 text (artifact hosting does not serve raw .bin)
+    for f in ("mesh", "disp", "bmode"):
+        with open(os.path.join(out, f + ".bin"), "rb") as src, open(os.path.join(out, f + ".txt"), "wb") as dst:
+            dst.write(base64.b64encode(src.read()))
     sizes = {f: os.path.getsize(os.path.join(out, f)) / 1e6 for f in ("mesh.bin", "disp.bin", "bmode.bin", "scene.json")}
     print("wrote", out, {k: f"{v:.1f} MB" for k, v in sizes.items()})
 

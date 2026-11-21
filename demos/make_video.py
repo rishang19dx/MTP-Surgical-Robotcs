@@ -95,8 +95,8 @@ def main(argv=None):
             x = 0
             for im, tag in zip(pbs, ("PyBullet: whole body", "PyBullet: cutaway close-up")):
                 fr.paste(im, (x, s.height))
-                d.rectangle([x + 8, s.height + 8, x + 18 + d.textlength(tag, font=tag_f), s.height + 36], fill=(0, 0, 0))
-                d.text((x + 13, s.height + 10), tag, font=tag_f, fill=(230, 235, 240))
+                d.text((x + im.width - 20 - d.textlength(tag, font=tag_f), s.height + 10), tag, font=tag_f,
+                       fill=(230, 235, 240))       # top right: the PyBullet HUD sits top left
                 x += im.width
             d.text((W - 20 - d.textlength("3D Slicer", font=tag_f), 40), "3D Slicer", font=tag_f, fill=(230, 235, 240))
             y = s.height + row_h + 10

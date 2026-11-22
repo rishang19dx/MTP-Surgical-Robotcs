@@ -1,0 +1,454 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="cli-anything" agent="cli-anything-drawio/1.0.0" version="24.0.0">
+  <diagram id="diagram_1795350176357103" name="System architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1680" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;MTP: patient-specific soft-tissue simulator for robotic ultrasound&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:13px'&gt;SonoGym-style gym with a GPU linear FEM, model-based B-mode, learned and heuristic scan policies, a 1 kHz robot runtime streaming to 3D Slicer, pre-registered studies and live demos&lt;/span&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=0;fontSize=22;fontColor=#1f2430;fontStyle=0;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="10.0" width="1700.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_data" value="1 · Data and patient assets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef4fb;strokeColor=#5b84b1;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#5b84b1;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="90.0" width="540.0" height="610.0" as="geometry" />
+        </mxCell>
+        <mxCell id="hf" value="&lt;b&gt;SonoGym assets (Hugging Face)&lt;/b&gt;&lt;br&gt;12 TotalSegmentator CTs + labels, STLs&lt;br&gt;CC BY 4.0" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="130.0" width="240.0" height="90.0" as="geometry" />
+        </mxCell>
+        <mxCell id="hf2" value="&lt;b&gt;Sample lumbar case&lt;/b&gt;&lt;br&gt;HF case-0004 (CT + L1-L5, sacrum, skin)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="300.0" y="130.0" width="240.0" height="90.0" as="geometry" />
+        </mxCell>
+        <mxCell id="imp_p" value="&lt;b&gt;import_sonogym_subjects&lt;/b&gt;&lt;br&gt;data/patients: frame P (LPS), L4 anchor" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="250.0" width="240.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="prep" value="&lt;b&gt;prepare_patient_assets&lt;/b&gt;&lt;br&gt;resample, meshes, skin height map" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="300.0" y="250.0" width="240.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="imp_l" value="&lt;b&gt;import_liver_subjects [--wide]&lt;/b&gt;&lt;br&gt;data/liver(_wide): frame Q" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="330.0" width="240.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="imp_v" value="&lt;b&gt;import_vein_subjects&lt;/b&gt;&lt;br&gt;data/vein: femoral vein/artery, frame Q" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="300.0" y="330.0" width="240.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="bfem" value="&lt;b&gt;build_patient_fem&lt;/b&gt;&lt;br&gt;FEM build + QA per patient" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="410.0" width="240.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="split" value="&lt;b&gt;data/splits.json&lt;/b&gt;&lt;br&gt;fixed train / held-out split" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=0.27;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="300.0" y="410.0" width="240.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="pd" value="&lt;b&gt;Patient dict&lt;/b&gt;&lt;br&gt;ct_volume [z,y,x], origin, spacing,&lt;br&gt;labels, bone points, skin height map" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="500.0" width="500.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="cal" value="&lt;b&gt;Calibrations&lt;/b&gt;&lt;br&gt;shared e_scale (force-indentation curve, k0 0.5 N/mm, β 0.15/mm)&lt;br&gt;fitted fat 3.38 kPa (popliteal vein, DEC-062)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#5b84b1;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="600.0" width="500.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_phys" value="2 · Soft-tissue physics (GPU, PyTorch)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdf1e7;strokeColor=#c7743b;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#c7743b;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="590.0" y="90.0" width="560.0" height="610.0" as="geometry" />
+        </mxCell>
+        <mxCell id="fem" value="&lt;b&gt;FEMTissueModel&lt;/b&gt;&lt;br&gt;linear tetrahedral FEM, 4 mm elements&lt;br&gt;Dirichlet: ROI deep + side faces, bone cells&lt;br&gt;precomputed Green's functions (3-direction skin compliance)&lt;br&gt;options: region_modulus · sliding interface · e_fat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="610.0" y="130.0" width="520.0" height="120.0" as="geometry" />
+        </mxCell>
+        <mxCell id="bsolve" value="&lt;b&gt;BatchedFEMSolver&lt;/b&gt;&lt;br&gt;N probe poses at once · active-set contact along the face normal&lt;br&gt;force by bisection on indentation · displacement field u(X)&lt;br&gt;warp_to_reference (backward Eulerian warp)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="610.0" y="275.0" width="520.0" height="105.0" as="geometry" />
+        </mxCell>
+        <mxCell id="adm" value="&lt;b&gt;Admittance control&lt;/b&gt;&lt;br&gt;δ in [first contact, max] so F ≈ target (4 N)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="610.0" y="405.0" width="250.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="stiff" value="&lt;b&gt;Strain stiffening&lt;/b&gt;&lt;br&gt;β = 0.15/mm on the force law" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="880.0" y="405.0" width="250.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="kel" value="&lt;b&gt;Kelvinlet model&lt;/b&gt;&lt;br&gt;regularised, alternative backend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="610.0" y="500.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="flex" value="&lt;b&gt;MuJoCo flex&lt;/b&gt;&lt;br&gt;demo only (DEC-053, gate failed)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="880.0" y="500.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="lim" value="&lt;b&gt;Known limits&lt;/b&gt;&lt;br&gt;small strain only · no vein collapse mechanics&lt;br&gt;clamped box walls bias deep motion down ~30 % (DEC-063)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#c7743b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="610.0" y="590.0" width="520.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_img" value="3 · Imaging and perception" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f7ee;strokeColor=#5e9a55;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#5e9a55;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="1180.0" y="90.0" width="560.0" height="610.0" as="geometry" />
+        </mxCell>
+        <mxCell id="slice" value="&lt;b&gt;VolumeSliceExtractor&lt;/b&gt;&lt;br&gt;grid_sample of CT / labels at the indented face pose&lt;br&gt;through the deformed tissue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1200.0" y="130.0" width="520.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="us" value="&lt;b&gt;ModelBasedUltrasoundSimulator&lt;/b&gt;&lt;br&gt;dB→Np attenuation, interface reflection, Rayleigh speckle, fixed TGC&lt;br&gt;200 × 150 px over 75 × 50 mm, target &lt; 2 ms/frame" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1200.0" y="230.0" width="520.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="conf" value="&lt;b&gt;Confidence estimator&lt;/b&gt;&lt;br&gt;image-only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1200.0" y="335.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="seg" value="&lt;b&gt;segment_from_bmode&lt;/b&gt;&lt;br&gt;ridge + distal shadow + run length" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1470.0" y="335.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="bp" value="&lt;b&gt;Back-projection&lt;/b&gt;&lt;br&gt;with the tracked (indented) face pose" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1200.0" y="420.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="acc" value="&lt;b&gt;PointCloudAccumulator&lt;/b&gt;&lt;br&gt;1.5 mm voxels" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1470.0" y="420.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="met" value="&lt;b&gt;Metrics&lt;/b&gt;&lt;br&gt;coverage @2/3 mm of the visible L4 ROI, precision, F, Chamfer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1200.0" y="505.0" width="520.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="oracle" value="&lt;b&gt;Oracle only (never feeds perception)&lt;/b&gt;&lt;br&gt;segment_from_label_map, bone_mask, energy" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1200.0" y="595.0" width="520.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_env" value="4 · Environments" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4effa;strokeColor=#8a6bb8;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#8a6bb8;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="1770.0" y="90.0" width="600.0" height="610.0" as="geometry" />
+        </mxCell>
+        <mxCell id="env1" value="&lt;b&gt;UltrasoundReconstructionEnv&lt;/b&gt;&lt;br&gt;single env, used by the server and the benchmark" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1790.0" y="130.0" width="560.0" height="65.0" as="geometry" />
+        </mxCell>
+        <mxCell id="vec" value="&lt;b&gt;mtp_gym vector env (GPU, no PyBullet)&lt;/b&gt;&lt;br&gt;MTP/FreeScan-v0 · MTP/Recon-v0&lt;br&gt;one PatientSim per patient (FEM, compliance, CT); per-env e_scale&lt;br&gt;autoreset in the same step" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1790.0" y="220.0" width="560.0" height="95.0" as="geometry" />
+        </mxCell>
+        <mxCell id="modes" value="&lt;b&gt;Deformation modes&lt;/b&gt;&lt;br&gt;aware (default) · unaware · rigid / kinematic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1790.0" y="340.0" width="270.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="tasks" value="&lt;b&gt;tasks/&lt;/b&gt;&lt;br&gt;labels feed rewards and metrics only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="2080.0" y="340.0" width="270.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="act" value="&lt;b&gt;Action&lt;/b&gt;&lt;br&gt;[dc1, dc2, dyaw, dpitch] (+ target force)&lt;br&gt;×5 mm, ×10° yaw, ×15° pitch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1790.0" y="435.0" width="560.0" height="65.0" as="geometry" />
+        </mxCell>
+        <mxCell id="obs" value="&lt;b&gt;Observation&lt;/b&gt;&lt;br&gt;B-mode, confidence, reconstructed points, probe pose, force" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1790.0" y="525.0" width="560.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="par" value="&lt;b&gt;Parity test&lt;/b&gt;&lt;br&gt;vector env = single env (force, indentation, pose)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1790.0" y="610.0" width="560.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_plan" value="5 · Planning and learning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbf0f4;strokeColor=#b5577c;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#b5577c;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="730.0" width="840.0" height="430.0" as="geometry" />
+        </mxCell>
+        <mxCell id="pn" value="&lt;b&gt;PointNet encoder&lt;/b&gt;&lt;br&gt;per-point LayerNorm" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="775.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="ppo" value="&lt;b&gt;Submodular PPO&lt;/b&gt;&lt;br&gt;coverage-gain reward" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="310.0" y="775.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="cfm" value="&lt;b&gt;Flow Matching (CFM)&lt;/b&gt;&lt;br&gt;8-step chunks, execute 2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="580.0" y="775.0" width="260.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="edm" value="&lt;b&gt;EDM diffusion policy&lt;/b&gt;&lt;br&gt;behaviour cloning from rasters" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="580.0" y="860.0" width="260.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="heur" value="&lt;b&gt;Heuristics&lt;/b&gt;&lt;br&gt;raster · orbital" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="860.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="nbv" value="&lt;b&gt;Greedy NBV&lt;/b&gt;&lt;br&gt;next best view" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="310.0" y="860.0" width="250.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="ckpt" value="&lt;b&gt;checkpoints/&lt;/b&gt;&lt;br&gt;ppo, flow_matching, diffusion" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="950.0" width="250.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="bench" value="&lt;b&gt;benchmark_runner&lt;/b&gt;&lt;br&gt;6 policies × trials, same start poses&lt;br&gt;→ results/benchmark_*.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="310.0" y="950.0" width="530.0" height="70.0" as="geometry" />
+        </mxCell>
+        <mxCell id="sb3" value="&lt;b&gt;Training scripts&lt;/b&gt;&lt;br&gt;train_submodular_ppo.py · train_diffusion_policy.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b5577c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="1050.0" width="800.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_rt" value="6 · Real-time runtime (unified_server)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef7f8;strokeColor=#3f8f99;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#3f8f99;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="890.0" y="730.0" width="1000.0" height="430.0" as="geometry" />
+        </mxCell>
+        <mxCell id="stream" value="&lt;b&gt;Streaming loop (30 Hz)&lt;/b&gt;&lt;br&gt;env.step → B-mode, recon points, force&lt;br&gt;never imports a physics engine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="910.0" y="775.0" width="300.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="physp" value="&lt;b&gt;Physics process (1 kHz)&lt;/b&gt;&lt;br&gt;PyBullet or MuJoCo · Franka Panda URDF, IK&lt;br&gt;F = F0 + K_c(δ − δ0) · virtual keep-out fixtures" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1250.0" y="775.0" width="320.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="viewer" value="&lt;b&gt;Viewer process&lt;/b&gt;&lt;br&gt;--gui, deformed skin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1610.0" y="775.0" width="260.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="slicer" value="&lt;b&gt;3D Slicer bridge&lt;/b&gt;&lt;br&gt;PatientToRAS transform&lt;br&gt;in-place VTK buffers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="910.0" y="940.0" width="300.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="user" value="&lt;b&gt;Clinician / operator&lt;/b&gt;&lt;br&gt;ROI target, mode, reset" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1250.0" y="940.0" width="320.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="rate" value="&lt;b&gt;Physics-rate monitor&lt;/b&gt;&lt;br&gt;--benchmark-seconds → results/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1610.0" y="940.0" width="260.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="igtl" value="OpenIGTLink :18944: UltrasoundProbe, US_Image, ReconstructedBone, DeformedSkin, Telemetry" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=11;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="910.0" y="1060.0" width="960.0" height="50.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_frames" value="Coordinate frames" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffbe6;strokeColor=#b59b2a;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#b59b2a;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="1920.0" y="730.0" width="450.0" height="430.0" as="geometry" />
+        </mxCell>
+        <mxCell id="frames" value="&lt;b&gt;P (simulation)&lt;/b&gt;&lt;br&gt;LPS, mm; volumes [z, y, x]&lt;br&gt;&lt;br&gt;&lt;b&gt;RAS (3D Slicer)&lt;/b&gt;&lt;br&gt;p_RAS = diag(−1, −1, 1) · p_P, applied once&lt;br&gt;&lt;br&gt;&lt;b&gt;PB (PyBullet / MuJoCo)&lt;/b&gt;&lt;br&gt;Z-up, metres&lt;br&gt;&lt;br&gt;&lt;b&gt;Q (liver and vein crops)&lt;/b&gt;&lt;br&gt;P rotated 180° about z (anterior skin on +y)&lt;br&gt;&lt;br&gt;&lt;b&gt;U (probe)&lt;/b&gt;&lt;br&gt;lateral, beam (+Y into body), elevation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b59b2a;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;align=left;spacingLeft=10;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1940.0" y="775.0" width="410.0" height="360.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_study" value="7 · Pre-registered studies (DECISIONS.md) → results/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f7f7f2;strokeColor=#7d7d6a;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#7d7d6a;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="1190.0" width="1180.0" height="460.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st56" value="&lt;b&gt;Muscle compression (DEC-056)&lt;/b&gt;&lt;br&gt;POSITIVE: thickness changes 1.0–1.3 mm over 1–5 N" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9f2d9;strokeColor=#3b8a3b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="1235.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st57" value="&lt;b&gt;Navigation transfer (DEC-057)&lt;/b&gt;&lt;br&gt;null: policy succeeds with or without deformation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ececec;strokeColor=#7a7a7a;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="420.0" y="1235.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st58" value="&lt;b&gt;Force headroom, spine (DEC-058)&lt;/b&gt;&lt;br&gt;0.28–1.13 mm: too small" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ececec;strokeColor=#7a7a7a;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="1330.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st59" value="&lt;b&gt;Liver target shift (DEC-059, 062)&lt;/b&gt;&lt;br&gt;FAIL: 0/10 patients ≥ 2 mm at 5 N" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8dada;strokeColor=#b23b3b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="420.0" y="1330.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st60" value="&lt;b&gt;Liver sliding (DEC-060)&lt;/b&gt;&lt;br&gt;partial: sliding slightly reduces motion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ececec;strokeColor=#7a7a7a;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="1425.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st61" value="&lt;b&gt;Vein compression (DEC-061, 062)&lt;/b&gt;&lt;br&gt;fat fit 3.38 kPa; FAIL: no vein halves by 20 N" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8dada;strokeColor=#b23b3b;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="420.0" y="1425.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="st63" value="&lt;b&gt;Box-margin sensitivity (DEC-063)&lt;/b&gt;&lt;br&gt;inconclusive: clamped walls bias motion −30 %" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fdebd3;strokeColor=#c27a1c;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40.0" y="1520.0" width="360.0" height="75.0" as="geometry" />
+        </mxCell>
+        <mxCell id="res" value="&lt;b&gt;results/&lt;/b&gt;&lt;br&gt;JSON + Markdown per run,&lt;br&gt;named next to every documented number" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#7d7d6a;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="800.0" y="1235.0" width="380.0" height="90.0" as="geometry" />
+        </mxCell>
+        <mxCell id="rules" value="&lt;b&gt;Rules&lt;/b&gt;&lt;br&gt;gate committed before the run · deviations disclosed&lt;br&gt;metrics must be able to fail · .agents/ never cited" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#7d7d6a;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="800.0" y="1350.0" width="380.0" height="90.0" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;green = positive · red = fail · grey = null / partial · orange = inconclusive" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#7d7d6a;fontSize=11;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="800.0" y="1470.0" width="380.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="g_demo" value="8 · Deformation demos (demos/, demonstration only)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f2f2fb;strokeColor=#5d5fb0;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontSize=17;fontStyle=1;fontColor=#5d5fb0;arcSize=3;" vertex="1" parent="1">
+          <mxGeometry x="1230.0" y="1190.0" width="1140.0" height="460.0" as="geometry" />
+        </mxCell>
+        <mxCell id="bscene" value="&lt;b&gt;build_scenes&lt;/b&gt;&lt;br&gt;whole-body meshes from SonoGym&lt;br&gt;spine · muscle · liver · vein" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1250.0" y="1235.0" width="260.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="deng" value="&lt;b&gt;DemoEngine&lt;/b&gt;&lt;br&gt;probe sweep + 1–6 N press&lt;br&gt;FEM, mesh displacements, B-mode" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1540.0" y="1235.0" width="260.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="rdemo" value="&lt;b&gt;run_demo&lt;/b&gt;&lt;br&gt;frame cache (.npz)&lt;br&gt;OpenIGTLink :18945" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1830.0" y="1235.0" width="250.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="web" value="&lt;b&gt;export_web&lt;/b&gt;&lt;br&gt;exact FEM states on a&lt;br&gt;position × force grid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="2110.0" y="1235.0" width="240.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="sdemo" value="&lt;b&gt;slicer_demo&lt;/b&gt;&lt;br&gt;clip-node cutaway at the image plane&lt;br&gt;live B-mode plane, force plot" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1540.0" y="1360.0" width="260.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="pbv" value="&lt;b&gt;pybullet_view&lt;/b&gt;&lt;br&gt;displacement bands, skin profile,&lt;br&gt;force arrow (EGL-free snapshots)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1830.0" y="1360.0" width="250.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="viewer3" value="&lt;b&gt;three.js web viewer&lt;/b&gt;&lt;br&gt;interactive probe, published artifact" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="2110.0" y="1360.0" width="240.0" height="85.0" as="geometry" />
+        </mxCell>
+        <mxCell id="vid" value="&lt;b&gt;make_video&lt;/b&gt;&lt;br&gt;Slicer + PyBullet → mp4 per scene" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5d5fb0;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1540.0" y="1480.0" width="540.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350200453291" value="CT, labels" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="hf" target="imp_p">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350200828969" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="hf" target="imp_l">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350201201332" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="hf2" target="prep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350201568910" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="imp_p" target="bfem">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350201937081" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="prep" target="pd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350202318132" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bfem" target="pd">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350202686338" value="patient anatomy" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="pd" target="fem">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350203053044" value="moduli" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="cal" target="fem">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350203422056" value="G, compliance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="fem" target="bsolve">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350203790956" value="u(X), face pose" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bsolve" target="slice">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350204161983" value="deformed CT" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="slice" target="us">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350204525668" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="us" target="conf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350204901281" value="B-mode" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="us" target="seg">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350205283791" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="seg" target="bp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350205646326" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bp" target="acc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350206032437" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="acc" target="met">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350206418343" value="force, field" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bsolve" target="vec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350206792908" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="us" target="obs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350207175548" value="pose + target force" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="act" target="adm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350207554685" value="points + pose" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="obs" target="pn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350207935285" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="pn" target="ppo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350208314857" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="pn" target="cfm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350208698267" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="ppo" target="ckpt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350209078034" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="edm" target="ckpt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350209449711" value="benchmark" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bench" target="res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350209825143" value="env.step" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="env1" target="stream">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350210204077" value="targets (queue)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="stream" target="physp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350210577734" value="contact snapshot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="physp" target="stream">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350210949475" value="skin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="stream" target="viewer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350211324219" value="OpenIGTLink" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="stream" target="slicer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350211699595" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="user" target="slicer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350212073526" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="physp" target="rate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350212438508" value="FEM" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bsolve" target="st56">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350212804206" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="st63" target="res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350213166430" value="full CTs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="hf" target="bscene">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350213538508" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bscene" target="deng">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350213910321" value="FEM" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="bsolve" target="deng">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350214288858" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="deng" target="rdemo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350214687309" value=":18945" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="rdemo" target="sdemo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350215070957" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="rdemo" target="pbv">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350215450145" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="deng" target="web">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350215826344" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="web" target="viewer3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350216195241" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="sdemo" target="vid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350216568237" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="pbv" target="vid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="diagram_1795350216955117" name="One simulation step">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" value="&lt;b&gt;One simulation step (Flow C)&lt;/b&gt;&lt;br&gt;&lt;span style='font-size:13px'&gt;single env and batched vector env follow the same chain; a parity test checks they agree&lt;/span&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=0;fontSize=22;fontColor=#1f2430;fontStyle=0;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="10.0" width="1200.0" height="60.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c1" value="&lt;b&gt;Action&lt;/b&gt;&lt;br&gt;[dc1, dc2, dyaw, dpitch] ∈ [−1, 1] (+ optional target force)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="90.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" value="&lt;b&gt;Probe pose on the undeformed skin&lt;/b&gt;&lt;br&gt;skin height map, frame P, clipped to the scan window" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="210.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" value="&lt;b&gt;First contact&lt;/b&gt;&lt;br&gt;FEM first_contact_indentation (can be &lt; 0)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="330.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" value="&lt;b&gt;Admittance loop&lt;/b&gt;&lt;br&gt;δ ∈ [first contact, max indentation] so F_tissue(δ) ≈ 4 N" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="450.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" value="&lt;b&gt;FEM solve&lt;/b&gt;&lt;br&gt;active-set contact on the precomputed skin compliance&lt;br&gt;→ force F, contact stiffness K_c, displacement field u(X), deformed skin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c7743b;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="570.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" value="&lt;b&gt;Backward warp + slice&lt;/b&gt;&lt;br&gt;X = x − u(X) (fixed point, GPU), grid_sample CT and labels at the face pose" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="690.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" value="&lt;b&gt;B-mode&lt;/b&gt;&lt;br&gt;model-based: attenuation, interfaces, speckle, TGC; coupling κ(force, tilt) as dB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="810.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" value="&lt;b&gt;Perception (image only)&lt;/b&gt;&lt;br&gt;confidence → segment_from_bmode → back-projection → point cloud" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="930.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="c9" value="&lt;b&gt;Task evaluation&lt;/b&gt;&lt;br&gt;reward, termination, metrics (labels allowed here only)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=13;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="120.0" y="1050.0" width="640.0" height="80.0" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350219911928" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c1" target="c2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350220300336" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c2" target="c3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350220692873" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c3" target="c4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350221086419" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c4" target="c5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350221474985" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c5" target="c6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350221864139" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c6" target="c7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350222245097" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c7" target="c8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350222631926" value="" style="edgeStyle=none;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;" edge="1" parent="1" source="c8" target="c9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="&lt;b&gt;Deformation modes (ablation)&lt;/b&gt;&lt;br&gt;aware: deformed image, tracked face pose&lt;br&gt;unaware: deformed image, nominal pose&lt;br&gt;rigid: no deformation, probe on the skin" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#8a6bb8;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="820.0" y="450.0" width="420.0" height="120.0" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="&lt;b&gt;Physics side (server only)&lt;/b&gt;&lt;br&gt;1 kHz loop applies F = F0 + K_c(δ − δ0) to the robot;&lt;br&gt;it never waits on the FEM" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#3f8f99;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="820.0" y="610.0" width="420.0" height="100.0" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="&lt;b&gt;Privileged outputs&lt;/b&gt;&lt;br&gt;energy, effective_energy, bone_mask:&lt;br&gt;metrics only, never perception" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#5e9a55;fontSize=12;fontColor=#1f2430;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="820.0" y="930.0" width="420.0" height="100.0" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350223865140" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="m1" target="c6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350224290242" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="m2" target="c5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_1795350224717456" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#555b66;strokeWidth=1.5;fontSize=11;fontColor=#3a3f4a;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;dashed=1;" edge="1" parent="1" source="m3" target="c8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

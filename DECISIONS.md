@@ -59,7 +59,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
-| **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver pending** |
+| **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
 
 ---
 
@@ -2188,7 +2188,11 @@ A chronological record of all architectural, research, algorithmic, and engineer
     (hyperelastic) mechanics with self-contact of the vein wall, which this model does not have.
 * **Consequence.** The vein direction is closed for the linear model. The interactive demos (`demos/`) show the vein
   scene with this limitation stated in its caption.
-* **Liver, tied, at the fitted fat**: pending.
-  - The first attempt was killed by a reboot after s0004: medians at 5 N of 1.10 / 0.90 / 0.80 mm at 2.3 / 4.1 /
-    5.9 kPa, and s0010 1.33 mm at 2.3 kPa.
-  - These are partial and not a result. The full re-run is in progress.
+* **Result — liver, tied, at the fitted fat: FAIL** (`results/liver_headroom_fatcal_20261122_102208.json` / `.md`,
+  10 measurable patients of 12; s0006 and s0034 not measurable, liver at the CT field of view).
+  - At every liver modulus, 0 of 10 patients reach a median of 2 mm at 5 N (gate: ≥ 2/3).
+  - Medians at 5 N, E 4.1 kPa: 0.30–1.53 mm (DEC-059 at the shared fat: 0.31–1.33 mm).
+  - Best patient: s0029, 1.86 mm at E 2.3, 1.53 mm at E 4.1, 2.13 mm only at 10 N.
+  - Motion is almost all in-plane (out-of-plane ≤ 0.21 mm at 4.1 kPa).
+  - Softening the fat three-fold moves the liver targets by at most about 0.2 mm more, because the probe force is
+    taken up in the wall.

@@ -42,6 +42,7 @@ from ReconstructionPipeline.data.import_sonogym_subjects import body_mask
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LIVER = 5                     # TotalSegmentator v2 `total` task: 1 spleen, 2/3 kidneys, 4 gallbladder, 5 liver
 GRID_X, GRID_Y, GRID_Z = (-70.0, 70.0), (-50.0, 120.0), (-90.0, 85.0)
+WIDE_X, WIDE_Z = (-140.0, 140.0), (-160.0, 155.0)      # DEC-063 (--wide): same depth, wider sides
 SKIN_TOP_Y = 115.0
 MEMBER_RE = re.compile(r"^assets/data/HumanModels/(selected_dataset/(s\d{4})/ct\.nii\.gz|"
                        r"selected_dataset_stl/(s\d{4})/(combined_label_map\.nii\.gz|liver\.stl))$")
@@ -74,7 +75,8 @@ def _stl_shape(path):
     return abs(float(m.volume)), np.sort(np.ptp(np.asarray(m.vertices, float), 0))
 
 
-def convert(sid, files, out_dir):
+def convert(sid, files, out_dir, grid_x=GRID_X, grid_z=GRID_Z):
+    GRID_X, GRID_Z = grid_x, grid_z
     ct_img, lbl_img = nib.load(files["ct"]), nib.load(files["label"])
     A = ct_img.affine
     if nib.aff2axcodes(A) != ("R", "A", "S"):
@@ -146,12 +148,16 @@ def main(argv=None):
     ap.add_argument("--out", default=os.path.join(ROOT, "data", "liver"))
     ap.add_argument("--subjects", default="")
     ap.add_argument("--archive", required=True)
+    ap.add_argument("--wide", action="store_true", help="DEC-063: x [-140, 140], z [-160, 155] (default out data/liver_wide)")
     args = ap.parse_args(argv)
+    grid = (WIDE_X, WIDE_Z) if args.wide else (GRID_X, GRID_Z)
+    if args.wide and args.out == os.path.join(ROOT, "data", "liver"):
+        args.out = os.path.join(ROOT, "data", "liver_wide")
     subjects = [s for s in args.subjects.split(",") if s] or None
     with tempfile.TemporaryDirectory() as tmp:
         files = extract(args.archive, subjects, tmp)
         for sid in sorted(files):
-            meta = convert(sid, files[sid], os.path.join(args.out, f"sonogym_{sid}"))
+            meta = convert(sid, files[sid], os.path.join(args.out, f"sonogym_{sid}"), *grid)
             q = meta["qa"]
             print(f"{sid}: liver in crop {q['liver_voxels_in_crop']} vox ({100 * q['liver_fraction_in_crop']:.0f} % of "
                   f"the label volume), STL/label volume {q.get('stl_volume_ratio', float('nan')):.2f}, extents differ <= "

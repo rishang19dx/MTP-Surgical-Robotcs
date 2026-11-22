@@ -68,3 +68,4 @@ checkpoints/vec_ppo/*.zip
 
 # MuJoCo engine warning log (written to the working directory)
 MUJOCO_LOG.TXT
+data/liver_wide/

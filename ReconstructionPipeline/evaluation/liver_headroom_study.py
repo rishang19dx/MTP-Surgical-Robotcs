@@ -162,7 +162,8 @@ def targets_for(prof, x, z):
 
 
 @torch.no_grad()
-def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalty=PENALTY, e_fat=None):
+def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalty=PENALTY, e_fat=None, roi=None):
+    """roi=(lo, hi) overrides the box (DEC-063 margin sensitivity); the registered studies leave it None."""
     xs = [s[0] for s in sites]
     zs = [s[1] for s in sites]
     ct = data["ct_volume"]
@@ -171,6 +172,8 @@ def run_modulus(data, liver, sites, targets, e_liver, dev, sliding=False, penalt
                    max(min(zs) - FACE_HALF[1] - ROI_MARGIN_MM, -90.0)])
     hi = np.array([min(max(xs) + FACE_HALF[0] + ROI_MARGIN_MM, 70.0), top + 4.0,
                    min(max(zs) + FACE_HALF[1] + ROI_MARGIN_MM, 85.0)])
+    if roi is not None:
+        lo, hi = np.asarray(roi[0], float), np.asarray(roi[1], float)
     t0 = time.perf_counter()
     slide = dict(sliding_region=liver, sliding_penalty=penalty) if sliding else {}
     if e_fat is not None:                       # DEC-062: fat modulus from the vein calibration (effective kPa)

@@ -59,7 +59,7 @@ def fov_edge_body_voxels(data, fov, lo, hi):
     inside_crop = (lo[0] >= ox and hi[0] <= ox + ct.shape[2] - 1 and lo[2] >= oz and hi[2] <= oz + ct.shape[0] - 1)
     edge = ndimage.binary_dilation(~fov, iterations=1)
     n = int(((ct[zs, :, xs] > BODY_HU) & edge[zs, :, xs]).sum())
-    return n, inside_crop
+    return n, bool(inside_crop)
 
 
 def main(argv=None):

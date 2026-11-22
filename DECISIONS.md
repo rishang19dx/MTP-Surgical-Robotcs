@@ -60,6 +60,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
 | **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
+| **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2196,3 +2197,36 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Motion is almost all in-plane (out-of-plane ≤ 0.21 mm at 4.1 kPa).
   - Softening the fat three-fold moves the liver targets by at most about 0.2 mm more, because the probe force is
     taken up in the wall.
+
+### `DEC-063`: Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity — PRE-REGISTERED
+* **Date**: November 22, 2026 (branch `liver-sliding`). Committed before any code or run.
+* **Question.** DEC-059 and DEC-062 found liver targets move 0.3–1.5 mm at 5 N. The FEM clamps the deep face and
+  the four side faces of its box (`fem_tissue.py`, Dirichlet). In those studies the box was the whole liver crop
+  (140 × 175 mm, 165 mm deep), and sites were spread across it. Some probe faces were 7–10 mm from a clamped side
+  wall.
+  - A real liver can translate as a whole: it slides on the diaphragm, and the bowel around it is mobile.
+  - Clamped walls this close suppress exactly that motion.
+  - So the null may be an artefact of the box.
+* **Design.**
+  - **Crops**: re-import the liver subjects with a wider window, x [−140, 140] and z [−160, 155] mm. Depth and
+    frame Q are unchanged (`import_liver_subjects.py --wide`, into `data/liver_wide/`).
+  - **Site**: one site per subject, the first selected site of DEC-059 (the valid site nearest the grid centre).
+    The targets are the same rule as DEC-059.
+  - **Box**: the site's probe face plus a side margin m ∈ {30, 60, 90} mm on all four sides. The deep face is
+    unchanged.
+  - **Model**: tied liver at 4.1 kPa, fitted fat (DEC-062, 3.38 kPa), all else as DEC-062.
+  - **Outcome**: the median |u| of the liver targets at 5 N, the same statistic as DEC-059.
+* **Subjects**: TRAINING subjects only, in this order: s0004, s0010, s0012, s0038, s0024, s0028, s0014, s0015.
+  - The first 3 eligible subjects are used.
+  - A subject is eligible if its site is measurable under the DEC-059 rules, and if no body voxel inside the
+    m = 90 box lies on the source CT's field-of-view edge. Tissue cut by the CT edge would be a free surface and
+    would inflate motion.
+* **Decision rule** (per subject, R = |u|(m = 90) / |u|(m = 30)):
+  - **Box artefact confirmed** if R ≥ 1.5 in ≥ 2 of 3 subjects. The DEC-059/062 liver nulls are then not valid as
+    stated, and a new pre-registered liver study at a converged margin follows.
+  - **Null stands** if R < 1.2 in ≥ 2 of 3.
+  - **Inconclusive** otherwise. It is reported, and nothing is re-run on it alone.
+  - Also reported: convergence |u|(90) / |u|(60), whether any subject reaches 2 mm, and the box size and build time.
+* **Not changed**: DEC-059 and DEC-062 stand as recorded. This entry tests a model assumption; it is not a
+  re-analysis.
+

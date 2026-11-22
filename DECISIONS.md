@@ -60,7 +60,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
 | **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
-| **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive: walls bias motion down ~30 % (R 1.28–1.33); still < 2 mm** |
 
 ---
 
@@ -2240,3 +2240,24 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - The smaller span makes "artefact" harder to reach and "null stands" easier. So a "null stands" verdict here only
     holds up to 60 mm.
   - The 90 mm point is left for the remote GPU server.
+* **Result: INCONCLUSIVE** (`results/liver_box_sensitivity_20261122_161442.json` / `.md`, commit 9626ea8).
+  - Eligible subjects: s0004, s0010 and s0038. s0012 is not eligible: the 60 mm box reaches the CT field-of-view
+    edge.
+  - |u| at 5 N for m = 30 / 45 / 60 mm:
+
+    | Subject | m = 30 | m = 45 | m = 60 | R |
+    | :--- | ---: | ---: | ---: | ---: |
+    | s0004 | 0.97 | 1.18 | 1.25 | 1.28 |
+    | s0010 | 1.23 | 1.48 | 1.63 | 1.33 |
+    | s0038 | 1.25 | 1.49 | 1.66 | 1.33 |
+
+  - All three fall between the thresholds (1.2 and 1.5).
+  - Convergence |u|(60) / |u|(45) is 1.06–1.11, so motion is still rising but slowing. No subject reaches 2 mm.
+  - A first run computed identical values but crashed while writing the JSON (a numpy bool). It was fixed in 9626ea8
+    and re-run; the crashed run's log is kept in local scratch.
+* **Reading** (not a verdict):
+  - The clamped walls bias liver motion down by about 30 % between 30 and 60 mm margins, and the trend suggests
+    roughly 40 % at convergence. That is enough to matter for a disclosed bias.
+  - It is not enough to take these targets past 2 mm: about 1.7–1.8 mm if the observed slowing continues.
+  - The DEC-059/062 liver nulls are reported with this bias stated. The 90 mm point (remote server) would settle
+    convergence.

@@ -2230,3 +2230,13 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Not changed**: DEC-059 and DEC-062 stand as recorded. This entry tests a model assumption; it is not a
   re-analysis.
 
+* **Deviation (22 Nov, before any further run).** The m = 90 mm box (225 × 190 mm) is infeasible on this machine:
+  the process was killed for lack of memory (15 GB RAM, about 6 GB used by desktop apps).
+  - Before the kill, s0004 had run at m = 30 and m = 60: 0.97 and 1.25 mm. These were seen before this change and
+    are disclosed here.
+  - The margins become **{30, 45, 60} mm**, so R = |u|(60) / |u|(30), with the same thresholds (artefact ≥ 1.5,
+    null < 1.2, in ≥ 2 of 3).
+  - Eligibility uses the 60 mm box.
+  - The smaller span makes "artefact" harder to reach and "null stands" easier. So a "null stands" verdict here only
+    holds up to 60 mm.
+  - The 90 mm point is left for the remote GPU server.

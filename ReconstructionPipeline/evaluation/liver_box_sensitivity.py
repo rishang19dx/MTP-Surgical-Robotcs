@@ -2,14 +2,14 @@
 DEC-063 (pre-registered): is the liver target-shift null an artefact of the FEM's clamped box walls?
 
     ./.venv/bin/python ReconstructionPipeline/evaluation/liver_box_sensitivity.py \
-        --fat-calibration results/vein_calibration_fat_<stamp>.json [--margins 30,60,90]
+        --fat-calibration results/vein_calibration_fat_<stamp>.json [--margins 30,45,60]
 
 Input: `data/liver_wide/<subject>` (`import_liver_subjects.py --wide`: x [-140, 140], z [-160, 155] mm, same depth
 and frame Q as DEC-059). Per subject: one site (the first DEC-059 site, nearest the grid centre), the DEC-059
 targets, a box = probe face + margin m on all four sides (deep face unchanged), tied liver 4.1 kPa, fitted fat.
 Outcome: median |u| of the targets at 5 N (as DEC-059). Subjects: training only, in the registered order; the
 first 3 eligible are used (eligible = measurable under DEC-059 and no body voxel on the CT field-of-view edge
-inside the largest box). Decision: R = |u|(90)/|u|(30); artefact if R >= 1.5 in >= 2/3, null stands if R < 1.2 in
+inside the largest box). Decision: R = |u|(60)/|u|(30) (deviation: 90 mm infeasible in RAM); artefact if R >= 1.5 in >= 2/3, null stands if R < 1.2 in
 >= 2/3, otherwise inconclusive. Writes results/liver_box_sensitivity_<stamp>.json / .md.
 """
 
@@ -65,7 +65,7 @@ def fov_edge_body_voxels(data, fov, lo, hi):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--fat-calibration", required=True)
-    ap.add_argument("--margins", default="30,60,90")
+    ap.add_argument("--margins", default="30,45,60")   # DEC-063 deviation: 90 mm infeasible (RAM)
     ap.add_argument("--subjects", default="", help="(debug) override the registered order; output goes to .agents/")
     a = ap.parse_args(argv)
     cal = json.load(open(a.fat_calibration))
@@ -73,7 +73,7 @@ def main(argv=None):
         raise SystemExit("needs a converged DEC-062 fat fit")
     e_fat = float(cal["fat_e_eff_kpa"])
     margins = [float(v) for v in a.margins.split(",")]
-    debug = bool(a.subjects) or margins != [30.0, 60.0, 90.0]
+    debug = bool(a.subjects) or margins != [30.0, 45.0, 60.0]
     names = [s for s in a.subjects.split(",") if s] or ORDER
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     base = os.path.join(ROOT, "data", "liver_wide")

@@ -298,6 +298,11 @@ class UltrasoundVectorEnv(VectorEnv):
         sf = {len(p.model.free_skin) for p in self.patients}
         self.preload = torch.zeros(N, 3 * max(sf), dtype=torch.float64, device=dev)
         self.u_warp = {}
+        # warp augmentation: each patient's buffer holds rows for its own envs only (env -> row in _warp_row)
+        self._warp_row = torch.zeros(N, dtype=torch.long, device=dev)
+        for p in range(len(self.patients)):
+            e = (self.env_patient == p).nonzero()[:, 0]
+            self._warp_row[e] = torch.arange(len(e), device=dev)
         self.img_gain_db = torch.zeros(N, device=dev)
         self.img_slope_db_cm = torch.zeros(N, device=dev)
         self.last_frame: Optional[Frame] = None
@@ -401,8 +406,9 @@ class UltrasoundVectorEnv(VectorEnv):
             w_rms = (((w ** 2).sum(1)).flatten(1).sum(1) / mask.sum().clamp_min(1)).sqrt().clamp_min(1e-9)
             w = w * (rms / w_rms)[:, None, None, None, None]
             if p_idx not in self.u_warp:
-                self.u_warp[p_idx] = torch.zeros(self.num_envs, 3, m.NZ, m.NY, m.NX, device=self.device)
-            self.u_warp[p_idx][g] = w
+                n_p = int((self.env_patient == p_idx).sum())
+                self.u_warp[p_idx] = torch.zeros(n_p, 3, m.NZ, m.NY, m.NX, device=self.device)
+            self.u_warp[p_idx][self._warp_row[g]] = w
 
     def step(self, actions):
         a = torch.as_tensor(actions, dtype=torch.float32, device=self.device).clamp(-1.0, 1.0)
@@ -527,7 +533,7 @@ class UltrasoundVectorEnv(VectorEnv):
                 u_grid, u_inner = ps.solver._field(res["f"][rows], res["fr"][rows], res["b"][rows],
                                                    res["es"][rows], wbg)
                 if self.augment == "warp":
-                    u_grid = u_grid + self.u_warp[pi][ids[rows]]
+                    u_grid = u_grid + self.u_warp[pi][self._warp_row[ids[rows]]]
                 # field-only state: only warp_to_reference is used here, the force came from `res`
                 st = BatchedFEMState(
                     indentation_mm=res["d"][rows], reaction_force_n=force[rows], linear_force_n=None,
@@ -601,7 +607,7 @@ class UltrasoundVectorEnv(VectorEnv):
                 st = ps.solver.solve(t_skin, d, e_scale=es, stiffness=False, preload=pre,
                                      preload_margin_mm=self.preload_margin_mm)
                 if self.augment == "warp":
-                    st.u_grid = st.u_grid + self.u_warp[p_idx][g]
+                    st.u_grid = st.u_grid + self.u_warp[p_idx][self._warp_row[g]]
                 f = st.reaction_force_n
                 t_img = st.probe_face_poses(t_skin)
                 sl = ps.ct.extract_slices(t_img, interpolation="bilinear", batched_warp_fn=st.warp_to_reference)

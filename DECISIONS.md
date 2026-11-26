@@ -2401,6 +2401,11 @@ A chronological record of all architectural, research, algorithmic, and engineer
   at 584 env-steps/s each (8.6 min), GPU utilisation median 88 % (p90 99 %), peak 34.9 GB. Three runs ran out of memory
   (about 17 GB each). So the working unit is 2 runs per GPU at up to ~32 patients each; from the server log
   (`~/ds404_work/logs/pack2_*.log`), not a results file, because it measures capacity, not a study outcome.
+* **Addendum (27 Nov, memory fix for the warp augmentation)**: `augment="warp"` allocated one (num_envs × 3 × lattice)
+  buffer per patient, although each patient uses only its own envs: about 46 GB at 16 patients × 512 envs. Each
+  patient's buffer now holds rows for its own envs only (`_warp_row`). Values are unchanged; `test_fem_multi.py` now
+  also checks batched-vs-per-patient parity with `augment="fem"` and `"warp"` (20 passed with `test_augmentation` and
+  `test_gym_api`).
 
 ### `DEC-067`: Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED
 

@@ -73,13 +73,14 @@ def test_queries_match_per_patient(patients):
     assert bool((res["F"] > 0).any()) and bool((res["F"] == 0).any()), "batch must mix contact and no contact"
 
 
-@pytest.mark.parametrize("mode", ["aware", "rigid"])
-def test_env_matches_per_patient_path(patients, mode):
+@pytest.mark.parametrize("mode,augment", [("aware", None), ("rigid", None), ("aware", "fem"), ("aware", "warp")])
+def test_env_matches_per_patient_path(patients, mode, augment):
     from mtp_gym.core import UltrasoundVectorEnv
     from mtp_gym.tasks import FreeScanTask
     out = {}
     for batched in (True, False):
-        env = UltrasoundVectorEnv(12, FreeScanTask(), patients, deformation_mode=mode, max_steps=10 ** 9, seed=3)
+        env = UltrasoundVectorEnv(12, FreeScanTask(), patients, deformation_mode=mode, max_steps=10 ** 9, seed=3,
+                                  augment=augment)
         env.batch_patients = batched
         env.reset(seed=3)
         rng = np.random.default_rng(3)
@@ -90,7 +91,7 @@ def test_env_matches_per_patient_path(patients, mode):
             rows.append((info["normal_force"].double(), info["indentation_mm"].double(), obs["bmode"].float()))
         if DEV.type == "cuda":
             torch.cuda.synchronize()
-        print(f"[*] {mode} batched={batched}: {(time.perf_counter() - t0) * 250:.1f} ms/step (12 envs, 3 patients)")
+        print(f"[*] {mode} {augment} batched={batched}: {(time.perf_counter() - t0) * 250:.1f} ms/step (12 envs, 3 patients)")
         out[batched] = rows
     for (fa, ia, ba), (fb, ib, bb) in zip(out[True], out[False]):
         torch.testing.assert_close(fa, fb, rtol=1e-4, atol=1e-4)

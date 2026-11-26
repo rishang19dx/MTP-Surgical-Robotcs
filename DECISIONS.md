@@ -67,6 +67,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-067` | Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED | **G, H4a, H4b pass; H4c fails (gap 0.113 mm/N), so H4 fails; H5 fails; P1 OUT; S1.2 ROBUST** |
 | **Nov 2026** | `DEC-068` | Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2535,4 +2536,23 @@ A chronological record of all architectural, research, algorithmic, and engineer
   DEC-057 null extends to held-out patients.
 * **Known before registration**: DEC-057 (−0.8 points deformation-only, +11.7 SonoGym, at ceiling on training
   patients); the indentation-dominates-the-image measurement of DEC-057.
+
+### `DEC-070`: Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED
+
+* **Date**: 27 Nov 2026. Committed before any S3.2 run.
+* **Question** (DEC-049 H2/H3 at scale): does training with physical FEM skin pre-deformation (`--augment fem`,
+  DEC-048 A1) raise held-out navigation success, and more than non-physical controls of matched size (`warp`: smooth
+  random image warp with the FEM field's RMS; `imaging`: random gain / TGC slope)?
+* **Design**: N = 16 (DEC-068's set, chosen now, before any S3.1 result, to share runs with DEC-068/069); deformable
+  training; arms none (= DEC-068's N = 16 aware runs, shared), fem, warp, imaging; seeds 0, 1, 2; T* steps and the
+  DEC-068 timing rule (train to 6M with checkpoints, evaluate the T* checkpoint); evaluation as DEC-068 (137 test
+  patients, 16 episodes, seed 1000, deploy aware).
+* **Analysis**: `nav_augment_analysis.py`, frozen with this commit. Per patient seeds averaged; paired bootstrap over
+  test patients (10,000, seed 0).
+  - **H2**: fem − none ≥ 0.05 and the 95 % interval excludes 0.
+  - **H3**: fem − warp ≥ 0.05 with interval > 0, and fem − imaging ≥ 0.05 with interval > 0.
+  - Not informative if every arm is at ≥ 0.95 or ≤ 0.05.
+* **Known before registration**: the laptop preliminary (DEC-051: no detectable effect at 2 patients, 300k steps).
+* **Implementation note**: the warp arm's buffer was fixed for many patients (DEC-066 addendum); values unchanged,
+  parity-tested.
 

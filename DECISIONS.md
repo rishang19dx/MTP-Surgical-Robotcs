@@ -60,7 +60,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
 | **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
-| **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive: walls bias motion down ~30 % (R 1.28–1.33); still < 2 mm** |
+| **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive at 60 mm and at the registered 90 mm (R 1.44–1.52, 1/3 ≥ 1.5); all < 2 mm** |
 | **Nov 2026** | `DEC-064` | Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients) | **Accepted** (infrastructure; 399 FEMs built) |
 | **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
 | **Nov 2026** | `DEC-066` | Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix) | **Accepted** (parity tests pass; 6.2× env, 5.8× training at 32 patients) |
@@ -2268,6 +2268,20 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - It is not enough to take these targets past 2 mm: about 1.7–1.8 mm if the observed slowing continues.
   - The DEC-059/062 liver nulls are reported with this bias stated. The 90 mm point (remote server) would settle
     convergence.
+* **Addendum: the registered 90 mm point** (27 Nov 2026, A6000 server with 1 TB RAM; `results/liver_box_sensitivity_20261126_205228.md`,
+  commit 3255749; margins 30/45/60/90, so R = |u|(90)/|u|(30) exactly as first registered).
+  - The script marks any margin set other than the 30/45/60 deviation as "debug" and wrote the file to `.agents/`;
+    the run is the registered design, so the file was copied unchanged to `results/` (its meta still says
+    `"debug": true`).
+  - Eligible subjects are the same: s0004, s0010, s0038 (s0012: the 90 mm box reaches the CT field-of-view edge).
+  - |u| at 5 N for m = 30 / 45 / 60 / 90 mm: s0004 0.97 / 1.18 / 1.25 / 1.40 (R 1.44); s0010 1.23 / 1.48 / 1.63 /
+    1.77 (R 1.44); s0038 1.25 / 1.49 / 1.66 / 1.89 (R 1.52). The 30–60 mm values reproduce the 22 Nov run exactly.
+  - **Verdict (registered rule): INCONCLUSIVE** — R ≥ 1.5 in 1 of 3, R < 1.2 in none.
+  - Convergence |u|(90)/|u|(60) = 1.09–1.14: motion still rises, more slowly. No subject reaches 2 mm (max 1.89).
+  - Build time of the 90 mm box 309–371 s per subject.
+  - Reading: the clamped walls bias liver motion down by about 30–35 % between 30 and 90 mm. At the largest box one
+    subject comes within 0.11 mm of 2 mm, so the DEC-059/062 "< 2 mm" nulls are close to the gate once the box bias is
+    removed. Nothing is re-run on this alone (registered rule).
 
 ### `DEC-064`: Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients)
 

@@ -64,7 +64,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-064` | Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients) | **Accepted** (infrastructure; 399 FEMs built) |
 | **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
 | **Nov 2026** | `DEC-066` | Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix) | **Accepted** (parity tests pass; 6.2× env, 5.8× training at 32 patients) |
-| **Nov 2026** | `DEC-067` | Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-067` | Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED | **G, H4a, H4b pass; H4c fails (gap 0.113 mm/N), so H4 fails; H5 fails; P1 OUT; S1.2 ROBUST** |
 | **Nov 2026** | `DEC-068` | Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Pre-registered** |
 
@@ -2448,6 +2448,35 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Consequences**: H4 pass at scale → the deformation effect on this measurement is a population result. H4 fail →
   DEC-056's two-patient result does not generalise, reported as such. P1 OUT → the spine is closed for a
   force-choosing policy. P1 IN → S3.4 on the spine, under its own pre-registration.
+* **Result** (27 Nov 2026; `results/muscle_thickness_dec067_s11_dec067.md` and `…_s12_dec067.md`, data
+  `results/muscle_thickness_dec067_s11.json` / `_s12.json`, each merged from 8 shards that are kept on the server).
+  - Run on d15f5fa; "-dirty" in the files is `eval_vec_policies.py`, edited for the budget-pilot evaluation, which the
+    study does not import. 411 patients per run, both runs about 13 min on 2 GPUs (16 shard processes).
+  - Test: 127 scored, **112 measurable**.
+  - **G pass**: detection 1.00, median |img − GT| at ≤ 2 N 1.51 mm.
+  - **H4a pass**: deformable image slope −0.264 mm/N [−0.283, −0.236]; 95 % of measurable patients negative; GT
+    slope median −0.264 mm/N.
+  - **H4b pass**: median |rigid slope| 0.042 mm/N (upper bound 0.066).
+  - **H4c FAIL**: median tracking gap 0.113 mm/N, upper bound 0.132 (limit 0.10).
+  - **H4 FAIL** (on H4c). **H5 FAIL**: force-aware 2.49 vs intercept-only 2.65 mm (gain 0.16 < 0.377); uncorrected
+    1.13 mm; k = 0.426 mm/N.
+  - **S1.3 P1 gate OUT**: median excess (headroom − noise floor) 0.00 mm [−0.19, 0.14]; 8 % of patients ≥ 1 mm.
+  - **S1.2 ROBUST**: with per-patient stiffness ×[0.5, 2] every verdict is the same (H4a slope −0.283 mm/N; H4c gap
+    0.099, upper 0.113, still FAIL; P1 OUT).
+  - Reported, not decisive: DEC-056's "every patient" rules fail at this n (H4a and H4b each fail in some patients);
+    without flagged patients and on new patients only (110 measurable) the verdicts are the same; train (209
+    measurable) H4 fails too; Spearman ρ of the deformable slope vs midline soft tissue +0.34 and vs paraspinal fat
+    +0.43 (n = 112; exploratory; positive ρ = less negative slope in thicker backs).
+* **Reading** (not a verdict):
+  - The deformation signature is a population result: in 95 % of held-out patients the image-measured thickness falls
+    with force in the deformable simulator and stays flat in the rigid one, and the median image slope equals the
+    median ground-truth slope (−0.264 mm/N both).
+  - Per patient, the image slope misses the ground-truth slope by about 0.11 mm/N in the median: the measurement
+    tracks compression on average but not patient by patient to the pre-registered 0.10 mm/N. H4 is reported as
+    failed.
+  - A population force correction does not help (H5, as in DEC-056), and no force choice on the spine improves the
+    error by more than its noise floor (P1 OUT). The spine is closed for a force-choosing policy; S3.4 needs a softer
+    target (liver, vein).
 
 ### `DEC-068`: Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED
 

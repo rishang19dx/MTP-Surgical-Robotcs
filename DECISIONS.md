@@ -2505,6 +2505,11 @@ A chronological record of all architectural, research, algorithmic, and engineer
   scale showed no detectable effect); the pilot's training-return curve (sizing only).
 * **Limits stated now**: one task; T* is chosen on a 32-patient pilot, so N = 64 may be under-trained (reported if the
   64-patient return curve is still rising at T*); N = 256 needs patient streaming and is not part of this entry.
+* **Deviation (27 Nov, before any S3.1/S3.3 run started; timing only)**: to save wall time the runs start before the
+  pilot has fixed T*. Every run trains to 6M steps and saves a checkpoint every 1M; the evaluated policy is the
+  checkpoint at T*, and runs may be stopped once past T*. This equals training to T*: PPO here uses a constant
+  learning rate (3e-4) and clip range (SB3 default 0.2), so no schedule depends on the total step count, and the run
+  up to T* is the same computation. T* is still chosen by the budget rule on the pilot's DEV evaluation only.
 
 ### `DEC-069`: Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED
 

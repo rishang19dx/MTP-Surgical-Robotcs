@@ -13,6 +13,10 @@ seeded: the same starts for every policy).  Policies:
   blind    nav only: drives to the patient's goal pose as seen in the OBSERVED pose frame, ignoring the image
            (DEC-045: must fail when the hidden placement offset is on; if it succeeds the task is solvable blind)
   ppo:<file> one entry per --ppo checkpoint (deterministic actions)
+--batch-patients K (DEC-067): K patients share one env (`--episodes` envs each, contiguous blocks), using the
+cross-patient batched simulation (DEC-066); metrics are split per patient. Start poses are seeded and identical across
+policies, but not identical to a per-patient run (the env's RNG then covers more envs). `--splits` resolves
+"train"/"test"/"dev" and names.
 Metrics (at each env's first episode end):
   recon / force: coverage@3 (task coverage), mean sensed force, episode return; force task also mean commanded
   force and mean bone visibility;  nav: success rate, steps, final goal distance (mm) and yaw error (deg).
@@ -54,7 +58,8 @@ def scripted_action(env, task_name: str, step: int) -> np.ndarray:
     return a.astype(np.float32)
 
 
-def run_policy(env: UltrasoundVectorEnv, venv: SB3VecEnv, task_name: str, policy: str, model, seed: int):
+def run_policy(env: UltrasoundVectorEnv, venv: SB3VecEnv, task_name: str, policy: str, model, seed: int,
+               per_env: bool = False):
     n = env.num_envs
     obs, _ = env.reset(seed=seed)
     obs_sb = venv._convert(obs)
@@ -101,6 +106,8 @@ def run_policy(env: UltrasoundVectorEnv, venv: SB3VecEnv, task_name: str, policy
         done |= end
         if done.all():
             break
+    if per_env:
+        return rec
     return {k: (float(np.nanmean(v)) if np.isfinite(v).any() else None) for k, v in rec.items()} | {
         "coverage_std": float(np.nanstd(rec["coverage"])) if np.isfinite(rec["coverage"]).any() else None}
 
@@ -115,14 +122,50 @@ def main(argv=None):
     ap.add_argument("--bmode-physics", default="depth", choices=["depth", "legacy"])
     ap.add_argument("--seed", type=int, default=1000)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "results"))
+    ap.add_argument("--batch-patients", type=int, default=0, help="K patients per env (DEC-067); 0 = one at a time")
+    ap.add_argument("--splits", default="", help="split file for --patients (default data/splits.json)")
+    ap.add_argument("--policies", default="", help="comma list overriding the default baselines (ppo:* always run)")
+    ap.add_argument("--tag", default="")
     args = ap.parse_args(argv)
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     from stable_baselines3 import PPO
     models = {f"ppo:{os.path.basename(p)}": PPO.load(p, device=dev) for p in args.ppo}
     policies = ["random", "scripted"] if args.task != "nav" else ["random", "blind", "oracle"]
+    if args.policies:
+        policies = [p for p in args.policies.split(",") if p]
     policies += list(models)
     rows = []
-    for pdir in patient_dirs(args.patients):
+    if args.splits:
+        sp = json.load(open(args.splits))
+        names = sp[args.patients] if args.patients in sp and isinstance(sp[args.patients], list) else args.patients.split(",")
+        pdirs = [os.path.normpath(os.path.join(ROOT, sp["patients_root"], n)) for n in names]
+    else:
+        pdirs = patient_dirs(args.patients)
+    key = "success" if args.task == "nav" else "coverage"
+    if args.batch_patients:
+        K, E = args.batch_patients, args.episodes
+        for c in range(0, len(pdirs), K):
+            group = [PatientSim(p, dev) for p in pdirs[c:c + K]]
+            for pol in policies:
+                env = UltrasoundVectorEnv(E * len(group), make_task(args.task), group, deformation_mode=args.deformation,
+                                          bmode_physics=args.bmode_physics, max_steps=DEFAULT_MAX_STEPS[args.task],
+                                          seed=args.seed)
+                venv = SB3VecEnv(env)
+                rec = run_policy(env, venv, args.task, pol, models.get(pol), args.seed, per_env=True)
+                ep = env.env_patient.cpu().numpy()
+                for j, ps in enumerate(group):
+                    sel = ep == j
+                    m = {k: (float(np.nanmean(v[sel])) if np.isfinite(v[sel]).any() else None) for k, v in rec.items()}
+                    m["coverage_std"] = float(np.nanstd(rec["coverage"][sel])) if np.isfinite(rec["coverage"][sel]).any() else None
+                    rows.append({"patient": ps.name.split("/")[-1], "policy": pol, **m})
+                print(f"patients {c}-{c + len(group) - 1} {pol:40s} mean {key} "
+                      f"{np.nanmean([r[key] for r in rows[-len(group):] if r[key] is not None]):.3f}", flush=True)
+                del env, venv
+            del group
+            gc.collect()
+            if dev.type == "cuda":
+                torch.cuda.empty_cache()
+    for pdir in ([] if args.batch_patients else pdirs):
         ps = PatientSim(pdir, dev)
         for pol in policies:
             env = UltrasoundVectorEnv(args.episodes, make_task(args.task), [ps], deformation_mode=args.deformation,
@@ -131,7 +174,6 @@ def main(argv=None):
             venv = SB3VecEnv(env)
             m = run_policy(env, venv, args.task, pol, models.get(pol), args.seed)
             rows.append({"patient": ps.name.split("/")[-1], "policy": pol, **m})
-            key = "success" if args.task == "nav" else "coverage"
             print(f"{rows[-1]['patient']:34s} {pol:40s} {key} {m[key]:.3f}  force {m['force_mean']:.2f} N  "
                   f"return {m['return']:.2f}", flush=True)
             del env, venv
@@ -147,9 +189,9 @@ def main(argv=None):
     stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     meta = {"script": "ReconstructionPipeline/evaluation/eval_vec_policies.py", "args": vars(args), "commit": commit,
             "gpu": torch.cuda.get_device_name() if dev.type == "cuda" else "cpu"}
-    base = os.path.join(args.out_dir, f"vec_eval_{args.task}_{stamp}")
+    os.makedirs(args.out_dir, exist_ok=True)
+    base = os.path.join(args.out_dir, f"vec_eval_{args.task}_{stamp}" + (f"_{args.tag}" if args.tag else ""))
     json.dump({"meta": meta, "rows": rows}, open(base + ".json", "w"), indent=2)
-    key = "success" if args.task == "nav" else "coverage"
     L = [f"# Vector-env evaluation: {args.task} ({stamp})", "", f"commit `{commit}` · {meta['gpu']} · patients "
          f"`{args.patients}` · {args.episodes} episodes per patient · eval deformation `{args.deformation}` · B-mode "
          f"`{args.bmode_physics}` · seed {args.seed}", "",

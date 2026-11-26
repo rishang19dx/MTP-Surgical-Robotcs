@@ -65,6 +65,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
 | **Nov 2026** | `DEC-066` | Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix) | **Accepted** (parity tests pass; 6.2× env, 5.8× training at 32 patients) |
 | **Nov 2026** | `DEC-067` | Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-068` | Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2446,4 +2448,52 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Consequences**: H4 pass at scale → the deformation effect on this measurement is a population result. H4 fail →
   DEC-056's two-patient result does not generalise, reported as such. P1 OUT → the spine is closed for a
   force-choosing policy. P1 IN → S3.4 on the spine, under its own pre-registration.
+
+### `DEC-068`: Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED
+
+* **Date**: 27 Nov 2026. **Branch**: liver-sliding. Committed before any S3.1 training run.
+* **Question**: the laptop navigation policy succeeded on its training patients and failed on held-out ones (100 % vs
+  7.8 %, DEC-048). Does held-out success rise with the number of training patients?
+* **Task and training**: `MTP/Nav-v0` (hidden placement offset, DEC-045), deformable (`aware`), depth B-mode, no
+  augmentation, PPO (`train_vec_ppo.py`, SB3 defaults as in DEC-049), 512 envs, seeds 0, 1, 2.
+  - Training sets: nested, N ∈ {1, 4, 16, 64}, from `ReconstructionPipeline/planning/nav_scale_sets.py` (new train
+    patients minus DEV and flagged, permuted with seed 0).
+  - Steps T*: chosen by the budget rule below from the DEC-067-sizing pilot, before any S3.1 run; the same T* for
+    every N.
+* **Budget rule (fixed now; applied to the pilot only)**: the pilot (`budget32`: 32 train patients not in DEV, aware,
+  seeds 0/1, checkpoints every 1M to 6M) is evaluated on the 27 DEV patients. T* = the smallest checkpoint whose DEV
+  success (mean of the 2 seeds) is within 0.02 of the best checkpoint. If the best is the 6M checkpoint and it is more
+  than 0.02 above 5M, T* = 6M and the runs are reported as "not converged at the budget".
+* **Evaluation**: every run's final policy on all 137 test patients of `data/splits_v2.json`, 16 episodes each,
+  deterministic, seed 1000, deployed `aware` (`eval_vec_policies.py --batch-patients 32`), with random, blind and
+  oracle baselines; also on its own training patients (train success).
+* **Analysis**: `nav_scale_analysis.py`, frozen with this commit. s(N) = mean over seeds of held-out success.
+  - **H1a**: s(1) ≤ s(4) ≤ s(16) ≤ s(64).
+  - **H1b**: s(64) − s(1) ≥ 0.10 and its bootstrap 95 % interval (test patients resampled, paired) excludes 0.
+  - **H1** = H1a and H1b.
+  - Reported: train success and the train − test gap per N, per-seed values, final distance and yaw error, baselines.
+* **Known before registration**: the laptop result (DEC-048/051; 1–3 patients, 300k steps, preliminary H1 at laptop
+  scale showed no detectable effect); the pilot's training-return curve (sizing only).
+* **Limits stated now**: one task; T* is chosen on a 32-patient pilot, so N = 64 may be under-trained (reported if the
+  64-patient return curve is still rising at T*); N = 256 needs patient streaming and is not part of this entry.
+
+### `DEC-069`: Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED
+
+* **Date**: 27 Nov 2026. Committed with DEC-068, before any run.
+* **Question**: DEC-057 found no deformation-only gap, but at the performance ceiling (0.98–1.00) and on the training
+  patients. Away from the ceiling, on held-out patients, does training on deformable tissue change navigation
+  success relative to rigid or kinematic training?
+* **Design**: the N = 16 training set of DEC-068; training conditions `aware` (= DEC-068's N = 16 runs, shared, not
+  retrained), `kinematic` and `rigid`; seeds 0, 1, 2; T* steps; everything else as DEC-068.
+* **Evaluation**: deploy every policy on the 137 test patients in `aware` (primary); deployments in `kinematic` and
+  `rigid` are reported.
+* **Primary (DEC-057 rule, 3 seeds)**: deformation-only gap = success(aware-trained) − success(kinematic-trained),
+  SonoGym gap = success(aware-trained) − success(rigid-trained), per seed, deployed on deformable tissue. A gap
+  **counts** if |mean over seeds| ≥ 0.15 and all three seeds have the same sign. Bootstrap interval reported.
+  - **Not informative** (no verdict) if the aware-trained held-out success is ≥ 0.95 or ≤ 0.05.
+* **Decision**: if the deformation-only gap counts, a policy-level soft-tissue effect exists for navigation on
+  held-out patients. If only the SonoGym gap counts, indentation matters, not the warp. If neither counts, the
+  DEC-057 null extends to held-out patients.
+* **Known before registration**: DEC-057 (−0.8 points deformation-only, +11.7 SonoGym, at ceiling on training
+  patients); the indentation-dominates-the-image measurement of DEC-057.
 

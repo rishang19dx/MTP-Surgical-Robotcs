@@ -62,6 +62,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
 | **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive: walls bias motion down ~30 % (R 1.28–1.33); still < 2 mm** |
 | **Nov 2026** | `DEC-064` | Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients) | **Accepted** (infrastructure; 399 FEMs built) |
+| **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
 
 ---
 
@@ -2316,4 +2317,34 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - The cache is 165 GB on the shared server disk (`ReconstructionPipeline/.fem_cache`, regenerable).
 * **Not decided here**: the train/test split of the new patients and every study that uses them. Each study is
   pre-registered as its own DEC before it runs.
+
+### `DEC-065`: Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan)
+
+* **Date**: 27 Nov 2026. **Branch**: liver-sliding. **Plan**: `tasks/server_studies_plan.md` (Stages 0–4, order).
+* **Split v2** (`ReconstructionPipeline/data/make_splits_v2.py` → `data/splits_v2.json`; user decision 27 Nov):
+  - The 13 old patients keep their DEC-041 assignment (`old_train`, `old_test`), so earlier results stay comparable.
+  - The 399 DEC-064 patients: sorted by midline soft tissue at L4 (ties by id); positions i % 3 == 1 are test.
+    Result: train 275 (266 new), test 137 (133 new).
+  - DEV = every 10th new train patient in the same order (27): tuning only, part of train, never a held-out set.
+  - Flags (kept, marked; user decision): sonogym_s0004 and s0012 (DEC-064 R3), sonogym_s0006 (R2), ts2_s0353 and
+    ts2_s0740 (partial scan-window skin). Each study states how it treats flagged patients in its pre-registration.
+  - `data/splits.json` is unchanged; scripts read v2 only when given `--splits data/splits_v2.json`.
+  - Fixed before any study used a new patient; no outcome on the new patients has been computed.
+* **Stage 0 runs (QA only, no hypothesis)**:
+  - S0.2a `muscle_window_check.py --splits data/splits_v2.json --shard i/3` (DEC-051 window rule) on all CT-derived
+    patients: which (pose, force) are truncated by the 75 mm window. The file gained `--splits/--shard/--tag`; the
+    default run on `data/splits.json` is unchanged.
+  - S0.2b `ReconstructionPipeline/data/organ_presence.py`: liver (whole in FOV) and iliac-vein groin end (≥ 15 mm above
+    the lowest slice) over all 1228 TotalSegmentator v2 subjects. No inclusion decision is taken there.
+  - S0.3 pilot: nav PPO, 32 new train patients (every 8th in thickness order), aware, seed 0, 1M steps at 512 and
+    1024 envs, to measure wall time, VRAM per patient and whether many-patient training runs. Its return curve is not
+    a result and is not used to choose any study parameter except the run budget.
+* **S0.2 results**:
+  - Window check (`results/muscle_window_check_20261126_18{4928,4754,4822}_v2_shard{0,1,2}of3.json`; 411 CT
+    patients; run on ff00982 plus the uncommitted `--splits/--shard` change that is committed with this entry, hence
+    "-dirty" in the files). Poses clean at all forces, out of 6: train 274 patients, 239 with 6/6, 262 with ≥ 1;
+    test 137, 117 with 6/6, 131 with ≥ 1. (DEC-056 had 2 measurable held-out patients; S1.1 applies its own frozen
+    measurability rule on top of this.)
+  - Organ presence (`results/organ_presence_20261126_184554.md`, 1228 subjects, ≥ 1000 voxels): liver whole in the FOV
+    546; iliac-vein groin end in the FOV left 521, right 516, both 509.
 

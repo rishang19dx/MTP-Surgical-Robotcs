@@ -2,6 +2,7 @@
 Is the ground-truth muscle thickness of the thread B study (DEC-050) cut off by the 75 mm image depth?
 
     ./.venv/bin/python ReconstructionPipeline/evaluation/muscle_window_check.py [--forces 1,2,3,4,5]
+        [--splits data/splits_v2.json --shard i/n --tag ts2]   (DEC-065 Stage 0 eligibility, one shard per GPU)
 
 The study (`muscle_compression_study.py`) measures ground-truth thickness by counting muscle-label pixels in the
 central columns of the warped label slice. The slice covers PHYSICAL_SIZE_MM[0] = 75 mm below the probe face. If the
@@ -67,15 +68,22 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--forces", default="1,2,3,4,5")
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "results"))
+    ap.add_argument("--splits", default=os.path.join(ROOT, "data", "splits.json"))
+    ap.add_argument("--shard", default="", help="i/n: every n-th patient starting at i")
+    ap.add_argument("--tag", default="")
     args = ap.parse_args(argv)
     forces = np.array([float(v) for v in args.forces.split(",")])
     i1, i5 = int(np.argmin(np.abs(forces - 1.0))), int(np.argmin(np.abs(forces - 5.0)))
-    split = json.load(open(os.path.join(ROOT, "data", "splits.json")))
-    names = [n for n in split["train"] + split["test"] if n.startswith("sonogym_")]
+    split = json.load(open(args.splits))
+    # every CT-derived patient (the sample patient comes from another dataset and has no autochthon label)
+    names = [n for n in split["train"] + split["test"] if n.startswith(("sonogym_", "../patients_ts2/"))]
+    if args.shard:
+        i, k = (int(v) for v in args.shard.split("/"))
+        names = names[i::k]
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     rows = {}
     for n in names:
-        pdir = os.path.join(ROOT, "data", "patients", n)
+        pdir = os.path.normpath(os.path.join(ROOT, split["patients_root"], n))
         ps = PatientSim(pdir, dev)
         d = ps.data
         mus = VolumeSliceExtractor(muscle_volume(pdir), spacing=d["spacing_mm"], origin=d["origin_mm"],
@@ -110,7 +118,9 @@ def main(argv=None):
     meta = {"script": "ReconstructionPipeline/evaluation/muscle_window_check.py", "commit": commit,
             "forces_n": forces.tolist(), "window_depth_mm": PHYSICAL_SIZE_MM[0], "bottom_rows": BOTTOM_ROWS,
             "truncated_if_col_fraction_at_least": TRUNCATED_COL_FRACTION, "sites": SITES}
-    base = os.path.join(args.out_dir, f"muscle_window_check_{stamp}")
+    meta.update(splits=os.path.relpath(args.splits, ROOT), shard=args.shard)
+    base = os.path.join(args.out_dir, f"muscle_window_check_{stamp}" + (f"_{args.tag}" if args.tag else "")
+                        + (f"_shard{args.shard.replace('/', 'of')}" if args.shard else ""))
     json.dump({"meta": meta, "patients": rows}, open(base + ".json", "w"), indent=1)
     L = [f"# Muscle ground truth vs the {PHYSICAL_SIZE_MM[0]:.0f} mm image window ({stamp})", "",
          f"commit `{commit}` · forces {forces.tolist()} N · a (pose, force) is truncated when ≥ "

@@ -2394,4 +2394,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
   network update is about 4 %. These are CPU-side costs of SB3, not of the simulator. Running several training
   processes per GPU uses the idle GPU time; a GPU-resident PPO would remove the buffer cost but replaces the SB3
   implementation used by DEC-057 and would need its own parity check.
+* **Packing check (27 Nov, GPU 4)**: two nav PPO runs (32 patients, 512 envs, 300k steps, seeds 0/1) on one A6000 ran
+  at 584 env-steps/s each (8.6 min), GPU utilisation median 88 % (p90 99 %), peak 34.9 GB. Three runs ran out of memory
+  (about 17 GB each). So the working unit is 2 runs per GPU at up to ~32 patients each; from the server log
+  (`~/ds404_work/logs/pack2_*.log`), not a results file, because it measures capacity, not a study outcome.
 

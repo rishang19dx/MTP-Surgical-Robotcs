@@ -61,6 +61,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
 | **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
 | **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive: walls bias motion down ~30 % (R 1.28–1.33); still < 2 mm** |
+| **Nov 2026** | `DEC-064` | Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients) | **Accepted** (infrastructure; 399 FEMs built) |
 
 ---
 
@@ -2261,3 +2262,58 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - It is not enough to take these targets past 2 mm: about 1.7–1.8 mm if the observed slowing continues.
   - The DEC-059/062 liver nulls are reported with this bias stated. The 90 mm point (remote server) would settle
     convergence.
+
+### `DEC-064`: Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients)
+
+* **Date**: 26 Nov 2026. **Branch**: liver-sliding. **Status**: Accepted (infrastructure, no hypothesis).
+* **Context**:
+  - The user is no longer targeting RSS 2027. The goal is results; the RSS abstract work stops.
+  - Results so far rest on 13 patients, a 4 GB laptop GPU and 15 GB of RAM. These limited H1 (2 measurable held-out
+    patients), navigation (2 training patients) and DEC-063 (the 90 mm box ran out of RAM).
+  - A shared server is now available: 8 × RTX A6000 48 GB (Ampere), 1 TB RAM, 64 cores, other users' jobs on most
+    GPUs. Repo at `~/ds404_work/MTP`, same Python 3.10 and pinned torch 2.5.1+cu124 as the laptop.
+* **Decision 1 (environment)**: the server `.venv` reproduces the laptop pins (torch 2.5.1+cu124, mujoco 3.17.0,
+  pybullet 3.2.6, SB3 2.6.0a1, gymnasium 1.0.0). No torch upgrade is needed (Ampere, not Blackwell).
+  - Test suite on the server (GPU 2, shared): 211 passed, 2 failed, 7 skipped, 3 xfailed in 35 min. Both failures are
+    latency thresholds, not correctness: B-mode best of 50 = 2.49 ms (target 2 ms, `test_gpu_latency_under_2ms`) and
+    Kelvinlet solve + warp = 38.9 ms (threshold 25 ms, `test_solve_and_warp_latency`). The host was at load ≈ 80 on
+    64 cores with another user's process on the same GPU. The thresholds are not changed; invariant 5's 2 ms B-mode
+    budget is **not met on this shared host** under contention.
+* **Decision 2 (throughput, T8 re-run)**: `results/throughput_20261126_181357.md` (A6000, commit 7656ccb plus the
+  uncommitted importer files, which the benchmark does not import).
+  - Large batches gain: 4448 rigid / 3768 aware env-steps/s at 1024 envs (peak 6.1 GB), against 944 / 732 at 128 envs on
+    the laptop (`results/throughput_20261105_235332.md`).
+  - Small batches are slower than on the laptop (N = 1: 37.5 vs 19.3 ms/step), consistent with a CPU-bound step on a
+    loaded host. Training should therefore use ≥ 512 envs per process.
+* **Decision 3 (data source)**: TotalSegmentator v2.0.1 (`Totalsegmentator_dataset_v201.zip`, 1228 CTs, CC BY 4.0).
+  - Zenodo (record 10047292) returns 403 "unusual traffic from your network" to the institute network, so the zip is
+    taken from the Hugging Face mirror `HajihajihaJimmy/TotalSegmentator_v2`.
+  - Transfer integrity: size 23,581,218,285 bytes and SHA-256 `741dbc91…bdf0ca26` match the mirror's LFS record.
+  - Provenance check (`results/totalseg_v2_identity_20261126_180901.json`): re-importing the 12 SonoGym subjects from
+    the zip with the same `convert` reproduces `data/patients` CTs exactly (max |ΔHU| = 0) for 10 of 11 comparable
+    subjects. s0038 differs because its L4 label differs by 22 voxels, which moves the L4 centroid (the grid anchor)
+    by 0.012 mm (median |ΔHU| 0.14 over resampled voxels). Label differences elsewhere are ≤ 258 voxels (sacrum) and
+    0 for L4. s0006 is not comparable (rejected by R2 before conversion). The mirror is accepted as the original.
+* **Decision 4 (inclusion filter, fixed before the import ran)**: `ReconstructionPipeline/data/import_totalseg_v2.py`.
+  - R1: L1–L5, sacrum and both autochthon labels each ≥ 1000 voxels. R2: no L1–L5 voxel on the first or last axial
+    slice. R3: in |x| ≤ 40 mm, ≥ 99 % of body columns have skin + 5 mm inside the source FOV, and the skin never
+    reaches the top of the P grid. R4: SonoGym subjects already in `data/patients` are skipped.
+  - Outcome (`results/totalseg_v2_import_20261126_181109.md`): 399 accepted; R1 730, R2 13, R3 74, R4 12.
+    Midline soft tissue at L4 over accepted subjects: 6 / 27 / 39 / 52 / 110 mm (min / q1 / median / q3 / max).
+  - Output `data/patients_ts2/ts2_<id>` (4.6 GB, gitignored like `data/patients`), same frame and files as the
+    SonoGym import.
+  - **Disclosure**: three existing patients would fail this filter: s0004 and s0012 (R3, dorsal FOV) and s0006 (R2,
+    truncated lumbar spine). Earlier studies used them; R3 matters most where tissue above the skin is read as air.
+* **Decision 5 (FEM assets)**: `build_patient_fem` gains `--shard i/n` (one process per GPU); its QA row now writes
+  `calib_rms_log_err_max: null` when the model is not calibrated (PatientSim uses shared moduli since DEC-041, so
+  the script crashed on the missing attribute). The FEM cache is keyed by volume content, so shards cannot collide.
+  - Outcome (`results/patients_fem_ts2_shard{0,1,2,3}of4_20261126.json`, 4 shards on GPUs 0/2/5/7): all 399 built,
+    no errors. Precompute 6.8 s median (1.0–25.3 s) against 42–45 s per patient on the laptop
+    (`results/patients_fem_20261105_225601.json`). Solver checks: compliance asymmetry ≤ 9.5e-6, PCG worst relative
+    residual ≤ 1.0e-5. Median of per-patient median window thickness 55 mm; no NaN thickness.
+  - QA flag: ts2_s0740 and ts2_s0353 have 550 and 454 free skin columns in the scan window (the others 744–750).
+    Whether they enter a study is that study's pre-registered rule.
+  - The cache is 165 GB on the shared server disk (`ReconstructionPipeline/.fem_cache`, regenerable).
+* **Not decided here**: the train/test split of the new patients and every study that uses them. Each study is
+  pre-registered as its own DEC before it runs.
+

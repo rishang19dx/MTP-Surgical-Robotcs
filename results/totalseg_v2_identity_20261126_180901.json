@@ -1,0 +1,198 @@
+{
+  "zip": "Totalsegmentator_dataset_v201.zip",
+  "reference": "data/patients",
+  "rows": [
+    {
+      "subject": "s0004",
+      "status": "reject",
+      "rule": "R3",
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 22,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0006",
+      "status": "reject",
+      "rule": "R2"
+    },
+    {
+      "subject": "s0010",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 11,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0012",
+      "status": "reject",
+      "rule": "R3",
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 10,
+        "vertebrae_L5": 175,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0014",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 170,
+        "vertebrae_L5": 4,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0015",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 0,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 4,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0024",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 258,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 9,
+        "vertebrae_L2": 4,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0028",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 37,
+        "vertebrae_L5": 2,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0029",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 6,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0030",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 2,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0034",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 0.0,
+      "label_voxels_differing": {
+        "sacrum": 0,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 0,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 0
+      }
+    },
+    {
+      "subject": "s0038",
+      "status": "accept",
+      "rule": null,
+      "ct_max_abs_diff": 802.7276000976562,
+      "label_voxels_differing": {
+        "sacrum": 1,
+        "vertebrae_L5": 0,
+        "vertebrae_L4": 22,
+        "vertebrae_L3": 0,
+        "vertebrae_L2": 0,
+        "vertebrae_L1": 0,
+        "autochthon_left": 0,
+        "autochthon_right": 0,
+        "skin": 128
+      }
+    }
+  ]
+}

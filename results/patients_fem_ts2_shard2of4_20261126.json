@@ -1,0 +1,2905 @@
+{
+  "gpu": "NVIDIA RTX A6000",
+  "rows": [
+    {
+      "patient": "data/patients_ts2/ts2_s0016",
+      "build_s": 1.3118664603680372,
+      "from_cache": true,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16084 soft cells, 96504 tets, 20002 nodes (7041 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 8.753051684008778e-06,
+      "pcg_worst_rel_residual": 9.946179488906637e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        44.0,
+        61.0,
+        72.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0040",
+      "build_s": 5.443000864237547,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14762 soft cells, 88572 tets, 18134 nodes (5766 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.275283550333861e-06,
+      "pcg_worst_rel_residual": 9.951611900760327e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        23.0,
+        54.0,
+        75.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0053",
+      "build_s": 8.75957059673965,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 22984 soft cells, 137904 tets, 27072 nodes (7417 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.67678289414318e-06,
+      "pcg_worst_rel_residual": 9.692677849670872e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        77.0,
+        96.0,
+        103.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0066",
+      "build_s": 8.106815908104181,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15198 soft cells, 91188 tets, 18615 nodes (5695 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.658261945522124e-06,
+      "pcg_worst_rel_residual": 9.947621038008947e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        20.5,
+        50.0,
+        59.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0075",
+      "build_s": 10.84761970397085,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15030 soft cells, 90180 tets, 18481 nodes (5999 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.9076028310245336e-06,
+      "pcg_worst_rel_residual": 8.27680378279183e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        23.0,
+        49.0,
+        56.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0082",
+      "build_s": 10.962165119126439,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15946 soft cells, 95676 tets, 19385 nodes (5892 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.607560495398869e-06,
+      "pcg_worst_rel_residual": 9.964282071450725e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        51.0,
+        58.75,
+        78.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0091",
+      "build_s": 10.2994301058352,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17228 soft cells, 103368 tets, 21129 nodes (6989 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.7589882245450123e-06,
+      "pcg_worst_rel_residual": 9.37208369578002e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        50.5,
+        61.5,
+        83.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0119",
+      "build_s": 9.293124983087182,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15251 soft cells, 91506 tets, 18863 nodes (6447 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.9412852593562025e-06,
+      "pcg_worst_rel_residual": 8.785832505964208e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        23.0,
+        48.0,
+        69.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0137",
+      "build_s": 13.685497690923512,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 19428 soft cells, 116568 tets, 23223 nodes (6641 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.967488676968663e-06,
+      "pcg_worst_rel_residual": 9.553212294122204e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        51.0,
+        75.0,
+        87.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0147",
+      "build_s": 11.471369461156428,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16745 soft cells, 100470 tets, 20184 nodes (6022 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.867092551959168e-06,
+      "pcg_worst_rel_residual": 9.838806363404728e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        27.0,
+        57.0,
+        72.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0157",
+      "build_s": 13.42589841131121,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18652 soft cells, 111912 tets, 22258 nodes (6376 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.3934341733506085e-06,
+      "pcg_worst_rel_residual": 9.952800610335544e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        53.0,
+        66.75,
+        78.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0166",
+      "build_s": 8.273623785935342,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13181 soft cells, 79086 tets, 16318 nodes (5273 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.1272031409944026e-06,
+      "pcg_worst_rel_residual": 9.692818821349647e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        10.0,
+        42.25,
+        54.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0179",
+      "build_s": 10.962232427671552,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17132 soft cells, 102792 tets, 20756 nodes (6398 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.8290342186569665e-06,
+      "pcg_worst_rel_residual": 9.63134334597271e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        33.25,
+        61.25,
+        74.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0191",
+      "build_s": 11.231086538173258,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16438 soft cells, 98628 tets, 19663 nodes (5763 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.775932122713016e-06,
+      "pcg_worst_rel_residual": 9.356012924399693e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        38.0,
+        60.0,
+        69.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0206",
+      "build_s": 13.019233349710703,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18171 soft cells, 109026 tets, 21636 nodes (6204 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.669639929121266e-06,
+      "pcg_worst_rel_residual": 9.892821253743023e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        51.0,
+        67.0,
+        77.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0221",
+      "build_s": 8.670785455964506,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13949 soft cells, 83694 tets, 17208 nodes (5701 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.7779885725144357e-06,
+      "pcg_worst_rel_residual": 9.938280527421739e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        17.0,
+        43.0,
+        52.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0239",
+      "build_s": 13.206818875856698,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18892 soft cells, 113352 tets, 22395 nodes (6164 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.501436411170528e-06,
+      "pcg_worst_rel_residual": 9.942458746081684e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        32.0,
+        69.0,
+        75.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0250",
+      "build_s": 10.866008488461375,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16957 soft cells, 101742 tets, 20527 nodes (6426 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.8461812016151784e-06,
+      "pcg_worst_rel_residual": 8.37986863189144e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        20.0,
+        49.0,
+        62.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0287",
+      "build_s": 9.28926048334688,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16341 soft cells, 98046 tets, 20102 nodes (6539 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.155318891251231e-06,
+      "pcg_worst_rel_residual": 9.240032341040205e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        17.25,
+        48.0,
+        55.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0304",
+      "build_s": 9.989291371777654,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15639 soft cells, 93834 tets, 19385 nodes (6518 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.2551696265031053e-06,
+      "pcg_worst_rel_residual": 9.093138032767456e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        24.0,
+        52.0,
+        62.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0320",
+      "build_s": 8.732714280486107,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15128 soft cells, 90768 tets, 18642 nodes (6170 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.8841976581101e-06,
+      "pcg_worst_rel_residual": 9.434730600332841e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        19.0,
+        48.0,
+        57.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0329",
+      "build_s": 5.897675559855998,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16644 soft cells, 99864 tets, 20292 nodes (6270 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.832595893025613e-06,
+      "pcg_worst_rel_residual": 9.935266461980063e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        32.0,
+        57.0,
+        62.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0341",
+      "build_s": 6.031964250840247,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17415 soft cells, 104490 tets, 21464 nodes (7300 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.199799545130289e-06,
+      "pcg_worst_rel_residual": 9.557243174640462e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        23.0,
+        63.0,
+        68.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0350",
+      "build_s": 10.872240424156189,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 19304 soft cells, 115824 tets, 23243 nodes (6941 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.380911490297075e-06,
+      "pcg_worst_rel_residual": 9.57921383815119e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        66.0,
+        74.75,
+        88.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0362",
+      "build_s": 8.519681391306221,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14579 soft cells, 87474 tets, 18621 nodes (6962 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.356941512480898e-06,
+      "pcg_worst_rel_residual": 9.836228855419904e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        14.0,
+        53.0,
+        60.75
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0390",
+      "build_s": 10.118411437608302,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16259 soft cells, 97554 tets, 20230 nodes (7129 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.4708665957670643e-06,
+      "pcg_worst_rel_residual": 8.575943866162561e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        39.0,
+        56.0,
+        80.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0406",
+      "build_s": 11.841644541360438,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18046 soft cells, 108276 tets, 22143 nodes (7363 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.5676407419409336e-06,
+      "pcg_worst_rel_residual": 9.478914762439672e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        41.0,
+        60.0,
+        66.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0436",
+      "build_s": 10.000789182260633,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15469 soft cells, 92814 tets, 18540 nodes (5258 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.5620278373375632e-06,
+      "pcg_worst_rel_residual": 8.772297405812424e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        17.75,
+        47.0,
+        64.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0447",
+      "build_s": 9.752754583954811,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14521 soft cells, 87126 tets, 17739 nodes (5332 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.3750068420819565e-06,
+      "pcg_worst_rel_residual": 9.894966751744505e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        10.0,
+        38.75,
+        50.25
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0461",
+      "build_s": 9.81165628414601,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14449 soft cells, 86694 tets, 17767 nodes (5620 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.7504259293335765e-06,
+      "pcg_worst_rel_residual": 9.868734196061268e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        25.0,
+        46.0,
+        60.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0472",
+      "build_s": 6.521375045180321,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18024 soft cells, 108144 tets, 21751 nodes (6544 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.2584778035458535e-06,
+      "pcg_worst_rel_residual": 9.819166734814644e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        62.0,
+        68.75,
+        94.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0480",
+      "build_s": 7.1524088671430945,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 19656 soft cells, 117936 tets, 23716 nodes (7329 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.683015213909414e-06,
+      "pcg_worst_rel_residual": 9.918288014887366e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        71.0,
+        79.0,
+        99.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0495",
+      "build_s": 7.674809064716101,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 19758 soft cells, 118548 tets, 23459 nodes (6503 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.897735639915609e-06,
+      "pcg_worst_rel_residual": 9.348093954031356e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        55.0,
+        75.0,
+        85.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0507",
+      "build_s": 5.134048419073224,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14308 soft cells, 85848 tets, 17903 nodes (6268 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.4432911038829504e-06,
+      "pcg_worst_rel_residual": 9.216946637025103e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        17.5,
+        46.0,
+        55.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0519",
+      "build_s": 5.6942341504618526,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15161 soft cells, 90966 tets, 18496 nodes (5948 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.6341377225772092e-06,
+      "pcg_worst_rel_residual": 9.963693628378678e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        14.0,
+        51.0,
+        67.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0542",
+      "build_s": 5.376527941785753,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15754 soft cells, 94524 tets, 19146 nodes (5954 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.463309750513754e-06,
+      "pcg_worst_rel_residual": 9.197007784678135e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        27.0,
+        54.0,
+        60.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0549",
+      "build_s": 5.4505675081163645,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17346 soft cells, 104076 tets, 21321 nodes (7106 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.313465416476108e-06,
+      "pcg_worst_rel_residual": 9.64970877248561e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        31.0,
+        60.0,
+        73.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0571",
+      "build_s": 4.945475751534104,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14868 soft cells, 89208 tets, 18014 nodes (5315 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.973836594997258e-06,
+      "pcg_worst_rel_residual": 9.656241672928445e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        23.0,
+        44.0,
+        53.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0579",
+      "build_s": 6.500994453206658,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17743 soft cells, 106458 tets, 21500 nodes (6844 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.566997261131228e-06,
+      "pcg_worst_rel_residual": 8.82077802089043e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        39.0,
+        70.0,
+        81.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0589",
+      "build_s": 4.5311976140365005,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 12841 soft cells, 77046 tets, 15882 nodes (5248 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.2572595542803023e-06,
+      "pcg_worst_rel_residual": 9.629474334360566e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        10.0,
+        41.0,
+        47.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0600",
+      "build_s": 4.327617439441383,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 12513 soft cells, 75078 tets, 15826 nodes (5724 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.5271770968023863e-06,
+      "pcg_worst_rel_residual": 8.285703188448679e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        9.0,
+        40.0,
+        46.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0613",
+      "build_s": 6.160327282734215,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17870 soft cells, 107220 tets, 22315 nodes (8183 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.5311095038960685e-06,
+      "pcg_worst_rel_residual": 9.471476914768573e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        38.0,
+        69.0,
+        77.25
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0621",
+      "build_s": 7.233809066005051,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20072 soft cells, 120432 tets, 23772 nodes (6739 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.616991046132668e-06,
+      "pcg_worst_rel_residual": 9.3397038654075e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        45.0,
+        75.0,
+        96.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0629",
+      "build_s": 4.737896975129843,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 12884 soft cells, 77304 tets, 15836 nodes (5059 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.8377365033138265e-06,
+      "pcg_worst_rel_residual": 9.977606168831699e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        17.0,
+        36.0,
+        47.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0639",
+      "build_s": 8.086443935520947,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20820 soft cells, 124920 tets, 24704 nodes (6692 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.477711218775737e-06,
+      "pcg_worst_rel_residual": 9.933695764630102e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        60.0,
+        87.0,
+        96.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0656",
+      "build_s": 6.457978042773902,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17182 soft cells, 103092 tets, 20735 nodes (6088 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.0720918586933126e-06,
+      "pcg_worst_rel_residual": 9.456709449295886e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        59.0,
+        67.0,
+        72.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0663",
+      "build_s": 6.978181785903871,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18413 soft cells, 110478 tets, 21931 nodes (6127 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.159451710545169e-06,
+      "pcg_worst_rel_residual": 9.94285710476106e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        65.0,
+        71.0,
+        87.25
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0669",
+      "build_s": 5.367321009747684,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16326 soft cells, 97956 tets, 20139 nodes (6948 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.416536628374135e-06,
+      "pcg_worst_rel_residual": 9.012635018734727e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        26.0,
+        54.0,
+        63.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0682",
+      "build_s": 5.422952801920474,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15787 soft cells, 94722 tets, 19311 nodes (6234 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.821280647872237e-06,
+      "pcg_worst_rel_residual": 9.954043889592867e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        33.0,
+        55.0,
+        73.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0694",
+      "build_s": 5.2837986489757895,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15311 soft cells, 91866 tets, 19104 nodes (6462 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.292249289247806e-06,
+      "pcg_worst_rel_residual": 9.271434464608319e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        28.0,
+        53.0,
+        67.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0703",
+      "build_s": 5.701466657221317,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17401 soft cells, 104406 tets, 21199 nodes (6984 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.527189237910771e-06,
+      "pcg_worst_rel_residual": 9.185379894915968e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        17.5,
+        55.0,
+        61.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0711",
+      "build_s": 4.803897644393146,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14652 soft cells, 87912 tets, 18103 nodes (6054 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.4259485012609172e-06,
+      "pcg_worst_rel_residual": 9.776600563782267e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        46.0,
+        51.0,
+        72.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0727",
+      "build_s": 4.823707640171051,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13346 soft cells, 80076 tets, 16542 nodes (5446 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.825872840324083e-06,
+      "pcg_worst_rel_residual": 9.460499313718174e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        31.75,
+        42.0,
+        46.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0737",
+      "build_s": 4.947465058416128,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 12712 soft cells, 76272 tets, 15654 nodes (4993 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.108181908352628e-06,
+      "pcg_worst_rel_residual": 8.193615030904766e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        35.75,
+        37.0,
+        61.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0749",
+      "build_s": 7.0040722489356995,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18673 soft cells, 112038 tets, 22281 nodes (6587 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.9937592510297944e-06,
+      "pcg_worst_rel_residual": 8.625271220807917e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        46.0,
+        69.0,
+        79.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0763",
+      "build_s": 6.628565060906112,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17424 soft cells, 104544 tets, 21401 nodes (6979 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.601309203226452e-06,
+      "pcg_worst_rel_residual": 9.916761882777791e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        30.0,
+        59.0,
+        69.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0777",
+      "build_s": 7.056629032827914,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 19515 soft cells, 117090 tets, 23502 nodes (7219 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.495693015212358e-06,
+      "pcg_worst_rel_residual": 9.986710210796446e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        50.5,
+        65.25,
+        81.75
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0796",
+      "build_s": 5.327985201962292,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15511 soft cells, 93066 tets, 19669 nodes (7312 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.0437902851615984e-06,
+      "pcg_worst_rel_residual": 9.678590686235111e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        18.0,
+        53.0,
+        56.75
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0812",
+      "build_s": 6.681265541352332,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17431 soft cells, 104586 tets, 21056 nodes (6437 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.982972127937303e-06,
+      "pcg_worst_rel_residual": 9.996409062296152e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        55.0,
+        61.0,
+        79.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0836",
+      "build_s": 6.72381101641804,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17778 soft cells, 106668 tets, 21422 nodes (6292 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.178472904340247e-06,
+      "pcg_worst_rel_residual": 8.80043808137998e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        37.0,
+        68.25,
+        85.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0863",
+      "build_s": 4.747670162469149,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13041 soft cells, 78246 tets, 16042 nodes (5256 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.912615748983163e-06,
+      "pcg_worst_rel_residual": 8.868491931934841e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        6.0,
+        41.0,
+        66.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0880",
+      "build_s": 6.256332628428936,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16095 soft cells, 96570 tets, 19246 nodes (5580 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.5996506402023445e-06,
+      "pcg_worst_rel_residual": 9.403272088093217e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        34.0,
+        60.0,
+        80.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0895",
+      "build_s": 6.007513043470681,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16199 soft cells, 97194 tets, 19778 nodes (6171 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.444531210221732e-06,
+      "pcg_worst_rel_residual": 9.246700756193604e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        18.0,
+        52.0,
+        67.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0913",
+      "build_s": 5.628820311278105,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14481 soft cells, 86886 tets, 17839 nodes (5774 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.260823194727187e-06,
+      "pcg_worst_rel_residual": 8.755698218010366e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        18.0,
+        47.0,
+        53.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0923",
+      "build_s": 8.087286867201328,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20174 soft cells, 121044 tets, 23542 nodes (5940 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.939751754890856e-06,
+      "pcg_worst_rel_residual": 9.751899597176816e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        72.0,
+        80.0,
+        104.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0933",
+      "build_s": 7.239004667848349,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18646 soft cells, 111876 tets, 22521 nodes (6694 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.776137321760095e-06,
+      "pcg_worst_rel_residual": 9.904323633236345e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        39.25,
+        71.0,
+        78.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0945",
+      "build_s": 6.4457783764228225,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16160 soft cells, 96960 tets, 19146 nodes (5175 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.082988768669054e-06,
+      "pcg_worst_rel_residual": 9.872252121567726e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        35.0,
+        60.0,
+        68.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0961",
+      "build_s": 5.2019604332745075,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13492 soft cells, 80952 tets, 16559 nodes (5201 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.6158537644895272e-06,
+      "pcg_worst_rel_residual": 9.186460374621674e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        15.5,
+        46.75,
+        64.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0983",
+      "build_s": 5.271417052485049,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14760 soft cells, 88560 tets, 18508 nodes (6459 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.0913445135452147e-06,
+      "pcg_worst_rel_residual": 9.741402209328953e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        41.0,
+        50.75,
+        68.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s0994",
+      "build_s": 6.8769982643425465,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17214 soft cells, 103284 tets, 20723 nodes (6354 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 8.200279841759721e-06,
+      "pcg_worst_rel_residual": 9.920267984853126e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        57.0,
+        68.0,
+        113.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1016",
+      "build_s": 5.8680492620915174,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16106 soft cells, 96636 tets, 19894 nodes (6778 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.857317506778801e-06,
+      "pcg_worst_rel_residual": 9.465769835514948e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        14.0,
+        49.0,
+        54.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1037",
+      "build_s": 5.673410545103252,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15545 soft cells, 93270 tets, 18567 nodes (5222 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.3959507753568874e-06,
+      "pcg_worst_rel_residual": 9.852620678429957e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        15.0,
+        51.0,
+        54.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1063",
+      "build_s": 5.28810456674546,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14884 soft cells, 89304 tets, 18164 nodes (5746 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.0707872799802258e-06,
+      "pcg_worst_rel_residual": 8.567209079046734e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        9.0,
+        40.0,
+        53.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1085",
+      "build_s": 5.620140363462269,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15794 soft cells, 94764 tets, 19302 nodes (6296 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.0656400242686177e-06,
+      "pcg_worst_rel_residual": 8.644038643979002e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        19.0,
+        47.0,
+        63.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1090",
+      "build_s": 7.336022258736193,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18455 soft cells, 110730 tets, 22721 nodes (7645 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.456791325510152e-06,
+      "pcg_worst_rel_residual": 9.86910436040489e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        31.5,
+        68.0,
+        74.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1111",
+      "build_s": 5.725440192036331,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15547 soft cells, 93282 tets, 19260 nodes (6501 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.9607402046680257e-06,
+      "pcg_worst_rel_residual": 8.608316420577466e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        34.0,
+        57.75,
+        81.75
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1130",
+      "build_s": 6.919386059045792,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18302 soft cells, 109812 tets, 22233 nodes (6863 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.445132208424759e-06,
+      "pcg_worst_rel_residual": 9.979353308153804e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        40.0,
+        70.75,
+        80.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1149",
+      "build_s": 5.864704891107976,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15651 soft cells, 93906 tets, 19326 nodes (6297 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.17960298824897e-06,
+      "pcg_worst_rel_residual": 9.822725587582681e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        27.0,
+        55.0,
+        61.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1183",
+      "build_s": 5.092884213663638,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14663 soft cells, 87978 tets, 17882 nodes (5738 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.0398579500965097e-06,
+      "pcg_worst_rel_residual": 8.3753338913084e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        22.5,
+        57.0,
+        72.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1208",
+      "build_s": 4.835397350601852,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13378 soft cells, 80268 tets, 16547 nodes (5572 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.4909171804580555e-06,
+      "pcg_worst_rel_residual": 9.208462870446965e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        20.0,
+        43.0,
+        66.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1224",
+      "build_s": 7.035543750040233,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 19710 soft cells, 118260 tets, 23854 nodes (7551 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 6.776316540309416e-06,
+      "pcg_worst_rel_residual": 9.891713489196263e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        38.25,
+        73.75,
+        90.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1235",
+      "build_s": 5.15556263551116,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 13953 soft cells, 83718 tets, 17267 nodes (5601 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.6636571515989426e-06,
+      "pcg_worst_rel_residual": 9.799591680348385e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        18.0,
+        47.0,
+        53.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1248",
+      "build_s": 8.18366496451199,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20367 soft cells, 122202 tets, 23881 nodes (6135 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.949221796854244e-06,
+      "pcg_worst_rel_residual": 9.953610970114823e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        54.25,
+        78.0,
+        110.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1283",
+      "build_s": 8.473138755187392,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 21379 soft cells, 128274 tets, 25075 nodes (6502 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.6325940078332696e-06,
+      "pcg_worst_rel_residual": 9.794554898689967e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        78.5,
+        89.0,
+        132.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1294",
+      "build_s": 3.8392675584182143,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 11200 soft cells, 67200 tets, 14391 nodes (5396 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.1997303516348213e-06,
+      "pcg_worst_rel_residual": 9.754258826433215e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        10.5,
+        39.0,
+        71.75
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1309",
+      "build_s": 6.295510584488511,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16993 soft cells, 101958 tets, 19822 nodes (4926 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.4804880792630753e-06,
+      "pcg_worst_rel_residual": 9.959403541870415e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        45.0,
+        61.0,
+        72.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1321",
+      "build_s": 4.2644286546856165,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 12120 soft cells, 72720 tets, 15002 nodes (4998 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.428309808995441e-06,
+      "pcg_worst_rel_residual": 9.878515811578836e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        21.0,
+        37.0,
+        57.25
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1334",
+      "build_s": 13.205303796567023,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15316 soft cells, 91896 tets, 18616 nodes (5640 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.5506920672420732e-06,
+      "pcg_worst_rel_residual": 8.296223313664086e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        15.0,
+        46.75,
+        57.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1344",
+      "build_s": 9.756542645394802,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16368 soft cells, 98208 tets, 19630 nodes (5600 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.829992358769533e-06,
+      "pcg_worst_rel_residual": 9.607480023987591e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        28.25,
+        58.5,
+        68.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1350",
+      "build_s": 7.955079486593604,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16771 soft cells, 100626 tets, 20126 nodes (5836 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.489213038243131e-06,
+      "pcg_worst_rel_residual": 9.961787327483762e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        47.0,
+        57.0,
+        104.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1364",
+      "build_s": 6.0620831763371825,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 11918 soft cells, 71508 tets, 15023 nodes (5304 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.0080440201989615e-06,
+      "pcg_worst_rel_residual": 7.85474639997119e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        13.0,
+        37.0,
+        46.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1369",
+      "build_s": 16.347095833159983,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 22454 soft cells, 134724 tets, 26309 nodes (6888 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.533086814396037e-06,
+      "pcg_worst_rel_residual": 9.855507414613385e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        32.25,
+        86.25,
+        99.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1374",
+      "build_s": 14.31926358025521,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 12123 soft cells, 72738 tets, 15257 nodes (5498 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.89443655127298e-06,
+      "pcg_worst_rel_residual": 9.862029401119798e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        31.0,
+        39.0,
+        46.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1382",
+      "build_s": 10.704569878987968,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 18843 soft cells, 113058 tets, 22724 nodes (7083 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.582919498925261e-06,
+      "pcg_worst_rel_residual": 9.737966138345655e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        28.0,
+        62.0,
+        72.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1387",
+      "build_s": 14.349595587700605,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17877 soft cells, 107262 tets, 21335 nodes (6302 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.290339101862872e-06,
+      "pcg_worst_rel_residual": 9.11257757252315e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        21.25,
+        58.0,
+        67.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1394",
+      "build_s": 10.204411264508963,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 15495 soft cells, 92970 tets, 18870 nodes (6052 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 4.37269888746526e-06,
+      "pcg_worst_rel_residual": 9.409743142896332e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        21.0,
+        51.75,
+        57.5
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1403",
+      "build_s": 7.998048044741154,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 14425 soft cells, 86550 tets, 18167 nodes (6687 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 2.9916004342571583e-06,
+      "pcg_worst_rel_residual": 9.550109098199755e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        16.5,
+        47.25,
+        55.25
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1412",
+      "build_s": 13.910962583497167,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 17914 soft cells, 107484 tets, 21427 nodes (6117 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 3.2993508983327544e-06,
+      "pcg_worst_rel_residual": 8.216965397878084e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        52.0,
+        58.5,
+        79.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1418",
+      "build_s": 11.510722839273512,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 20906 soft cells, 125436 tets, 24680 nodes (6731 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.005367555381591e-06,
+      "pcg_worst_rel_residual": 9.02595365914749e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        62.25,
+        86.0,
+        94.0
+      ]
+    },
+    {
+      "patient": "data/patients_ts2/ts2_s1424",
+      "build_s": 8.306880783289671,
+      "from_cache": false,
+      "mesh": "h=4.0 mm lattice (32, 34, 27): 16341 soft cells, 98046 tets, 19579 nodes (5560 fixed), 864 skin nodes",
+      "free_skin_columns": 750,
+      "field_mb": 396.576,
+      "compliance_asymmetry": 5.467128534203471e-06,
+      "pcg_worst_rel_residual": 9.657036571297795e-06,
+      "e_scale": 1.0958,
+      "moduli_kpa": [
+        10.958000000000002,
+        21.916000000000004
+      ],
+      "calib_rms_log_err_max": null,
+      "window_c1": [
+        -32.0,
+        32.0
+      ],
+      "window_c2": [
+        -55.0,
+        -10.0
+      ],
+      "thickness_mm_min_med_max": [
+        32.0,
+        55.0,
+        70.0
+      ]
+    }
+  ]
+}

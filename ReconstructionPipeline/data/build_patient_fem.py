@@ -2,7 +2,7 @@
 Build (or load) and calibrate the FEM for every patient folder, and write a QA table (DEC-041, task T4).
 
     ./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --patients-dir data/patients \
-        [--include-sample] [--out results/patients_fem_<stamp>.json]
+        [--include-sample] [--out results/patients_fem_<stamp>.json] [--shard i/n]
 
 Per patient: mesh size, cold precompute or cache-load time, Maxwell-Betti asymmetry (solver check), calibrated
 e_scale and moduli, calibration log-error, the field size on the device, the fitted scan window, and the soft-
@@ -31,11 +31,15 @@ def main(argv=None):
     ap.add_argument("--patients-dir", default=os.path.join(ROOT, "data", "patients"))
     ap.add_argument("--include-sample", action="store_true")
     ap.add_argument("--out", default="")
+    ap.add_argument("--shard", default="", help="i/n: build only every n-th patient starting at i (one GPU each)")
     args = ap.parse_args(argv)
     dirs = sorted(glob.glob(os.path.join(args.patients_dir, "*", "ct.nii.gz")))
     dirs = [os.path.dirname(d) for d in dirs]
     if args.include_sample:
         dirs = [os.path.join(ROOT, "data", "sample_totalsegmentator_patient")] + dirs
+    if args.shard:
+        i, n = (int(v) for v in args.shard.split("/"))
+        dirs = dirs[i::n]
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     rows = []
     for d in dirs:
@@ -54,7 +58,10 @@ def main(argv=None):
             "compliance_asymmetry": m.timings.get("compliance_asymmetry"),
             "pcg_worst_rel_residual": m.timings.get("pcg_worst_rel_residual"),
             "e_scale": m.e_scale, "moduli_kpa": list(m.effective_moduli_kpa),
-            "calib_rms_log_err_max": float(np.max(m.calibration["rms_log_error_per_pose"])),
+            # PatientSim uses shared moduli by default (no per-patient calibration, mtp_gym.core.SHARED_E_SCALE),
+            # so the calibration error exists only for stiffness="calibrated".
+            "calib_rms_log_err_max": (float(np.max(m.calibration["rms_log_error_per_pose"]))
+                                      if getattr(m, "calibration", None) else None),
             "window_c1": list(ps.c1_bounds), "window_c2": list(ps.c2_bounds),
             "thickness_mm_min_med_max": [float(np.nanmin(thick)), float(np.nanmedian(thick)), float(np.nanmax(thick))],
         }

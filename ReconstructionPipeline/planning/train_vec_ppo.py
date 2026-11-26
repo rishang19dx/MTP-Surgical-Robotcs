@@ -32,7 +32,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from stable_baselines3 import PPO  # noqa: E402
-from stable_baselines3.common.callbacks import BaseCallback  # noqa: E402
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback  # noqa: E402
 from stable_baselines3.common.vec_env import VecMonitor  # noqa: E402
 
 from mtp_gym.core import PatientSim, UltrasoundVectorEnv  # noqa: E402
@@ -86,6 +86,8 @@ def main(argv=None):
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--tag", default="")
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "checkpoints", "vec_ppo"))
+    ap.add_argument("--save-every", type=int, default=0,
+                    help="also save a checkpoint every this many env steps (<run>_<steps>_steps.zip; DEC-067 budget pilot)")
     args = ap.parse_args(argv)
 
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -101,12 +103,16 @@ def main(argv=None):
     model = PPO("MultiInputPolicy", venv, n_steps=args.n_steps, batch_size=args.batch_size, learning_rate=args.lr,
                 gamma=0.99, gae_lambda=0.95, ent_coef=0.0, device=dev, seed=args.seed, verbose=0)
     cb = CurveCallback()
-    t0 = time.perf_counter()
-    model.learn(total_timesteps=args.timesteps, callback=cb, progress_bar=False)
-    wall = time.perf_counter() - t0
-
     run = f"{args.task}_{args.deformation}_{args.bmode_physics}_s{args.seed}" + \
         (f"_aug-{args.augment}" if args.augment != "none" else "") + (f"_{args.tag}" if args.tag else "")
+    cbs = cb
+    if args.save_every:
+        cbs = CallbackList([cb, CheckpointCallback(save_freq=max(args.save_every // args.num_envs, 1),
+                                                   save_path=args.out_dir, name_prefix=run)])
+    t0 = time.perf_counter()
+    model.learn(total_timesteps=args.timesteps, callback=cbs, progress_bar=False)
+    wall = time.perf_counter() - t0
+
     os.makedirs(args.out_dir, exist_ok=True)
     model.save(os.path.join(args.out_dir, run + ".zip"))
     try:

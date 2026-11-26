@@ -16,6 +16,11 @@ Window rule (DEC-054): a site is scored only if, at every force and in both cond
 the image window and bone is present (`_gt` "scorable").
 Image thickness (B-mode only): `measure_thickness` (detector v3, frozen in DETECTOR_V3).
 `--dev` restricts to TRAIN patients and writes to .agents/ (never to results/), for detector development.
+
+DEC-067 (scale-up; the measurement above is unchanged): `--splits data/splits_v2.json` runs every CT-derived patient of
+that split, `--shard i/n` one GPU's share (merge with `muscle_merge_shards.py`), `--e-scale-draw lo,hi` multiplies each
+patient's shared modulus scale by a log-uniform draw seeded by (`--e-scale-seed`, patient name) (S1.2), and
+`--prereg` names the pre-registration recorded in the output.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import gc
+import hashlib
 import json
 import os
 import subprocess
@@ -172,21 +178,39 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--dev", action="store_true", help="TRAIN patients only; output to .agents/ (detector development)")
     ap.add_argument("--out-dir", default=None)
+    ap.add_argument("--splits", default=os.path.join(ROOT, "data", "splits.json"))
+    ap.add_argument("--shard", default="", help="i/n: every n-th patient starting at i")
+    ap.add_argument("--e-scale-draw", default="", help="lo,hi: per-patient log-uniform modulus multiplier (S1.2)")
+    ap.add_argument("--e-scale-seed", type=int, default=1)
+    ap.add_argument("--prereg", default=PREREGISTRATION)
+    ap.add_argument("--tag", default="")
     args = ap.parse_args(argv)
     forces = np.array([float(v) for v in args.forces.split(",")])
-    split = json.load(open(os.path.join(ROOT, "data", "splits.json")))
-    names = [n for n in split["train"] + ([] if args.dev else split["test"]) if n.startswith("sonogym_")]
+    split = json.load(open(args.splits))
+    names = [n for n in split["train"] + ([] if args.dev else split["test"])
+             if n.startswith(("sonogym_", "../patients_ts2/"))]
+    if args.shard:
+        si, sn = (int(v) for v in args.shard.split("/"))
+        names = names[si::sn]
+    draw = tuple(float(v) for v in args.e_scale_draw.split(",")) if args.e_scale_draw else None
     out_dir = args.out_dir or os.path.join(ROOT, ".agents" if args.dev else "results")
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     rows = {}
     for n in names:
-        pdir = os.path.join(ROOT, "data", "patients", n)
+        pdir = os.path.normpath(os.path.join(ROOT, split["patients_root"], n))
         ps = PatientSim(pdir, dev)
+        mult = 1.0
+        if draw:
+            h = int(hashlib.sha256(f"{args.e_scale_seed}:{n}".encode()).hexdigest()[:8], 16)
+            mult = float(np.exp(np.random.default_rng(h).uniform(np.log(draw[0]), np.log(draw[1]))))
+            ps.model.set_parameters(e_scale=ps.model.e_scale * mult)
         d = ps.data
         mus = VolumeSliceExtractor(muscle_volume(pdir), spacing=d["spacing_mm"], origin=d["origin_mm"],
                                    image_size=IMAGE_SIZE, physical_size_mm=PHYSICAL_SIZE_MM, device=dev)
         r = measure(ps, mus, forces, args.seed)
         r["split"] = "train" if n in split["train"] else "test"
+        r["e_scale_multiplier"] = mult
+        r["e_scale"] = float(ps.model.e_scale)
         rows[n] = r
         ok = r["scored_site"]
         low = forces <= 2.0
@@ -208,9 +232,11 @@ def main(argv=None):
     meta = {"script": "ReconstructionPipeline/evaluation/muscle_thickness_study.py", "commit": commit,
             "args": vars(args), "forces_n": forces.tolist(), "sites": SITES, "detector": DETECTOR_V3,
             "bmode_physics": BMODE_PHYSICS, "perception": PERCEPTION,
-            "preregistration": PREREGISTRATION, "dev": bool(args.dev)}
+            "preregistration": args.prereg, "dev": bool(args.dev), "splits": os.path.relpath(args.splits, ROOT),
+            "shard": args.shard, "e_scale_draw": draw, "e_scale_seed": args.e_scale_seed}
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"muscle_thickness_{'dev_' if args.dev else ''}{stamp}.json")
+    suffix = (f"_{args.tag}" if args.tag else "") + (f"_shard{args.shard.replace('/', 'of')}" if args.shard else "")
+    path = os.path.join(out_dir, f"muscle_thickness_{'dev_' if args.dev else ''}{stamp}{suffix}.json")
     json.dump({"meta": meta, "patients": _jsonable(rows)}, open(path, "w"), indent=1)
     print("wrote", path)
     return path

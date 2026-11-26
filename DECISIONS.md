@@ -64,6 +64,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-064` | Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients) | **Accepted** (infrastructure; 399 FEMs built) |
 | **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
 | **Nov 2026** | `DEC-066` | Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix) | **Accepted** (parity tests pass; 6.2× env, 5.8× training at 32 patients) |
+| **Nov 2026** | `DEC-067` | Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2398,4 +2399,51 @@ A chronological record of all architectural, research, algorithmic, and engineer
   at 584 env-steps/s each (8.6 min), GPU utilisation median 88 % (p90 99 %), peak 34.9 GB. Three runs ran out of memory
   (about 17 GB each). So the working unit is 2 runs per GPU at up to ~32 patients each; from the server log
   (`~/ds404_work/logs/pack2_*.log`), not a results file, because it measures capacity, not a study outcome.
+
+### `DEC-067`: Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED
+
+* **Date**: 27 Nov 2026. **Branch**: liver-sliding. Committed before any run on the new patients. Plan:
+  `tasks/server_studies_plan.md`.
+* **Question**: does DEC-056's positive result (image-measured paraspinal thickness falls with probe force and tracks
+  ground truth in the deformable simulator, stays flat in the rigid control) hold across many held-out patients
+  instead of 2? Does a force-aware correction (H5) work with a large training set? Is there enough force headroom on
+  the spine for a force-choosing policy (P1)?
+* **Measurement: unchanged from DEC-056** (`muscle_thickness_study.py`): detector v3 (frozen), the 6 DEC-050 sites,
+  forces 1, 2, 3, 4, 5, 8, 10 N (primary 1–5 N), bisection on the batched FEM with shared moduli, deformable vs rigid
+  (kinematic) condition, the DEC-054 window rule, fascia layer (DEC-055), depth-physics B-mode and its DEC-044
+  perception preset. New options only select patients and stiffness: `--splits data/splits_v2.json --shard i/n
+  --prereg DEC-067 [--e-scale-draw 0.5,2 --e-scale-seed 1] --tag <tag>`; shards merged by
+  `muscle_merge_shards.py`.
+* **Patients**: every CT-derived patient of `data/splits_v2.json` (DEC-065): train 274, test 137 (the sample patient
+  has no autochthon label). Scored set = test. Flagged patients are included; the criteria without them are reported.
+* **Analysis**: `muscle_scale_analysis.py`, frozen with this commit. Criteria (test, measurable = detection at ≤ 2 N
+  ≥ 0.5; at least 20 measurable patients, otherwise "underpowered"):
+  - **G**: DEC-056 rule unchanged (median detection ≥ 0.5, median |img − GT| at ≤ 2 N < 3 mm).
+  - **H4a**: the median deformable image slope over 1–5 N is < 0, its bootstrap 95 % upper bound is < 0, and ≥ 75 % of
+    measurable patients have a negative slope.
+  - **H4b**: the bootstrap 95 % upper bound of the median |rigid image slope| is ≤ 0.15 mm/N.
+  - **H4c**: the bootstrap 95 % upper bound of the median tracking gap |image slope − GT slope| is ≤ 0.10 mm/N.
+  - **H5**: DEC-056 rule unchanged (fit on train, deformable 1–5 N; force-aware beats intercept-only on test by ≥ one
+    axial pixel, 0.377 mm).
+  - Bootstrap: patients resampled, 10,000 draws, seed 0, percentile interval.
+  - Why the rules change: DEC-056's "in every measurable patient" was set for n = 2; at n ≈ 100 a single noisy patient
+    would fail it by chance. The DEC-056 rules are still computed on the same data and reported.
+* **S1.2 (stiffness sensitivity)**: the same run with each patient's modulus scale multiplied by a log-uniform draw in
+  [0.5, 2] (E_fat 5.5–21.9 kPa, E_muscle 11–44 kPa), seeded by patient name (seed 1). The factor-2 band is a chosen
+  sensitivity range, not a literature fit. Verdict **ROBUST** if G, H4a, H4b, H4c, H5 and the P1 gate have the same
+  verdicts as the shared-moduli run, else **SENSITIVE** with the differing verdicts listed.
+* **S1.3 (spine force headroom, P1 gate)**: DEC-058's per-patient headroom (span of the deformable error over 1–5 N
+  against the uncompressed thickness) minus its noise floor (rigid span), on measurable test patients. **P1 gated IN**
+  if the median excess is ≥ 1.0 mm and ≥ 50 % of patients have an excess ≥ 1.0 mm; otherwise **OUT**, and the spine
+  force-choosing policy is not trained. 1.0 mm is about 2.7 axial pixels and above the 0.3–1.1 mm headroom DEC-058
+  saw; it was chosen as the smallest effect worth a policy study, before any new data.
+* **Known before registration (disclosed)**: DEC-056 on the 13 old patients (2 measurable test patients, slope
+  −0.25 to −0.30 mm/N; H5 failed); DEC-058 headroom 0.3–1.1 mm; the DEC-065 window check (counts of clean poses per
+  patient). No outcome of this study on a new patient has been computed. The 4 old test patients are included;
+  criteria on new test patients only are reported.
+* **Reported, never decisive**: DEC-056's original rules; criteria without flagged patients and on new patients only;
+  train-set criteria; Spearman ρ of the deformable slope against midline soft tissue and paraspinal fat.
+* **Consequences**: H4 pass at scale → the deformation effect on this measurement is a population result. H4 fail →
+  DEC-056's two-patient result does not generalise, reported as such. P1 OUT → the spine is closed for a
+  force-choosing policy. P1 IN → S3.4 on the spine, under its own pre-registration.
 

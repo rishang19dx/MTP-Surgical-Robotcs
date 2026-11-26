@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/throughput_benchmark.py",
+    "args": {
+      "patient_dir": "/usershome/ds404_user5/ds404_work/MTP/data/sample_totalsegmentator_patient",
+      "num_envs": "512",
+      "modes": "aware",
+      "steps": 10,
+      "warmup": 3,
+      "seed": 0,
+      "out_dir": "/usershome/ds404_user5/ds404_work/logs/bench_before",
+      "patients": "../patients_ts2/ts2_s0863,../patients_ts2/ts2_s0600,../patients_ts2/ts2_s1364,../patients_ts2/ts2_s0324,../patients_ts2/ts2_s1388,../patients_ts2/ts2_s0680,../patients_ts2/ts2_s0040,../patients_ts2/ts2_s0796,../patients_ts2/ts2_s0133,../patients_ts2/ts2_s1371,../patients_ts2/ts2_s1187,../patients_ts2/ts2_s0166,../patients_ts2/ts2_s0950,../patients_ts2/ts2_s1090,../patients_ts2/ts2_s0657,../patients_ts2/ts2_s0168,../patients_ts2/ts2_s1405,../patients_ts2/ts2_s1145,../patients_ts2/ts2_s1424,../patients_ts2/ts2_s1070,../patients_ts2/ts2_s1373,../patients_ts2/ts2_s1061,../patients_ts2/ts2_s1103,../patients_ts2/ts2_s0983,../patients_ts2/ts2_s0959,../patients_ts2/ts2_s0339,../patients_ts2/ts2_s0945,../patients_ts2/ts2_s0163,../patients_ts2/ts2_s1412,../patients_ts2/ts2_s0656,../patients_ts2/ts2_s1395,../patients_ts2/ts2_s0480",
+      "num_patients": "1,8,32",
+      "splits": "/usershome/ds404_user5/ds404_work/MTP/data/splits.json"
+    },
+    "commit": "ff00982-dirty",
+    "timestamp": "20261126_192723",
+    "device": "cuda",
+    "gpu": "NVIDIA RTX A6000",
+    "torch": "2.5.1+cu124",
+    "patient": "../patients_ts2/ts2_s0863,../patients_ts2/ts2_s0600,../patients_ts2/ts2_s1364,../patients_ts2/ts2_s0324,../patients_ts2/ts2_s1388,../patients_ts2/ts2_s0680,../patients_ts2/ts2_s0040,../patients_ts2/ts2_s0796,../patients_ts2/ts2_s0133,../patients_ts2/ts2_s1371,../patients_ts2/ts2_s1187,../patients_ts2/ts2_s0166,../patients_ts2/ts2_s0950,../patients_ts2/ts2_s1090,../patients_ts2/ts2_s0657,../patients_ts2/ts2_s0168,../patients_ts2/ts2_s1405,../patients_ts2/ts2_s1145,../patients_ts2/ts2_s1424,../patients_ts2/ts2_s1070,../patients_ts2/ts2_s1373,../patients_ts2/ts2_s1061,../patients_ts2/ts2_s1103,../patients_ts2/ts2_s0983,../patients_ts2/ts2_s0959,../patients_ts2/ts2_s0339,../patients_ts2/ts2_s0945,../patients_ts2/ts2_s0163,../patients_ts2/ts2_s1412,../patients_ts2/ts2_s0656,../patients_ts2/ts2_s1395,../patients_ts2/ts2_s0480",
+    "task": "FreeScan (zero reward; simulation cost only)"
+  },
+  "rows": [
+    {
+      "num_envs": 512,
+      "num_patients": 1,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 1.5525752296671271,
+      "ms_per_step": 155.2575229667127,
+      "env_steps_per_s": 3297.7468029666625,
+      "peak_vram_mb": 16853.474816,
+      "force_mean_n": 3.924253463745117,
+      "force_std_n": 0.30814966559410095
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 8,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 4.987262765876949,
+      "ms_per_step": 498.7262765876949,
+      "env_steps_per_s": 1026.6152477529847,
+      "peak_vram_mb": 16775.035392,
+      "force_mean_n": 3.920645236968994,
+      "force_std_n": 0.30057311058044434
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 32,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 14.006436629220843,
+      "ms_per_step": 1400.6436629220843,
+      "env_steps_per_s": 365.546222464494,
+      "peak_vram_mb": 16887.540736,
+      "force_mean_n": 3.9166762828826904,
+      "force_std_n": 0.2932390570640564
+    }
+  ]
+}

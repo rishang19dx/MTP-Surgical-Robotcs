@@ -8,6 +8,10 @@ Measures env-steps per second of `UltrasoundVectorEnv.step` with the zero-reward
 is the simulation itself: admittance force control (2 FEM force solves), the tissue solve with field
 (deformable modes), the backward-warped slice, B-mode, coupling and confidence.  Random actions in [-1, 1].
 Rigid mode still runs the force controller (force is simulated; only the image is undeformed).
+
+Many patients (DEC-066): `--patients a,b,c --num-patients 1,8,32` runs each envs count with the first P patients of
+the list (envs split over them in contiguous blocks, as in training), so the cost of distinct patients per batch is
+measured. Names are resolved like train_vec_ppo (relative to data/patients, or "train"/"test" of `--splits`).
 """
 
 from __future__ import annotations
@@ -40,9 +44,10 @@ def _commit() -> str:
         return "unknown"
 
 
-def measure(patient: PatientSim, n: int, mode: str, steps: int, warmup: int, seed: int) -> dict:
-    dev = patient.device
-    env = UltrasoundVectorEnv(n, FreeScanTask(), [patient], deformation_mode=mode, max_steps=10 ** 9, seed=seed)
+def measure(patient, n: int, mode: str, steps: int, warmup: int, seed: int) -> dict:
+    patients = list(patient) if isinstance(patient, (list, tuple)) else [patient]
+    dev = patients[0].device
+    env = UltrasoundVectorEnv(n, FreeScanTask(), patients, deformation_mode=mode, max_steps=10 ** 9, seed=seed)
     env.reset(seed=seed)
     rng = np.random.default_rng(seed)
     acts = rng.uniform(-1, 1, (warmup + steps, n, 4)).astype(np.float32)
@@ -61,7 +66,7 @@ def measure(patient: PatientSim, n: int, mode: str, steps: int, warmup: int, see
     dt = time.perf_counter() - t
     f = torch.stack(forces).float()
     return {
-        "num_envs": n, "mode": mode, "steps": steps, "seconds": dt,
+        "num_envs": n, "num_patients": len(patients), "mode": mode, "steps": steps, "seconds": dt,
         "ms_per_step": 1e3 * dt / steps, "env_steps_per_s": n * steps / dt,
         "peak_vram_mb": torch.cuda.max_memory_allocated() / 1e6 if dev.type == "cuda" else None,
         "force_mean_n": float(f.mean()), "force_std_n": float(f.std()),
@@ -77,16 +82,30 @@ def main(argv=None):
     ap.add_argument("--warmup", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "results"))
+    ap.add_argument("--patients", default="", help="comma list or train/test; overrides --patient-dir")
+    ap.add_argument("--num-patients", default="", help="comma list of P: use the first P of --patients")
+    ap.add_argument("--splits", default=os.path.join(ROOT, "data", "splits.json"))
     args = ap.parse_args(argv)
 
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    patient = PatientSim(args.patient_dir, dev)
+    if args.patients:
+        split = json.load(open(args.splits))
+        names = split[args.patients] if args.patients in ("train", "test") else args.patients.split(",")
+        counts = [int(v) for v in args.num_patients.split(",")] if args.num_patients else [len(names)]
+        base_dir = os.path.join(ROOT, split["patients_root"])
+        pool = [PatientSim(os.path.normpath(os.path.join(base_dir, nm)), dev) for nm in names[:max(counts)]]
+        groups = [pool[:P] for P in counts]
+    else:
+        groups = [[PatientSim(args.patient_dir, dev)]]
     rows = []
     for mode in args.modes.split(","):
-        for n in (int(v) for v in args.num_envs.split(",")):
-            r = measure(patient, n, mode, args.steps, args.warmup, args.seed)
+        for grp in groups:
+          for n in (int(v) for v in args.num_envs.split(",")):
+            if n < len(grp):
+                continue
+            r = measure(grp, n, mode, args.steps, args.warmup, args.seed)
             rows.append(r)
-            print(f"{mode:7s} N={n:4d}: {r['ms_per_step']:8.1f} ms/step  {r['env_steps_per_s']:8.1f} env-steps/s  "
+            print(f"{mode:7s} P={len(grp):3d} N={n:4d}: {r['ms_per_step']:8.1f} ms/step  {r['env_steps_per_s']:8.1f} env-steps/s  "
                   f"peak {r['peak_vram_mb'] or float('nan'):.0f} MB  F {r['force_mean_n']:.2f}±{r['force_std_n']:.2f} N",
                   flush=True)
 
@@ -95,7 +114,8 @@ def main(argv=None):
         "script": "ReconstructionPipeline/evaluation/throughput_benchmark.py", "args": vars(args),
         "commit": _commit(), "timestamp": stamp, "device": str(dev),
         "gpu": torch.cuda.get_device_name() if dev.type == "cuda" else None,
-        "torch": torch.__version__, "patient": os.path.relpath(args.patient_dir, ROOT),
+        "torch": torch.__version__,
+        "patient": (args.patients if args.patients else os.path.relpath(args.patient_dir, ROOT)),
         "task": "FreeScan (zero reward; simulation cost only)",
     }
     os.makedirs(args.out_dir, exist_ok=True)
@@ -105,12 +125,15 @@ def main(argv=None):
     lines = [f"# Vector-env throughput ({stamp})", "",
              f"GPU: {meta['gpu']} · commit `{meta['commit']}` · torch {meta['torch']} · patient `{meta['patient']}`",
              f"Command: `./.venv/bin/python {meta['script']} --num-envs {args.num_envs} --modes {args.modes} "
-             f"--steps {args.steps}`", "",
-             "| Mode | Envs | ms / step | env-steps / s | Peak VRAM (MB) |", "| :--- | ---: | ---: | ---: | ---: |"]
+             f"--steps {args.steps}" + (f" --patients {args.patients} --num-patients {args.num_patients} --splits "
+                                         f"{os.path.relpath(args.splits, ROOT)}" if args.patients else "") + "`", "",
+             "| Mode | Patients | Envs | ms / step | env-steps / s | Peak VRAM (MB) |",
+             "| :--- | ---: | ---: | ---: | ---: | ---: |"]
     for r in rows:
-        lines.append(f"| {r['mode']} | {r['num_envs']} | {r['ms_per_step']:.1f} | {r['env_steps_per_s']:.1f} | "
+        lines.append(f"| {r['mode']} | {r['num_patients']} | {r['num_envs']} | {r['ms_per_step']:.1f} | {r['env_steps_per_s']:.1f} | "
                      f"{r['peak_vram_mb']:.0f} |" if r["peak_vram_mb"] is not None else
-                     f"| {r['mode']} | {r['num_envs']} | {r['ms_per_step']:.1f} | {r['env_steps_per_s']:.1f} | - |")
+                     f"| {r['mode']} | {r['num_patients']} | {r['num_envs']} | {r['ms_per_step']:.1f} | "
+                     f"{r['env_steps_per_s']:.1f} | - |")
     with open(base + ".md", "w") as fh:
         fh.write("\n".join(lines) + "\n")
     print(f"wrote {base}.json / .md")

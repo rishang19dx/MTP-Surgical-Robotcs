@@ -63,6 +63,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive: walls bias motion down ~30 % (R 1.28–1.33); still < 2 mm** |
 | **Nov 2026** | `DEC-064` | Compute Move to the Shared A6000 Server and TotalSegmentator v2 Import (399 New Patients) | **Accepted** (infrastructure; 399 FEMs built) |
 | **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
+| **Nov 2026** | `DEC-066` | Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix) | **Accepted** (parity tests pass; 6.2× env, 5.8× training at 32 patients) |
 
 ---
 
@@ -2347,4 +2348,50 @@ A chronological record of all architectural, research, algorithmic, and engineer
     measurability rule on top of this.)
   - Organ presence (`results/organ_presence_20261126_184554.md`, 1228 subjects, ≥ 1000 voxels): liver whole in the FOV
     546; iliac-vein groin end in the FOV left 521, right 516, both 509.
+
+### `DEC-066`: Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix)
+
+* **Date**: 27 Nov 2026. **Branch**: liver-sliding. **Status**: Accepted. A performance change; no physics or
+  algorithm change.
+* **Context**: the S0.3 pilot (DEC-065; nav PPO, 32 patients, 512 envs) ran at about 90 env-steps/s with the GPU at
+  15–20 % and one CPU core saturated. A py-spy profile (local scratch log on the server, not a result) put 44 % of
+  the main thread in the env step, most of it in `_acquire` → `_regulate` → `BatchedFEMSolver.force`.
+  - Cause: `UltrasoundVectorEnv._acquire` looped over patients in Python; each patient's admittance loop ran its own
+    short GPU kernels, and each contact solve made host syncs (the candidate count K and an active-set convergence
+    check every iteration). The cost grew with the number of distinct patients per batch, which the 1-patient
+    throughput benchmark could not show.
+  - Measured before the fix (`results/throughput_20261126_192723.md`, aware, 512 envs, A6000 GPU 4): 155 / 499 /
+    1401 ms per step at 1 / 8 / 32 patients.
+* **Decision**: `ReconstructionPipeline/simulation/fem_multi.py` `MultiPatientFEMSolver` stacks the per-patient
+  contact data (skin height map, skin columns, skin→free map, skin reference points, lattice origin, compliance C,
+  bone top), zero-padded, and answers first contact, tissue thickness, max indentation and the contact solve for
+  envs of all patients in one batch, each env indexed by its patient. `UltrasoundVectorEnv._simulate_batched` uses
+  it for skin pose, the admittance loop, the contact solve, thickness and skin normals; the field GEMM
+  (`BatchedFEMSolver._field`, lattices differ in NY) and the warped slice still loop over patients.
+  - Used only when the env has more than one patient; a single patient keeps the original loop, so single-patient
+    results are unchanged by construction.
+  - Two implementation differences, neither changing a force: convergence is checked at iterations 2, 4, 8, 16 and
+    the last (converged envs are frozen, so extra iterations recompute the same f), and K is the maximum over all
+    patients in the batch (extra padded slots solve f = 0).
+  - Alternatives not taken: patient rotation (only a few patients per batch at a time; changes the training
+    distribution within a batch) and a fixed upper bound on K (removes one sync but makes the K×K solves several
+    times larger).
+* **Verification**:
+  - `tests/test_fem_multi.py` (4 tests, pass on the server): per-query parity against each patient's
+    `BatchedFEMSolver` on interleaved envs of 3 patients with different lattice depth (sample, s0015, s0004) —
+    first contact, thickness, max indentation (rtol 1e-6), force (rtol 1e-4), field; and env-level parity of force,
+    indentation and B-mode with the batched path on and off, in aware and rigid modes.
+  - Gym and FEM test subset (`test_gym_api`, `test_vec_*`, `test_fem_batched`, `test_augmentation`, `test_fem_multi`):
+    42 passed, 1 xfailed.
+* **Result** (`results/throughput_20261126_193230.md`, same patients and GPU): aware at 512 envs 180 / 173 / 226 ms
+  per step at 1 / 8 / 32 patients (32 patients: 6.2× faster than before; mean force unchanged, 3.92 ± 0.29 N). At
+  1024 envs and 32 patients: 2681 (aware) and 3302 (rigid) env-steps/s.
+  - Training (nav PPO, 32 patients, 512 envs, 100k steps): 523 env-steps/s, against about 90 before (from the
+    profiled run's sample count: 56,991 samples at 50 Hz for 100k steps). Median GPU utilisation during training is
+    still about 19 %.
+* **Remaining bottleneck (not fixed here)**: in the training profile, episode resets (15 approach iterations on the
+  few envs that finish each step) take 19 %, and SB3's CPU rollout buffer (`swap_and_flatten`) takes 18 %; the PPO
+  network update is about 4 %. These are CPU-side costs of SB3, not of the simulator. Running several training
+  processes per GPU uses the idle GPU time; a GPU-resident PPO would remove the buffer cost but replaces the SB3
+  implementation used by DEC-057 and would need its own parity check.
 

@@ -42,7 +42,8 @@ from gymnasium.vector import VectorEnv
 
 from ReconstructionPipeline.data.prepare_patient_assets import PatientAssetGenerator
 from ReconstructionPipeline.simulation.confidence_map import UltrasoundConfidenceEstimator
-from ReconstructionPipeline.simulation.fem_batched import BatchedFEMSolver
+from ReconstructionPipeline.simulation.fem_batched import BatchedFEMSolver, BatchedFEMState
+from ReconstructionPipeline.simulation.fem_multi import MultiPatientFEMSolver, bilinear_multi
 from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel
 from ReconstructionPipeline.simulation.slice_extractor import VolumeSliceExtractor
 from ReconstructionPipeline.simulation.tissue_model import SkinSurface
@@ -249,6 +250,12 @@ class UltrasoundVectorEnv(VectorEnv):
         self.env_patient = torch.as_tensor(np.asarray(env_patient), dtype=torch.long, device=self.device)
         if self.env_patient.shape != (self.num_envs,) or int(self.env_patient.max()) >= len(self.patients):
             raise ValueError("env_patient must assign each env to a patient index")
+        # DEC-066: with several patients the force control and contact solve run as ONE batch over all patients
+        # (MultiPatientFEMSolver); only the field GEMM and the slice stay per patient.  One patient keeps the
+        # original per-patient path, so single-patient results are unchanged.
+        self.batch_patients = len(self.patients) > 1
+        if self.batch_patients:
+            self._init_multi()
         bounds = torch.tensor([[*p.c1_bounds, *p.c2_bounds] for p in self.patients], device=self.device)
         self.bounds = bounds[self.env_patient]                                   # (N,4) c1lo c1hi c2lo c2hi
 
@@ -437,6 +444,109 @@ class UltrasoundVectorEnv(VectorEnv):
         return obs
 
     # ---------------------------------------------------------- simulation
+    def _init_multi(self) -> None:
+        dev, f32, L = self.device, torch.float32, torch.long
+        P = self.patients
+        self.mp = MultiPatientFEMSolver([p.solver for p in P])
+        maps = [torch.stack([p.skin_h, p.skin_dhdx, p.skin_dhdz]) for p in P]          # (3, nz, nx) each
+        nz_m, nx_m = max(m.shape[1] for m in maps), max(m.shape[2] for m in maps)
+        self._skin_maps = torch.zeros(3, len(P), nz_m, nx_m, dtype=f32, device=dev)
+        for i, m in enumerate(maps):
+            self._skin_maps[:, i, :m.shape[1], :m.shape[2]] = m
+        self._skin_nz = torch.tensor([m.shape[1] for m in maps], dtype=L, device=dev)
+        self._skin_nx = torch.tensor([m.shape[2] for m in maps], dtype=L, device=dev)
+        self._skin_o = torch.tensor([p.skin_o for p in P], dtype=f32, device=dev)
+        self._skin_s = torch.tensor([p.skin_s for p in P], dtype=f32, device=dev)
+        self._sf3 = [3 * len(p.model.free_skin) for p in P]
+        ep = self.env_patient.cpu()
+        self._groups_all = [(i, (ep == i).nonzero()[:, 0].to(dev)) for i in range(len(P)) if bool((ep == i).any())]
+
+    def _skin_lookup(self, k: int, pid, x, z):
+        return bilinear_multi(self._skin_maps[k], self._skin_nx, self._skin_nz, self._skin_o, self._skin_s,
+                              pid, x, z)
+
+    def _groups(self, ids: torch.Tensor):
+        """[(patient, rows into ids)] for a batch; precomputed for the full batch (no host sync)."""
+        if len(ids) == self.num_envs:
+            return self._groups_all
+        pat = self.env_patient[ids].cpu()
+        return [(p, (pat == p).nonzero()[:, 0].to(self.device)) for p in pat.unique().tolist()]
+
+    def _simulate_batched(self, ids: torch.Tensor, approach: bool):
+        """Steps 2-4 of the module docstring for envs of all patients at once (DEC-066)."""
+        dev = self.device
+        n = len(ids)
+        h, w = IMAGE_SIZE
+        pid = self.env_patient[ids]
+        groups = self._groups(ids)
+        p = self.pose[ids].double()
+        t_skin = torch.eye(4, dtype=torch.float64, device=dev).repeat(n, 1, 1)          # PatientSim.skin_pose
+        t_skin[:, :3, :3] = probe_rotation(p[:, 2], p[:, 3])
+        t_skin[:, 0, 3] = p[:, 0]
+        t_skin[:, 1, 3] = self._skin_lookup(0, pid, p[:, 0].float(), p[:, 1].float()).double()
+        t_skin[:, 2, 3] = p[:, 1]
+        rel = torch.zeros(n, dtype=torch.float64, device=dev) if approach else self.indent_rel[ids]
+        it = self.approach_iters if approach else self.adm_iters
+        es = self.e_scale[ids]
+        pre = None
+        if self.augment == "fem" and self.deformation_mode not in ("rigid", "kinematic"):
+            pre = self.preload[ids]
+        mp = self.mp
+        d_fc = mp.first_contact(pid, t_skin)                                            # batched `_regulate`
+        d_fc = torch.where(torch.isfinite(d_fc), d_fc, torch.zeros_like(d_fc))
+        d_max = torch.maximum(mp.max_indentation(pid, t_skin, first_contact=d_fc), d_fc)
+        d = torch.minimum(torch.maximum(d_fc + rel, d_fc), d_max)
+        target = self.target_force[ids].double()
+        for _ in range(it):
+            f = mp.contact(pid, t_skin, d, es, preload=pre, preload_margin_mm=self.preload_margin_mm,
+                           groups=groups)["F"]
+            step = (self.k_adm * (target - f)).clamp(-self.adm_max_step, self.adm_max_step)
+            d = torch.minimum(torch.maximum(d + step, d_fc), d_max)
+        self.indent_rel[ids] = (d - d_fc).double()
+        bvec = t_skin[:, :3, 1] / t_skin[:, :3, 1].norm(dim=1, keepdim=True)
+        slices = torch.empty(n, h, w, device=dev)
+        if self.deformation_mode in ("rigid", "kinematic"):
+            force = mp.contact(pid, t_skin, d, es)["F"]
+            if self.deformation_mode == "rigid":
+                t_img = t_skin
+            else:   # DEC-057: indented face as in "aware", but the tissue is not deformed
+                t_img = t_skin.clone()
+                t_img[:, :3, 3] = t_skin[:, :3, 3] + d.to(torch.float64)[:, None] * bvec
+            for pi, rows in groups:
+                slices[rows] = self.patients[pi].ct.extract_slices(t_img[rows], interpolation="bilinear").float()
+        else:
+            res = mp.contact(pid, t_skin, d, es, preload=pre, preload_margin_mm=self.preload_margin_mm,
+                             groups=groups)
+            force = res["F"]
+            t_img = t_skin.clone()                                                     # probe_face_poses
+            t_img[:, :3, 3] = t_skin[:, :3, 3] + res["d"].to(torch.float64)[:, None] * bvec
+            for pi, rows in groups:
+                ps = self.patients[pi]
+                m = ps.model
+                wbg = None if res["Wbg"] is None else res["Wbg"][rows, :self._sf3[pi]]
+                u_grid, u_inner = ps.solver._field(res["f"][rows], res["fr"][rows], res["b"][rows],
+                                                   res["es"][rows], wbg)
+                if self.augment == "warp":
+                    u_grid = u_grid + self.u_warp[pi][ids[rows]]
+                # field-only state: only warp_to_reference is used here, the force came from `res`
+                st = BatchedFEMState(
+                    indentation_mm=res["d"][rows], reaction_force_n=force[rows], linear_force_n=None,
+                    stiffening_factor=None, compression_mm=None, contact_stiffness_n_per_mm=None,
+                    force_vec_n=None, torque_nmm=None,
+                    in_contact=res["in_contact"][rows], num_active_nodes=None, active_set_iters=0,
+                    active_set_converged=None, u_grid=u_grid, u_grid_inner=u_inner,
+                    grid_origin_mm=ps.solver.lat_origin.float(),
+                    grid_extent_mm=torch.tensor([(m.NX - 1) * m.h, (m.NY - 1) * m.h, (m.NZ - 1) * m.h],
+                                                dtype=torch.float32, device=dev))
+                slices[rows] = ps.ct.extract_slices(t_img[rows], interpolation="bilinear",
+                                                    batched_warp_fn=st.warp_to_reference).float()
+        thick = mp.tissue_thickness(pid, t_skin).double()
+        x, z = self.pose[ids, 0], self.pose[ids, 1]
+        gx, gz = self._skin_lookup(1, pid, x, z), self._skin_lookup(2, pid, x, z)          # PatientSim.skin_normal
+        nrm = torch.stack([-gx, torch.ones_like(gx), -gz], -1)
+        normals = nrm / nrm.norm(dim=-1, keepdim=True)
+        return slices, force.double(), d.double(), thick, t_skin, t_img, normals
+
     def _regulate(self, ps: PatientSim, t_skin, rel, target, es, iters, preload=None):
         """Batched `regulate_force`: admittance along the beam within [first contact, max indentation]."""
         s = ps.solver
@@ -463,7 +573,9 @@ class UltrasoundVectorEnv(VectorEnv):
         t_img_all = torch.empty_like(t_skin_all)
         normals = torch.empty(n, 3, device=dev)
         pat = self.env_patient[ids]
-        for p_idx in pat.unique().tolist():
+        if self.batch_patients:
+            slices, force, indent, thick, t_skin_all, t_img_all, normals = self._simulate_batched(ids, approach)
+        for p_idx in ([] if self.batch_patients else pat.unique().tolist()):
             loc = (pat == p_idx).nonzero()[:, 0]
             g = ids[loc]
             ps = self.patients[p_idx]

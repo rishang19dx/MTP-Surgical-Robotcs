@@ -1,0 +1,170 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/throughput_benchmark.py",
+    "args": {
+      "patient_dir": "/usershome/ds404_user5/ds404_work/MTP/data/sample_totalsegmentator_patient",
+      "num_envs": "512,1024",
+      "modes": "aware,rigid",
+      "steps": 10,
+      "warmup": 3,
+      "seed": 0,
+      "out_dir": "/usershome/ds404_user5/ds404_work/MTP/results",
+      "patients": "../patients_ts2/ts2_s0863,../patients_ts2/ts2_s0600,../patients_ts2/ts2_s1364,../patients_ts2/ts2_s0324,../patients_ts2/ts2_s1388,../patients_ts2/ts2_s0680,../patients_ts2/ts2_s0040,../patients_ts2/ts2_s0796,../patients_ts2/ts2_s0133,../patients_ts2/ts2_s1371,../patients_ts2/ts2_s1187,../patients_ts2/ts2_s0166,../patients_ts2/ts2_s0950,../patients_ts2/ts2_s1090,../patients_ts2/ts2_s0657,../patients_ts2/ts2_s0168,../patients_ts2/ts2_s1405,../patients_ts2/ts2_s1145,../patients_ts2/ts2_s1424,../patients_ts2/ts2_s1070,../patients_ts2/ts2_s1373,../patients_ts2/ts2_s1061,../patients_ts2/ts2_s1103,../patients_ts2/ts2_s0983,../patients_ts2/ts2_s0959,../patients_ts2/ts2_s0339,../patients_ts2/ts2_s0945,../patients_ts2/ts2_s0163,../patients_ts2/ts2_s1412,../patients_ts2/ts2_s0656,../patients_ts2/ts2_s1395,../patients_ts2/ts2_s0480",
+      "num_patients": "1,8,32",
+      "splits": "/usershome/ds404_user5/ds404_work/MTP/data/splits.json"
+    },
+    "commit": "ff00982-dirty",
+    "timestamp": "20261126_193230",
+    "device": "cuda",
+    "gpu": "NVIDIA RTX A6000",
+    "torch": "2.5.1+cu124",
+    "patient": "../patients_ts2/ts2_s0863,../patients_ts2/ts2_s0600,../patients_ts2/ts2_s1364,../patients_ts2/ts2_s0324,../patients_ts2/ts2_s1388,../patients_ts2/ts2_s0680,../patients_ts2/ts2_s0040,../patients_ts2/ts2_s0796,../patients_ts2/ts2_s0133,../patients_ts2/ts2_s1371,../patients_ts2/ts2_s1187,../patients_ts2/ts2_s0166,../patients_ts2/ts2_s0950,../patients_ts2/ts2_s1090,../patients_ts2/ts2_s0657,../patients_ts2/ts2_s0168,../patients_ts2/ts2_s1405,../patients_ts2/ts2_s1145,../patients_ts2/ts2_s1424,../patients_ts2/ts2_s1070,../patients_ts2/ts2_s1373,../patients_ts2/ts2_s1061,../patients_ts2/ts2_s1103,../patients_ts2/ts2_s0983,../patients_ts2/ts2_s0959,../patients_ts2/ts2_s0339,../patients_ts2/ts2_s0945,../patients_ts2/ts2_s0163,../patients_ts2/ts2_s1412,../patients_ts2/ts2_s0656,../patients_ts2/ts2_s1395,../patients_ts2/ts2_s0480",
+    "task": "FreeScan (zero reward; simulation cost only)"
+  },
+  "rows": [
+    {
+      "num_envs": 512,
+      "num_patients": 1,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 1.8028425350785255,
+      "ms_per_step": 180.28425350785255,
+      "env_steps_per_s": 2839.959619533267,
+      "peak_vram_mb": 16853.474816,
+      "force_mean_n": 3.924253463745117,
+      "force_std_n": 0.30814966559410095
+    },
+    {
+      "num_envs": 1024,
+      "num_patients": 1,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 2.99908160418272,
+      "ms_per_step": 299.908160418272,
+      "env_steps_per_s": 3414.378583669951,
+      "peak_vram_mb": 19894.354944,
+      "force_mean_n": 3.9190452098846436,
+      "force_std_n": 0.3125816583633423
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 8,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 1.7272098753601313,
+      "ms_per_step": 172.72098753601313,
+      "env_steps_per_s": 2964.3183917834285,
+      "peak_vram_mb": 17175.021568,
+      "force_mean_n": 3.9206454753875732,
+      "force_std_n": 0.30057311058044434
+    },
+    {
+      "num_envs": 1024,
+      "num_patients": 8,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 2.940007113851607,
+      "ms_per_step": 294.0007113851607,
+      "env_steps_per_s": 3482.9847695793196,
+      "peak_vram_mb": 20141.733376,
+      "force_mean_n": 3.9239234924316406,
+      "force_std_n": 0.31219688057899475
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 32,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 2.258839606307447,
+      "ms_per_step": 225.8839606307447,
+      "env_steps_per_s": 2266.6505340632516,
+      "peak_vram_mb": 17841.493504,
+      "force_mean_n": 3.9166762828826904,
+      "force_std_n": 0.2932389974594116
+    },
+    {
+      "num_envs": 1024,
+      "num_patients": 32,
+      "mode": "aware",
+      "steps": 10,
+      "seconds": 3.819808659143746,
+      "ms_per_step": 381.9808659143746,
+      "env_steps_per_s": 2680.762549581584,
+      "peak_vram_mb": 21304.339968,
+      "force_mean_n": 3.918638229370117,
+      "force_std_n": 0.3106827139854431
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 1,
+      "mode": "rigid",
+      "steps": 10,
+      "seconds": 1.3500831630080938,
+      "ms_per_step": 135.00831630080938,
+      "env_steps_per_s": 3792.3589748295417,
+      "peak_vram_mb": 18964.875264,
+      "force_mean_n": 3.924253463745117,
+      "force_std_n": 0.30814966559410095
+    },
+    {
+      "num_envs": 1024,
+      "num_patients": 1,
+      "mode": "rigid",
+      "steps": 10,
+      "seconds": 2.9747072951868176,
+      "ms_per_step": 297.47072951868176,
+      "env_steps_per_s": 3442.3554937888125,
+      "peak_vram_mb": 21825.2416,
+      "force_mean_n": 3.9190452098846436,
+      "force_std_n": 0.3125816583633423
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 8,
+      "mode": "rigid",
+      "steps": 10,
+      "seconds": 1.6220999211072922,
+      "ms_per_step": 162.20999211072922,
+      "env_steps_per_s": 3156.402348201176,
+      "peak_vram_mb": 17607.782912,
+      "force_mean_n": 3.9206454753875732,
+      "force_std_n": 0.30057311058044434
+    },
+    {
+      "num_envs": 1024,
+      "num_patients": 8,
+      "mode": "rigid",
+      "steps": 10,
+      "seconds": 3.173328294418752,
+      "ms_per_step": 317.3328294418752,
+      "env_steps_per_s": 3226.895880268709,
+      "peak_vram_mb": 20573.510144,
+      "force_mean_n": 3.9239234924316406,
+      "force_std_n": 0.31219688057899475
+    },
+    {
+      "num_envs": 512,
+      "num_patients": 32,
+      "mode": "rigid",
+      "steps": 10,
+      "seconds": 2.074873473495245,
+      "ms_per_step": 207.4873473495245,
+      "env_steps_per_s": 2467.6203466879656,
+      "peak_vram_mb": 18835.214848,
+      "force_mean_n": 3.9166762828826904,
+      "force_std_n": 0.2932389974594116
+    },
+    {
+      "num_envs": 1024,
+      "num_patients": 32,
+      "mode": "rigid",
+      "steps": 10,
+      "seconds": 3.1008633757010102,
+      "ms_per_step": 310.086337570101,
+      "env_steps_per_s": 3302.3060868281723,
+      "peak_vram_mb": 22299.634176,
+      "force_mean_n": 3.918638229370117,
+      "force_std_n": 0.3106827139854431
+    }
+  ]
+}

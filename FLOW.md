@@ -184,8 +184,15 @@ the sample patient. The fixed train/held-out split is in `data/splits.json`. Tis
 patients by default (`PatientSim(stiffness="shared")`, `SHARED_E_SCALE`), so force depends on anatomy;
 `stiffness="calibrated"` is the per-patient ablation.
 
-Envs are grouped by patient: each `PatientSim` holds one FEM model, its compliance and field, and its CT. The Python
-loop runs over patients, not envs. A per-env `e_scale` gives stiffness randomisation (`e_scale_range`).
+Envs are grouped by patient: each `PatientSim` holds one FEM model, its compliance and field, and its CT. A per-env
+`e_scale` gives stiffness randomisation (`e_scale_range`).
+
+With more than one patient (DEC-066), steps 2–3, the contact solve of step 4, tissue thickness and skin normals run
+as ONE batch over all patients (`UltrasoundVectorEnv._simulate_batched`, `simulation/fem_multi.py`
+`MultiPatientFEMSolver`: per-patient maps stacked and padded, each env indexed by its patient). Only the field GEMM
+(`BatchedFEMSolver._field`) and the warped slice loop over patients. A single patient keeps the original
+per-patient loop. Parity: `tests/test_fem_multi.py`. Cost per distinct patient: `throughput_benchmark.py --patients
+<list> --num-patients 1,8,32`.
 
 ---
 

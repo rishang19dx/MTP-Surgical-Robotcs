@@ -90,3 +90,52 @@ def test_vein_collapses_monotonically():
     F = np.array([r[0] for r in rows])
     R = np.array([r[1] for r in rows])
     assert np.all(np.diff(F) > 0) and np.all(np.diff(R) <= 1e-6) and R[-1] < 0.9
+
+
+def _cavity_model():
+    nh = NeoHookeanContact(_model(lumen_e_eff=vc.E_LUMEN_VOID, precompute=False), cavity=True)
+    return nh, nh.model.dorsal_pose(0.0, 0.0)
+
+
+def test_cavity_wall_contact_gradient_and_hessian():
+    """DEC-075: the wall-to-wall term's gradient and Hessian match finite differences (pairs made active by flipping
+    their sign, which keeps the same energy form at small u)."""
+    nh, T = _cavity_model()
+    pr = nh.cavity_pairs(T)
+    assert len(pr["node"]) > 0 and np.all(pr["g0"] > 0)
+    pr["sign"] = -pr["sign"]
+    nh._pairs = pr
+    u = np.zeros(nh.n)
+    u[nh.fidx] = np.random.default_rng(1).normal(0, 0.01, len(nh.fidx))
+    d = float(nh.model.first_contact_indentation(T)) - 1.0          # probe off the skin: wall term only
+    _, w, _ = nh._contact(u, T, d)
+    g, K, _, _ = nh.grad_hess(u, T, d, w)
+    _, nd, _, q = nh._cavity_terms(u)
+    assert len(q) == len(pr["node"])
+    for k in [3 * int(nd[0, 0]) + 1, 3 * int(nd[0, 1]) + 1, 3 * int(nd[1, 0]) + 1]:
+        e = np.zeros(nh.n)
+        e[k] = 1e-6
+        fd = (nh.energy(u + e, T, d, w) - nh.energy(u - e, T, d, w)) / 2e-6
+        assert abs(fd - g[k]) <= 1e-4 * max(1.0, abs(g[k])), (k, fd, g[k])
+        e[k] = 1e-5
+        col = (nh.grad_hess(u + e, T, d, w)[0] - nh.grad_hess(u - e, T, d, w)[0]) / 2e-5
+        assert np.abs(col - K[:, k].toarray().ravel()).max() <= 1e-6 * max(1.0, np.abs(col).max())
+
+
+def test_cavity_lumen_collapses_fully():
+    """DEC-075: with the lumen as a cavity the phantom vein reaches full collapse (AP ratio <= 0.1), which the 0.1 kPa
+    solid lumen cannot (DEC-073: stall at 0.36), with monotone force and ratio."""
+    nh, T = _cavity_model()
+    centre = np.array([0.0, vc.SKIN_Y - vc.DEPTH_MM, 0.0])
+    rows = []
+
+    def rec(dd, F, u):
+        rows.append((F, nh.cavity_ratio(u.ravel(), centre)))
+        return rows[-1][1] <= 0.1
+
+    res = nh.sweep(T, d_max_mm=20.0, step_mm=0.5, f_stop_n=20.0, on_step=rec)
+    print(f"[*] cavity force / AP ratio: {[(round(f, 2), round(r, 3)) for f, r in rows]}")
+    F = np.array([r[0] for r in rows])
+    R = np.array([r[1] for r in rows])
+    assert res["converged"] and R[-1] <= 0.1
+    assert np.all(np.diff(F) > 0) and np.all(np.diff(R) <= 1e-6)

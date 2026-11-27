@@ -19,6 +19,16 @@ penalty energy E_c = k/2 sum_i w_i p_i^2 with k = PENALTY x E_muscle x h (N/mm p
 penalty) and w_i in [0, 1] a footprint weight with a linear edge taper of one lattice spacing, computed from the
 reference skin positions (fixed per pose). Probe force F = sum_i k w_i p_i.
 
+Cavity lumen (DEC-075, `cavity=True`): the `region_modulus` cells (a vein lumen) are REMOVED from the mesh instead of
+being a 0.1 kPa solid that inverts under collapse (DEC-073: stall at AP ratio 0.36). Nodes left without a tet are held
+fixed. The cavity surface (faces shared by a kept and a removed tet) gets frictionless wall-to-wall penalty contact:
+for a probe pose, every cavity-surface node casts a ray along +b and -b in the REFERENCE configuration; the first
+cavity face it hits through the cavity (segment midpoint in a removed cell) is its partner, with fixed barycentric
+weights (like the probe footprint, fixed per pose so Newton sees a smooth energy). Gap g = s b . (sum_j w_j x_j - x_p)
+in the deformed configuration (reference gap g0 > 0); energy k/2 max(0, -g)^2 with the probe's k. Valid while the walls
+slide little relative to each other across the cavity (transverse compression); `cavity_ratio` gives the AP ratio
+g / g0 of the pairs near a line along b.
+
 Solver: indentation increments from first contact (warm start), Newton on elastic + contact energy with a sparse direct
 solve on the free dofs and backtracking line search keeping every J > 0; an increment that fails is halved (down to
 min_step_mm), as the adaptive load stepping of DEC-047.
@@ -49,7 +59,8 @@ def _frame(T: np.ndarray):
 
 
 class NeoHookeanContact:
-    def __init__(self, model: FEMTissueModel, e_scale: Optional[float] = None, penalty: float = PENALTY):
+    def __init__(self, model: FEMTissueModel, e_scale: Optional[float] = None, penalty: float = PENALTY,
+                 cavity: bool = False):
         m = model.mesh
         dt = torch.float64
         self.model, self.mesh = model, m
@@ -65,6 +76,19 @@ class NeoHookeanContact:
                 nu_cell = np.where(reg, float(model.nu_region), nu_cell)
         E = E_cell[m.tet_cell] * es
         nu = nu_cell[m.tet_cell]
+        self.cavity = bool(cavity)
+        tets_np = np.asarray(m.tets)
+        if self.cavity:
+            if reg is None:
+                raise ValueError("cavity=True needs the model's region_modulus mask (the lumen)")
+            gone = reg[m.tet_cell]
+            self._cavity_faces = self._interface_faces(tets_np[~gone], tets_np[gone])
+            ijk = np.asarray(m.cell_ijk)[reg]
+            self._cav_grid = np.zeros(tuple(int(v) for v in ijk.max(0) + 2), dtype=bool)
+            self._cav_grid[ijk[:, 0], ijk[:, 1], ijk[:, 2]] = True
+            tets_np, E, nu = tets_np[~gone], E[~gone], nu[~gone]
+            self.tets = torch.as_tensor(tets_np, dtype=torch.long)
+        self._pairs = None
         self.mu = torch.as_tensor(E / (2 * (1 + nu)), dtype=dt)
         self.lam = torch.as_tensor(E * nu / ((1 + nu) * (1 - 2 * nu)), dtype=dt)
         Xe = self.X[self.tets]
@@ -72,9 +96,11 @@ class NeoHookeanContact:
         self.V = torch.linalg.det(Dm).abs() / 6.0
         self.Dm_inv = torch.linalg.inv(Dm)
         self.n = 3 * len(self.X)
-        self.free = np.repeat(~m.fixed, 3)
+        used = np.zeros(len(m.nodes), dtype=bool)
+        used[tets_np.ravel()] = True
+        self.free = np.repeat(~m.fixed & used, 3)
         self.fidx = np.nonzero(self.free)[0]
-        dofs = (m.tets[:, :, None] * 3 + np.arange(3)).reshape(-1, 12)
+        dofs = (tets_np[:, :, None] * 3 + np.arange(3)).reshape(-1, 12)
         self.dofs = torch.as_tensor(dofs, dtype=torch.long)
         self.rows = np.repeat(dofs, 12, axis=1).ravel()
         self.cols = np.tile(dofs, (1, 12)).ravel()
@@ -86,6 +112,101 @@ class NeoHookeanContact:
         self.k = float(penalty) * model.e_muscle * 1e-3 * es * m.h
         self.L, self.W = model.face_dims
         self.taper = m.h
+
+    # ------------------------------------------------------------------ cavity
+    @staticmethod
+    def _interface_faces(kept: np.ndarray, gone: np.ndarray) -> np.ndarray:
+        """Triangles shared by a kept tet and a removed tet (node ids, (F,3))."""
+        fl = np.array([[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]])
+        fk = np.sort(kept[:, fl].reshape(-1, 3), 1)
+        fg = np.sort(gone[:, fl].reshape(-1, 3), 1)
+        sk = {tuple(f) for f in fk}
+        out = {tuple(f) for f in fg if tuple(f) in sk}
+        return np.array(sorted(out), dtype=np.int64).reshape(-1, 3)
+
+    def _in_cavity(self, pts: np.ndarray) -> np.ndarray:
+        m = self.mesh
+        c = np.floor((pts - m.lattice_origin) / m.h).astype(np.int64)
+        sh = np.array(self._cav_grid.shape)
+        ok = np.all((c >= 0) & (c < sh), 1)
+        out = np.zeros(len(pts), dtype=bool)
+        out[ok] = self._cav_grid[c[ok, 0], c[ok, 1], c[ok, 2]]
+        return out
+
+    def cavity_pairs(self, T: np.ndarray) -> Dict[str, np.ndarray]:
+        """Reference wall-to-wall pairs along the beam of pose T (see module docstring)."""
+        _, _, b, _ = _frame(np.asarray(T, dtype=np.float64))
+        F = self._cavity_faces
+        X = self.X.numpy()
+        A, B, C = X[F[:, 0]], X[F[:, 1]], X[F[:, 2]]
+        e1, e2 = B - A, C - A
+        nodes = np.unique(F)
+        P, S, Fi, W, G0 = [], [], [], [], []
+        eps = 1e-9
+        for sgn in (1.0, -1.0):
+            dvec = sgn * b
+            h = np.cross(dvec, e2)                              # (F,3)
+            det = (e1 * h).sum(1)
+            okf = np.abs(det) > 1e-12
+            inv = np.where(okf, 1.0 / np.where(okf, det, 1.0), 0.0)
+            for ch in np.array_split(nodes, max(1, len(nodes) // 256)):
+                o = X[ch]                                       # (n,3)
+                sv = o[:, None, :] - A[None]                    # (n,F,3)
+                uu = (sv * h[None]).sum(2) * inv[None]
+                q = np.cross(sv, e1[None])
+                vv = (q * dvec).sum(2) * inv[None]
+                tt = (q * e2[None]).sum(2) * inv[None]
+                hit = okf[None] & (uu >= -eps) & (vv >= -eps) & (uu + vv <= 1 + eps) & (tt > 1e-6)
+                hit &= ~np.any(F[None, :, :] == ch[:, None, None], 2)
+                tt = np.where(hit, tt, np.inf)
+                j = np.argmin(tt, 1)
+                tmin = tt[np.arange(len(ch)), j]
+                good = np.isfinite(tmin)
+                if not good.any():
+                    continue
+                mid = o[good] + 0.5 * tmin[good, None] * dvec
+                good_idx = np.nonzero(good)[0][self._in_cavity(mid)]
+                for k in good_idx:
+                    f = j[k]
+                    w = np.array([1 - uu[k, f] - vv[k, f], uu[k, f], vv[k, f]])
+                    P.append(ch[k]); S.append(sgn); Fi.append(f); W.append(np.clip(w, 0, 1) / np.clip(w, 0, 1).sum())
+                    G0.append(tmin[k])
+        if not P:
+            return {"node": np.zeros(0, np.int64), "sign": np.zeros(0), "tri": np.zeros((0, 3), np.int64),
+                    "w": np.zeros((0, 3)), "g0": np.zeros(0), "b": b}
+        return {"node": np.array(P, np.int64), "sign": np.array(S), "tri": F[np.array(Fi)], "w": np.array(W),
+                "g0": np.array(G0), "b": b}
+
+    def _cavity_gap(self, u: np.ndarray) -> np.ndarray:
+        pr = self._pairs
+        x = self.X.numpy() + u.reshape(-1, 3)
+        y = (pr["w"][:, :, None] * x[pr["tri"]]).sum(1)
+        return pr["sign"] * ((y - x[pr["node"]]) @ pr["b"])
+
+    def cavity_ratio(self, u: np.ndarray, point: np.ndarray, radius: Optional[float] = None) -> float:
+        """AP ratio of the cavity at the line through `point` along b: mean g / g0 (g clipped at 0) over the +b pairs
+        whose node lies within `radius` (default h) of that line in the reference configuration."""
+        pr = self._pairs
+        if pr is None or not len(pr["node"]):
+            return float("nan")
+        b = pr["b"]
+        r = self.X.numpy()[pr["node"]] - np.asarray(point, dtype=np.float64)
+        lat = np.linalg.norm(r - (r @ b)[:, None] * b[None], axis=1)
+        sel = (pr["sign"] > 0) & (lat <= (self.mesh.h if radius is None else radius) + 1e-9)
+        if not sel.any():
+            return float("nan")
+        g = self._cavity_gap(u)[sel]
+        return float(np.mean(np.maximum(g, 0.0) / pr["g0"][sel]))
+
+    def _cavity_terms(self, u: np.ndarray):
+        """Energy, and the active pairs' dof indices (A,4,3) and coefficients (A,4) with penetration q (A,)."""
+        g = self._cavity_gap(u)
+        q = np.maximum(0.0, -g)
+        act = np.nonzero(q > 0)[0]
+        pr = self._pairs
+        nd = np.concatenate([pr["node"][act, None], pr["tri"][act]], 1)            # (A,4)
+        cf = np.concatenate([-np.ones((len(act), 1)), pr["w"][act]], 1) * pr["sign"][act, None]
+        return 0.5 * self.k * float((q * q).sum()), nd, cf, q[act]
 
     # ------------------------------------------------------------------ contact
     def footprint(self, T: np.ndarray) -> np.ndarray:
@@ -119,7 +240,10 @@ class NeoHookeanContact:
         if bool((torch.linalg.det(Ds @ self.Dm_inv) <= 0).any()):
             return float("inf")
         p, _, _ = self._contact(u, T, d, w)
-        return float(self._e(xe, self.Dm_inv, self.V, self.mu, self.lam).sum()) + 0.5 * self.k * float((w * p * p).sum())
+        e = float(self._e(xe, self.Dm_inv, self.V, self.mu, self.lam).sum()) + 0.5 * self.k * float((w * p * p).sum())
+        if self.cavity and self._pairs is not None:
+            e += self._cavity_terms(u)[0]
+        return e
 
     def grad_hess(self, u: np.ndarray, T, d, w):
         ut = torch.as_tensor(u)
@@ -139,6 +263,16 @@ class NeoHookeanContact:
             r_ = np.repeat(idx, 3, axis=1).ravel()
             c_ = np.tile(idx, (1, 3)).ravel()
             K = K + sps.coo_matrix(((kw[:, None, None] * bb[None]).ravel(), (r_, c_)), shape=(self.n, self.n)).tocsr()
+        if self.cavity and self._pairs is not None:
+            _, nd, cf, q = self._cavity_terms(u)
+            if len(q):
+                bv = self._pairs["b"]
+                idx = (nd[:, :, None] * 3 + np.arange(3)).reshape(-1, 12)                # (A,12)
+                gv = (-(self.k * q)[:, None, None] * cf[:, :, None] * bv[None, None, :]).reshape(-1, 12)
+                np.add.at(g, idx.ravel(), gv.ravel())
+                Hc = self.k * np.einsum("ai,aj,kl->aikjl", cf, cf, np.outer(bv, bv)).reshape(-1, 12, 12)
+                K = K + sps.coo_matrix((Hc.ravel(), (np.repeat(idx, 12, 1).ravel(), np.tile(idx, (1, 12)).ravel())),
+                                       shape=(self.n, self.n)).tocsr()
         return g, K, p, w
 
     def force(self, u: np.ndarray, T, d) -> float:
@@ -176,6 +310,8 @@ class NeoHookeanContact:
         on_step(indentation_beyond_first_contact, force, u (Nn,3)); a True return stops the sweep. Stops also when the
         force exceeds f_stop_n. Returns the force curve and convergence history."""
         T = np.asarray(pose_P, dtype=np.float64)
+        if self.cavity:
+            self._pairs = self.cavity_pairs(T)
         d0 = float(self.model.first_contact_indentation(T))
         d0 = 0.0 if not np.isfinite(d0) else d0
         u = np.zeros(self.n)

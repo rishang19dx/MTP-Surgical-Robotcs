@@ -70,8 +70,9 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **H2 and H3 FAIL (FEM augmentation −0.03 vs none)** |
 | **Nov 2026** | `DEC-071` | Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov) | **Accepted (design); build gated** |
 | **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **H1c FAIL (0.290 vs 0.504 at N=64; under-fitted at 2M, train success 0.352)** |
-| **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated (3.275 kPa); gate held: solver stalls at AP ratio 0.36 on the phantom, full collapse unreachable** |
+| **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated (3.275 kPa); gate not run (solid lumen stalls at AP ratio 0.36); superseded by DEC-075** |
 | **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-075` | Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2775,3 +2776,42 @@ A chronological record of all architectural, research, algorithmic, and engineer
   arm L run exists.
 * **Compute**: arm L about 3–4 h per seed on 8 shared GPUs, run one seed at a time; arm S and the 30 evaluations fit
   around it.
+
+### `DEC-075`: Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED
+
+* **Date**: 28 Nov 2026. Committed before the calibration and the gate run. Supersedes the DEC-073 gate, which was not
+  run (the solid 0.1 kPa lumen stalls at AP ratio 0.36 on the phantom). User decision 28 Nov: model the lumen as an
+  empty cavity whose walls touch.
+* **Model** (`fem_contact_nl.py` `NeoHookeanContact(cavity=True)`, commits c874663 and e965807): the DEC-073 model with the
+  lumen cells REMOVED from the mesh.
+  * Nodes left without a tet are held fixed.
+  * The cavity walls (faces shared by kept and removed tets) get frictionless penalty contact, with the probe's
+    penalty k.
+  * Pairs: each wall node casts a ray along ±beam in the reference configuration; its partner is the first cavity
+    face hit through the cavity, with barycentric weights frozen per pose (like the probe footprint). Gap measured
+    along the beam in the deformed configuration.
+  * Choices made by me, open to override: frictionless walls; the same k as the probe; frozen pairs, valid while the
+    walls slide little relative to each other in transverse compression.
+* **AP ratio** (`cavity_ratio`): mean current/reference wall gap of the +beam pairs within h of the line along the beam
+  through the lumen centre, restricted to pairs whose reference gap is ≥ 0.8 × the largest there (the AP diameter;
+  this leaves out pairs across one-cell steps of the voxel cavity). Lumen centre: the phantom's vessel axis point; for
+  a patient vein, the midpoint of the DEC-061 site's wall points.
+* **Calibration, gate and constants**: exactly as DEC-073, with `vein_cavity_study.py` (frozen with this commit; it
+  imports DEC-073's constants and helpers unchanged).
+  * Calibration: Sato phantom at h = 2 mm; fat modulus fitted so that AP ratio = 0.50 ± 0.01 at 1.87 N.
+  * Gate: the first 40 measurable TRAINING veins, h = 2 mm, DEC-061 ROI; sweep to AP ratio ≤ 0.1, caps 40 N / 40 mm.
+    **PASS iff the median Fc / 450 mm² is within ×2 of 10.93 kPa (82 mmHg)**, with ≥ 8 measurable veins.
+  * New measurability condition: at least one wall pair within h of the site line.
+  * New report: veins whose sweep stalled (solver failure before collapse or a cap; counted as Fc = inf).
+  * Also reported, not gating: `meshcheck`, the calibrated modulus on the phantom at h = 1 mm.
+* **Order**: calibrate → (if converged) meshcheck and gate. Test veins are not used.
+* **Consequence**: PASS → the cavity model may be used for the vein study (DEC-061's F50-spread gate on test veins),
+  under its own pre-registration. FAIL → reported; the vein route closes with this model.
+* **Known before registration**:
+  * DEC-073 (calibration 3.275 kPa with the solid lumen; its stall).
+  * One phantom sweep with the cavity at 3.275 kPa, h = 2 mm: full collapse (AP ratio 0.071 at 2.53 N, no failed
+    step; ratio 0.27 at 1.87 N), so the cavity fit will be stiffer than 3.275 kPa.
+  * The tests: FD gradient/Hessian; full phantom collapse.
+  * A pairs-only smoke test on the first 3 training veins (mesh and wall pairs built, NO sweep, so no force or collapse
+    information): 92–114k tets, 5–9 pairs near each site line, with reference gaps of 12–16 mm (matching the 12–15 mm
+    DEC-061 wall gaps) mixed with 2 mm edge-step pairs. That led to the 0.8 × largest-gap rule, set before any sweep.

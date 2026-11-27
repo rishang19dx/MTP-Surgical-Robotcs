@@ -10,16 +10,17 @@ The scene can be streamed to 3D Slicer over OpenIGTLink.
 For learning, [`mtp_gym`](#batched-training-environment-mtp_gym) runs N scanning environments at once on one GPU as a
 Gymnasium `VectorEnv`. The soft tissue is the same FEM, solved for all environments in one batch. It includes the 12
 TotalSegmentator patients used by SonoGym, imported into the project frame, plus the original sample patient. This
-is the work towards an RSS 2027 submission: SonoGym-style tasks with patient-specific soft-tissue deformation and
-contact force (DEC-041; plan in [`tasks/plan.md`](tasks/plan.md)).
+started as work towards an RSS 2027 submission (DEC-041; [`tasks/plan.md`](tasks/plan.md)). That target was dropped on
+26 Nov 2026; the work now aims at results, run on a shared 8 × RTX A6000 server with 412 patients
+([server study round](#server-study-round-2627-nov-2026), plan in [`tasks/server_studies_plan.md`](tasks/server_studies_plan.md)).
 
 This is a research prototype. The 6-policy benchmark below still runs on one patient CT. Read
 [Limitations](#limitations) before using any number below.
 
-> This branch (`mujoco-bridge`) adds MuJoCo as an alternative physics backend (`--physics-backend mujoco`) and a
-> demo-only live MuJoCo flex soft-tissue model (`--tissue-backend mujoco-flex`), as a side track — PyBullet and
-> the GPU FEM remain the defaults and nothing below changes. See
-> [`README_MUJOCO_BRIDGE.md`](README_MUJOCO_BRIDGE.md) for what it adds, how to run it, and its current status.
+> This branch (`liver-sliding`) contains the MuJoCo backend side track (`--physics-backend mujoco`, demo-only
+> `--tissue-backend mujoco-flex`; see [`README_MUJOCO_BRIDGE.md`](README_MUJOCO_BRIDGE.md)), the soft-target studies
+> (paraspinal muscle, liver, groin vein; DEC-054–063) and the server-scale studies (DEC-064–073). PyBullet and the
+> linear GPU FEM remain the defaults.
 
 ![FEM soft-body demo](demonstrations/demo_fem_soft_body.gif)
 
@@ -222,8 +223,14 @@ time-limit flags in SB3's format.
     --ppo checkpoints/vec_ppo/recon_aware_depth_s0_laptop2p.zip
 ```
 
-On the 4 GB laptop GPU, training runs at about 230 env-steps/s with 32 envs. It holds the FEM fields of 2–3
-patients, so the full 9-patient training split needs a larger GPU.
+On the 4 GB laptop GPU, training runs at about 230 env-steps/s with 32 envs and holds the FEM fields of 2–3 patients.
+
+**Many patients (DEC-066, DEC-072).** With several patients in one env, force control and the contact solve run as
+one batch over all patients (`simulation/fem_multi.py`); only the field GEMM and the slice loop over patients
+(parity: `tests/test_fem_multi.py`). Each patient's FEM field takes about 0.45 GB of GPU memory, so one A6000 holds
+about 90 patients and two training runs of 32 patients share one GPU at about 88 % utilisation. Beyond one GPU,
+`train_vec_ppo.py --shards K` splits envs and patients over K worker processes, one GPU each (`mtp_gym/sharded.py`).
+`eval_vec_policies.py --batch-patients 32 --splits data/splits_v2.json` evaluates 32 patients per env.
 
 **Laptop pilot results** (1–2 seeds, ≤ 3 training patients, 300k steps, 4 held-out patients × 16 episodes; DEC-051):
 - **Navigation** ([`results/vec_eval_nav_20261108_075931.md`](results/vec_eval_nav_20261108_075931.md)). PPO succeeds in
@@ -266,7 +273,10 @@ identical contact loads, 22 of 24 solves converged. The linear model is within 5
   - Moving the ground-truth target changes the reward but no observation (invariant 5).
 
 **Throughput.** Source: [`results/throughput_20261105_235332.md`](results/throughput_20261105_235332.md) (laptop RTX
-2050, FreeScan task, sample patient). It is not yet measured on the workstation GPU.
+2050, FreeScan task, sample patient). On the A6000 server: [`results/throughput_20261126_181357.md`](results/throughput_20261126_181357.md)
+(one patient; 4448 rigid / 3768 aware env-steps/s at 1024 envs) and, for many patients, 32 patients × 512 envs aware
+1401 → 226 ms per step after DEC-066 ([`results/throughput_20261126_192723.md`](results/throughput_20261126_192723.md) →
+[`results/throughput_20261126_193230.md`](results/throughput_20261126_193230.md)).
 
 | Mode | 1 env | 8 envs | 32 envs | 128 envs |
 | :--- | ---: | ---: | ---: | ---: |
@@ -283,6 +293,68 @@ rigid simulator that lets the probe press in reproduces it. What the FEM adds is
 force-to-indentation relation and the compression of the soft layers. In thick backs, force (through indentation)
 also decides whether bone enters the 75 mm field of view: s0014 shows bone at 0 of 9 poses at 1 N and 8 of 9 at
 15 N.
+
+---
+
+## Server study round (26–27 Nov 2026)
+
+Every study below was pre-registered as its own DEC entry (prediction, patients, seeds, analysis script frozen) before
+it ran; negative results are reported. Numbers come from the named `results/` files.
+
+**Data (DEC-064, DEC-065).** 399 TotalSegmentator v2 patients pass a fixed inclusion filter
+([`results/totalseg_v2_import_20261126_181109.md`](results/totalseg_v2_import_20261126_181109.md); 730 lack the labels, 13
+have a cut lumbar spine, 74 a cut dorsal field of view). With the 13 earlier patients the split
+(`data/splits_v2.json`, every 3rd by back thickness held out) is 275 train / 137 test. The zip came from a Hugging Face
+mirror (Zenodo blocks the institute network); its CTs reproduce our SonoGym patients exactly
+([`results/totalseg_v2_identity_20261126_180901.json`](results/totalseg_v2_identity_20261126_180901.json)).
+
+**Paraspinal muscle thickness under probe force, 112 measurable held-out patients (DEC-067)**
+([`results/muscle_thickness_dec067_s11_dec067.md`](results/muscle_thickness_dec067_s11_dec067.md)):
+
+| Criterion | Value | Verdict |
+| :--- | :--- | :---: |
+| Image-measured thickness falls with force (deformable) | −0.264 mm/N [−0.283, −0.236], 95 % of patients; ground truth −0.264 | pass |
+| Flat in the rigid control | median abs slope 0.042 mm/N (upper bound 0.066) | pass |
+| Image slope tracks the true slope per patient (≤ 0.10 mm/N) | 0.113 mm/N (upper bound 0.132) | **fail** |
+| Force-aware correction beats a constant one (H5) | 2.49 vs 2.65 mm | **fail** |
+| Spine force headroom for a force-choosing policy | median excess 0.00 mm; 8 % of patients ≥ 1 mm | **closed** |
+
+With per-patient stiffness ×0.5–2 every verdict is unchanged
+([`results/muscle_thickness_dec067_s12_dec067.md`](results/muscle_thickness_dec067_s12_dec067.md)).
+
+**Liver (DEC-060, DEC-063).** With the liver sliding against the abdominal wall, a 5 N probe moves liver targets by less
+than 2 mm in all 10 measurable patients (max 1.64 mm;
+[`results/liver_headroom_sliding_20261126_230145.md`](results/liver_headroom_sliding_20261126_230145.md)); the penalty
+factor does not matter (×30 and ×300 identical). The clamped FEM box biases liver motion down by about 30–35 %; at the
+largest box (90 mm margins) the maximum is 1.89 mm, still below 2 mm
+([`results/liver_box_sensitivity_20261126_205228.md`](results/liver_box_sensitivity_20261126_205228.md); verdict
+inconclusive).
+
+**Navigation (DEC-068–070)** ([`results/nav_scale_20261127_124239.md`](results/nav_scale_20261127_124239.md),
+[`results/nav_augment_20261127_124239.md`](results/nav_augment_20261127_124239.md); 137 held-out patients × 16
+episodes, 3 seeds, PPO at the 2M-step checkpoint):
+
+| Training patients | 1 | 4 | 16 | 64 |
+| :--- | ---: | ---: | ---: | ---: |
+| Held-out success | 0.103 | 0.101 | 0.312 | 0.504 |
+| Training-patient success | 1.000 | 1.000 | 0.999 | 0.964 |
+
+- Held-out success rises steeply once there are more than 4 training patients. The pre-registered H1 still fails on
+  its monotonicity clause (N = 4 is 0.002 below N = 1); the 1 → 64 gain (+0.40, CI [+0.36, +0.44]) passes.
+- Training on deformable rather than kinematic tissue (same indentation, no warp) gives +0.058 held-out success
+  (CI [+0.030, +0.085], all seeds positive), below the pre-registered 0.15; rigid (SonoGym-style) training is not
+  worse (−0.035). FEM pre-deformation augmentation lowers held-out success by 0.03 against no augmentation.
+- The step budget (2M) was fixed on 27 DEV patients before these runs. With the DEC-049 PPO settings both pilot
+  seeds collapse after about 3.5M steps (DEV success 0.45 at 2M → 0.05 at 5M; `results/vec_eval_nav_*_budget_dev_*.md`).
+
+**In progress.** Navigation with all 238 eligible training patients (DEC-072, sharded over 4 GPUs). A large-strain
+(Neo-Hookean) vein model with probe contact re-solved on the deformed skin (`simulation/fem_contact_nl.py`, DEC-071),
+to be calibrated on popliteal data and checked against held-out femoral collapse data before any patient study
+uses it; 1037 groin veins from 528 subjects are imported.
+
+**Bottom line so far.** Soft tissue measurably biases a soft-tissue measurement across the population, and patient
+diversity drives navigation generalisation. No task yet shows deformation changing what a robot should do by a
+pre-registered margin.
 
 ---
 
@@ -387,8 +459,8 @@ machine.
   recall 0.86, precision 0.82). The simulated images lack the clutter, reverberation and soft-tissue echoes that
   cause false positives in practice, so the precision numbers here are optimistic.
 - **One patient and 3 trials (benchmark).** The 6-policy benchmark and the checkpoints still use one CT
-  (`case-0004`, L4). The 13-patient split exists in `mtp_gym`, but no policy has been trained or tested on it yet. There is no held-out
-  anatomy, so the learned policies are not shown to generalise to other patients. With 3 trials, differences of a
+  (`case-0004`, L4), so its learned policies are not shown to generalise to other patients. The server studies above
+  use 412 patients with `mtp_gym`, but have not retrained the 6-policy benchmark. With 3 trials, differences of a
   few percent (e.g. PPO 85.0 vs NBV 83.8 vs CFM 83.7 Cov@3) are within noise.
 - **No learned policy beats the raster.** The elevational raster has the best Cov@3 (88.1 %). Sampled PPO reaches
   85.0 %, CFM 83.7 % and Diffusion 71.0 %. CFM and Diffusion clone a randomised raster expert, so the expert caps
@@ -438,10 +510,15 @@ machine.
   fat) stay at 0.01–0.07.
 - **The bone-echo shift under force is kinematic, not deformation** (DEC-051). In the reconstruction task a
   tracked probe makes the deformation largely irrelevant (aware vs unaware Cov@3 88.0 vs 88.8). The muscle-thickness
-  study, where deformation does change the measured quantity, failed its pre-registered measurement gate: the
-  simulated B-mode does not render the fascia (DEC-050/051). Showing a task where soft-tissue deformation changes
-  policy outcomes remains open.
-- **No learned policy generalises to held-out patients at laptop scale** (≤ 14 % navigation success; DEC-051).
+  study first failed its measurement gate because the B-mode did not render the fascia (DEC-050/051); with a
+  literature fascia layer (DEC-055) the effect holds on 112 held-out patients (DEC-067), though not to the
+  pre-registered per-patient tracking precision. Showing a task where soft-tissue deformation changes policy
+  outcomes by a pre-registered margin remains open (DEC-058, 060, 063, 069, 070).
+- **Generalisation needs many patients.** At laptop scale no learned policy generalised (≤ 14 % held-out navigation
+  success; DEC-051). With 64 training patients held-out navigation success is 0.50 (DEC-068), still well below the
+  0.96 on training patients.
+- **PPO is unstable beyond about 3.5M steps** with the DEC-049 settings (constant learning rate, no entropy bonus);
+  the server studies stop at 2M steps (DEC-068).
 - **The linear FEM is accurate only at low force.** Against a Neo-Hookean reference on the same mesh (DEC-047)
   compression agrees within 5 % at 2 N but differs by up to about 30 % at 5–15 N. Force-dependent results above
   about 5 N carry this model error.

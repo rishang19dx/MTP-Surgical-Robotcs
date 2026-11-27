@@ -24,6 +24,12 @@ before you change an entry point or a data route. All paths are relative to the 
 | Import the 12 SonoGym TotalSegmentator subjects into frame P | [`ReconstructionPipeline/data/import_sonogym_subjects.py`](ReconstructionPipeline/data/import_sonogym_subjects.py) | `./.venv/bin/python -m ReconstructionPipeline.data.import_sonogym_subjects --out data/patients` |
 | Import TotalSegmentator v2 subjects into frame P with the DEC-064 inclusion filter (R1–R4); `--verify-against data/patients` reproduces the SonoGym subjects from the zip | [`ReconstructionPipeline/data/import_totalseg_v2.py`](ReconstructionPipeline/data/import_totalseg_v2.py) | `./.venv/bin/python -m ReconstructionPipeline.data.import_totalseg_v2 --zip <Totalsegmentator_dataset_v201.zip> --out data/patients_ts2 --workers 16` |
 | Build / QA the FEM of every patient (writes `results/patients_fem_*.json`) | [`ReconstructionPipeline/data/build_patient_fem.py`](ReconstructionPipeline/data/build_patient_fem.py) | `./.venv/bin/python -m ReconstructionPipeline.data.build_patient_fem --include-sample` (`--patients-dir data/patients_ts2 --shard i/n` runs one shard per GPU, DEC-064) |
+| Patient split v2 (DEC-065: old 13 keep their split; new patients every 3rd by back thickness held out; DEV; flags) | [`ReconstructionPipeline/data/make_splits_v2.py`](ReconstructionPipeline/data/make_splits_v2.py) | `./.venv/bin/python -m ReconstructionPipeline.data.make_splits_v2` |
+| Liver / iliac-vein presence over all TotalSegmentator v2 subjects (DEC-065) | [`ReconstructionPipeline/data/organ_presence.py`](ReconstructionPipeline/data/organ_presence.py) | `./.venv/bin/python -m ReconstructionPipeline.data.organ_presence --zip <zip>` |
+| Groin-vein crops from TotalSegmentator v2 (DEC-071, DEC-061 crop and frame) | [`ReconstructionPipeline/data/import_vein_ts2.py`](ReconstructionPipeline/data/import_vein_ts2.py) | `./.venv/bin/python -m ReconstructionPipeline.data.import_vein_ts2 --zip <zip> --presence results/organ_presence_<stamp>.json` |
+| Muscle thickness at scale (DEC-067): sharded study, merge, frozen analysis | [`muscle_thickness_study.py`](ReconstructionPipeline/evaluation/muscle_thickness_study.py), [`muscle_merge_shards.py`](ReconstructionPipeline/evaluation/muscle_merge_shards.py), [`muscle_scale_analysis.py`](ReconstructionPipeline/evaluation/muscle_scale_analysis.py) | `muscle_thickness_study.py --splits data/splits_v2.json --shard i/n --prereg DEC-067 --tag s11`, then merge and `muscle_scale_analysis.py <merged.json>` |
+| Navigation scaling, transfer and augmentation (DEC-068–070, 072): nested training sets, frozen analyses | [`nav_scale_sets.py`](ReconstructionPipeline/planning/nav_scale_sets.py), [`nav_scale_analysis.py`](ReconstructionPipeline/evaluation/nav_scale_analysis.py), [`nav_augment_analysis.py`](ReconstructionPipeline/evaluation/nav_augment_analysis.py), [`nav_scale_ext_analysis.py`](ReconstructionPipeline/evaluation/nav_scale_ext_analysis.py) | `train_vec_ppo.py --patients "$(python -m ReconstructionPipeline.planning.nav_scale_sets --n 16)" --save-every 1000000 [--shards 4]`; `eval_vec_policies.py --splits data/splits_v2.json --batch-patients 32 --tag <tag>` |
+| Large-strain FEM with contact on the deformed skin (offline, DEC-071; not used by the gym or the 1 kHz loop) | [`ReconstructionPipeline/simulation/fem_contact_nl.py`](ReconstructionPipeline/simulation/fem_contact_nl.py) | `NeoHookeanContact(FEMTissueModel(..., precompute=False)).sweep(pose, d_max_mm)` |
 | Reconstruction task, vector env | [`mtp_gym/tasks/reconstruction.py`](mtp_gym/tasks/reconstruction.py) | `gym.make_vec("MTP/Recon-v0", num_envs=64, vectorization_mode="vector_entry_point", patients=[...])` |
 | Tests | [`ReconstructionPipeline/tests/`](ReconstructionPipeline/tests) | `./.venv/bin/python -m pytest ReconstructionPipeline/tests/ -q` |
 | Remote GPU automation | [`scripts/run_remote_totalsegmentator.sh`](scripts/run_remote_totalsegmentator.sh) | `bash scripts/run_remote_totalsegmentator.sh --mode all --dataset-dir <subject>` (only inside `*/workspace/rishang/*`) |
@@ -193,6 +199,11 @@ as ONE batch over all patients (`UltrasoundVectorEnv._simulate_batched`, `simula
 (`BatchedFEMSolver._field`) and the warped slice loop over patients. A single patient keeps the original
 per-patient loop. Parity: `tests/test_fem_multi.py`. Cost per distinct patient: `throughput_benchmark.py --patients
 <list> --num-patients 1,8,32`.
+
+When the training patients do not fit one GPU (about 0.45 GB of FEM field each), `train_vec_ppo.py --shards K`
+(DEC-072) runs K `UltrasoundVectorEnv` worker processes, one GPU each with a contiguous block of patients
+(`mtp_gym/sharded.py` `ShardedSB3VecEnv`); the parent sets each worker's `CUDA_VISIBLE_DEVICES` before it starts and
+concatenates observations for one SB3 learner (test: `tests/test_sharded.py`).
 
 ---
 

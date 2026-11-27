@@ -91,6 +91,9 @@ def main(argv=None):
     ap.add_argument("--shards", type=int, default=1,
                     help="split envs and patients over this many worker processes, one GPU each (DEC-072); the GPUs "
                          "are CUDA_VISIBLE_DEVICES in order")
+    ap.add_argument("--shard-gpus", default="",
+                    help="comma list of GPU ids for the shard workers, repeats allowed (default: CUDA_VISIBLE_DEVICES). "
+                         "Do not repeat ids in CUDA_VISIBLE_DEVICES itself: the learner then sees no GPU (DEC-074)")
     args = ap.parse_args(argv)
 
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -108,7 +111,7 @@ def main(argv=None):
         blocks = [list(b) for b in np.array_split(np.array(pdirs, dtype=object), K)]
         specs = [{"patients": b, "num_envs": args.num_envs // K, "task": args.task, "seed": args.seed + 1000 * k,
                   "env_kwargs": env_kwargs} for k, b in enumerate(blocks)]
-        gpus = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")
+        gpus = (args.shard_gpus or os.environ.get("CUDA_VISIBLE_DEVICES", "0")).split(",")
         venv = VecMonitor(ShardedSB3VecEnv(specs, gpus))
         patients = None
     else:

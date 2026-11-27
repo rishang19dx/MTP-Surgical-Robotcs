@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/eval_vec_policies.py",
+    "args": {
+      "task": "nav",
+      "patients": "../patients_ts2/ts2_s0620",
+      "episodes": 16,
+      "ppo": [
+        "checkpoints/vec_ppo_s31/nav_aware_depth_s0_s31_N1_1999872_steps.zip"
+      ],
+      "deformation": "aware",
+      "bmode_physics": "depth",
+      "seed": 1000,
+      "out_dir": "/usershome/ds404_user5/ds404_work/MTP/results",
+      "batch_patients": 32,
+      "splits": "data/splits_v2.json",
+      "policies": ",",
+      "tag": "s31_N1_aware_s0_dep-aware_train"
+    },
+    "commit": "3255749",
+    "gpu": "NVIDIA RTX A6000"
+  },
+  "rows": [
+    {
+      "patient": "ts2_s0620",
+      "policy": "ppo:nav_aware_depth_s0_s31_N1_1999872_steps.zip",
+      "coverage": null,
+      "force_mean": 3.9980856893318037,
+      "return": 37.52584747970104,
+      "success": 1.0,
+      "steps": 4.0625,
+      "dist": 0.46750967111438513,
+      "yaw_err": 0.4354694370413199,
+      "target_force_mean": null,
+      "visibility_mean": null,
+      "coverage_std": null
+    }
+  ]
+}

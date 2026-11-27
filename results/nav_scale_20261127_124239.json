@@ -1,0 +1,150 @@
+{
+ "meta": {
+  "script": "ReconstructionPipeline/evaluation/nav_scale_analysis.py",
+  "preregistration": "DEC-068, DEC-069",
+  "inputs": [
+   "results/vec_eval_nav_20261127_120044_s31_N16_aware_s1_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120058_s31_N16_aware_s0_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120116_s31_N1_aware_s0_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120145_s31_N1_aware_s1_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120215_s31_N1_aware_s2_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120256_s31_N4_aware_s0_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120302_s31_N4_aware_s1_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120318_s31_N16_aware_s2_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_120827_s31_N1_aware_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_120839_s31_N16_aware_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_120956_s31_N4_aware_s2_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_121018_s31_N1_aware_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121018_s31_N4_aware_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121103_s31_N16_aware_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121111_s31_N1_aware_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121225_s31_N4_aware_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121338_s31_N64_aware_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121416_s31_N4_aware_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121424_s31_N64_aware_s1_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_121557_s31_N64_aware_s0_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_121559_s31_N64_aware_s2_dep-aware_train.json",
+   "results/vec_eval_nav_20261127_121649_s31_N64_aware_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121759_s31_N16_aware_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121816_s33_N16_kinematic_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121830_s31_N64_aware_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121909_s33_N16_kinematic_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121923_s33_N16_rigid_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_122143_s33_N16_rigid_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_122158_s33_N16_rigid_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_122242_s33_N16_aware_s1_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_122242_s33_N16_kinematic_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_122352_s33_N16_aware_s2_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_122420_s33_N16_aware_s0_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_122526_s33_N16_aware_s0_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_122611_s33_N16_kinematic_s0_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_122627_s33_N16_aware_s2_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_122700_s33_N16_kinematic_s1_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_122715_s33_N16_kinematic_s2_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_122904_s33_N16_kinematic_s0_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_123009_s33_N16_rigid_s1_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_123033_s33_N16_kinematic_s2_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_123053_s33_N16_rigid_s2_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_123056_s33_N16_rigid_s0_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_123219_s33_N16_rigid_s1_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_123303_s32_N16_aug-fem_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123326_s33_N16_rigid_s2_dep-rigid_test.json",
+   "results/vec_eval_nav_20261127_123359_s32_N16_aug-fem_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123409_s32_N16_aug-fem_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123442_s33_N16_rigid_s0_dep-kinematic_test.json",
+   "results/vec_eval_nav_20261127_123507_s32_N16_aug-warp_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123604_s32_N16_aug-warp_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123612_s32_N16_aug-warp_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123636_s32_N16_aug-imaging_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123739_s32_N16_aug-imaging_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_124149_s32_N16_aug-imaging_s1_dep-aware_test.json"
+  ]
+ },
+ "H1": {
+  "1": {
+   "heldout_success": 0.1031021897810219,
+   "per_seed": [
+    0.12773722627737227,
+    0.09717153284671533,
+    0.0843978102189781
+   ],
+   "train_success": 1.0,
+   "n_test_patients": 137
+  },
+  "4": {
+   "heldout_success": 0.10127737226277372,
+   "per_seed": [
+    0.1104014598540146,
+    0.09443430656934307,
+    0.0989963503649635
+   ],
+   "train_success": 1.0,
+   "n_test_patients": 137
+  },
+  "16": {
+   "heldout_success": 0.3117396593673966,
+   "per_seed": [
+    0.32253649635036497,
+    0.29927007299270075,
+    0.3134124087591241
+   ],
+   "train_success": 0.9986979166666666,
+   "n_test_patients": 137
+  },
+  "64": {
+   "heldout_success": 0.5042579075425792,
+   "per_seed": [
+    0.4781021897810219,
+    0.5027372262773723,
+    0.531934306569343
+   ],
+   "train_success": 0.9641927083333334,
+   "n_test_patients": 137
+  },
+  "verdict": {
+   "H1a": false,
+   "H1b": true,
+   "diff_64_minus_1": 0.4011557177615571,
+   "ci": [
+    0.3581204379562044,
+    0.44328239051094886
+   ],
+   "H1": false
+  }
+ },
+ "transfer": {
+  "deformation_only": {
+   "per_seed_gap": [
+    0.0643248175182482,
+    0.02189781021897813,
+    0.08713503649635035
+   ],
+   "mean_gap": 0.057785888077858893,
+   "ci": [
+    0.030105687347931877,
+    0.08546228710462286
+   ],
+   "aware_success": 0.3117396593673966,
+   "verdict": "does not count"
+  },
+  "sonogym": {
+   "per_seed_gap": [
+    -0.010948905109489038,
+    -0.05200729927007297,
+    -0.042883211678832134
+   ],
+   "mean_gap": -0.035279805352798045,
+   "ci": [
+    -0.0675220498783455,
+    -0.00288929440389294
+   ],
+   "aware_success": 0.3117396593673966,
+   "verdict": "does not count"
+  }
+ },
+ "baselines_test": {
+  "random": 0.04151459854014598,
+  "blind": 0.08029197080291971,
+  "oracle": 1.0
+ }
+}

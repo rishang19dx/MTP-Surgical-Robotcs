@@ -1,0 +1,84 @@
+{
+ "meta": {
+  "script": "ReconstructionPipeline/evaluation/nav_augment_analysis.py",
+  "preregistration": "DEC-070",
+  "inputs": [
+   "results/vec_eval_nav_20261127_120839_s31_N16_aware_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121103_s31_N16_aware_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_121759_s31_N16_aware_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123303_s32_N16_aug-fem_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123359_s32_N16_aug-fem_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123409_s32_N16_aug-fem_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123507_s32_N16_aug-warp_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123604_s32_N16_aug-warp_s1_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123612_s32_N16_aug-warp_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123636_s32_N16_aug-imaging_s0_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_123739_s32_N16_aug-imaging_s2_dep-aware_test.json",
+   "results/vec_eval_nav_20261127_124149_s32_N16_aug-imaging_s1_dep-aware_test.json"
+  ]
+ },
+ "arms": {
+  "none": {
+   "heldout_success": 0.3117396593673966,
+   "per_seed": [
+    0.32253649635036497,
+    0.29927007299270075,
+    0.3134124087591241
+   ]
+  },
+  "fem": {
+   "heldout_success": 0.2782846715328467,
+   "per_seed": [
+    0.28832116788321166,
+    0.24224452554744524,
+    0.30428832116788324
+   ]
+  },
+  "warp": {
+   "heldout_success": 0.3269464720194647,
+   "per_seed": [
+    0.333029197080292,
+    0.3517335766423358,
+    0.2960766423357664
+   ]
+  },
+  "imaging": {
+   "heldout_success": 0.30489659367396593,
+   "per_seed": [
+    0.2869525547445255,
+    0.33211678832116787,
+    0.2956204379562044
+   ]
+  }
+ },
+ "comparisons": {
+  "fem_minus_none": {
+   "diff": -0.03345498783454988,
+   "ci": [
+    -0.05824589416058394,
+    -0.008667883211678832
+   ],
+   "counts": false
+  },
+  "fem_minus_warp": {
+   "diff": -0.048661800486618,
+   "ci": [
+    -0.07770681265206812,
+    -0.02052919708029197
+   ],
+   "counts": false
+  },
+  "fem_minus_imaging": {
+   "diff": -0.026611922141119227,
+   "ci": [
+    -0.050182481751824826,
+    -0.0036496350364963537
+   ],
+   "counts": false
+  }
+ },
+ "verdict": {
+  "H2": false,
+  "H3": false
+ }
+}

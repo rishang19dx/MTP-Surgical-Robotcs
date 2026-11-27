@@ -65,9 +65,9 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-065` | Patient Split v2 and Stage 0 Eligibility / Training Pilot (Server Study Plan) | **Accepted** (split fixed; QA and pilot running) |
 | **Nov 2026** | `DEC-066` | Cross-Patient Batched FEM Contact in the Vector Env (Training Bottleneck Fix) | **Accepted** (parity tests pass; 6.2× env, 5.8× training at 32 patients) |
 | **Nov 2026** | `DEC-067` | Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED | **G, H4a, H4b pass; H4c fails (gap 0.113 mm/N), so H4 fails; H5 fails; P1 OUT; S1.2 ROBUST** |
-| **Nov 2026** | `DEC-068` | Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED | **Pre-registered** |
-| **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Pre-registered** |
-| **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-068` | Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED | **H1 FAIL on H1a (N=4 0.002 below N=1); H1b pass (+0.40, 0.10 → 0.50 held-out)** |
+| **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Neither gap counts (deformation-only +0.058, CI [+0.030, +0.085]; SonoGym −0.035)** |
+| **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **H2 and H3 FAIL (FEM augmentation −0.03 vs none)** |
 
 ---
 
@@ -2557,6 +2557,20 @@ A chronological record of all architectural, research, algorithmic, and engineer
   checkpoint at T*, and runs may be stopped once past T*. This equals training to T*: PPO here uses a constant
   learning rate (3e-4) and clip range (SB3 default 0.2), so no schedule depends on the total step count, and the run
   up to T* is the same computation. T* is still chosen by the budget rule on the pilot's DEV evaluation only.
+* **Result** (27 Nov 2026; `results/nav_scale_20261127_124239.md`, inputs `results/vec_eval_nav_*_s31_*.json`):
+  - Evaluations: 57 runs of `eval_vec_policies.py --batch-patients 32` on the 2M checkpoints, server commit 3255749
+    plus the uncommitted DEC-066 fixes (`fem_multi.py` skin padding, `core.py` warp buffer; committed as 097376f and
+    d27690f), hence "-dirty". The first launch crashed on ts2_s0353 before producing any result (DEC-066 addendum);
+    two secondary rigid-deployment evaluations ran out of memory on a shared GPU and are re-run (not used here).
+  - Held-out success (137 test patients, mean of 3 seeds): N = 1 **0.103**, N = 4 **0.101**, N = 16 **0.312**,
+    N = 64 **0.504**. Train success 1.000 / 1.000 / 0.999 / 0.964. Baselines: random 0.042, blind 0.080, oracle 1.000.
+  - **H1a FAIL**: s(4) is 0.002 below s(1). **H1b pass**: s(64) − s(1) = +0.401, 95 % CI [+0.358, +0.443].
+  - **H1 FAIL** by the registered rule (H1a and H1b).
+  - Reading (not a verdict): held-out success is flat from 1 to 4 patients (both near 0.10, at the level of the
+    blind baseline) and then rises steeply, 0.10 → 0.31 → 0.50 for 4 → 16 → 64. The policy memorises 1–4 patients
+    and starts to generalise only with more; the train − test gap shrinks from 0.90 to 0.46. H1a failed on a 0.002 tie
+    at the flat end, not on a reversal of the trend. Larger N (256) needs patient streaming and a fix for the
+    training collapse (T* note) before it can be run.
 
 ### `DEC-069`: Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED
 
@@ -2577,6 +2591,21 @@ A chronological record of all architectural, research, algorithmic, and engineer
   DEC-057 null extends to held-out patients.
 * **Known before registration**: DEC-057 (−0.8 points deformation-only, +11.7 SonoGym, at ceiling on training
   patients); the indentation-dominates-the-image measurement of DEC-057.
+* **Result** (27 Nov 2026; `results/nav_scale_20261127_124239.md`, inputs `results/vec_eval_nav_*_s3[13]_N16_*.json`):
+  - Evaluations: 57 runs of `eval_vec_policies.py --batch-patients 32` on the 2M checkpoints, server commit 3255749
+    plus the uncommitted DEC-066 fixes (`fem_multi.py` skin padding, `core.py` warp buffer; committed as 097376f and
+    d27690f), hence "-dirty". The first launch crashed on ts2_s0353 before producing any result (DEC-066 addendum);
+    two secondary rigid-deployment evaluations ran out of memory on a shared GPU and are re-run (not used here).
+  - Held-out success deployed on deformable tissue: aware-trained 0.312 (not at ceiling or floor, so informative).
+  - **Deformation-only gap** (aware − kinematic-trained): +0.064 / +0.022 / +0.087 per seed, mean **+0.058**, 95 % CI
+    [+0.030, +0.085] — **does not count** (below 0.15).
+  - **SonoGym gap** (aware − rigid-trained): −0.011 / −0.052 / −0.043, mean **−0.035**, CI [−0.068, −0.003] — **does
+    not count**.
+  - **Decision (registered)**: neither gap counts; the DEC-057 null extends to held-out patients at the 0.15 level.
+  - Reading (not a verdict): the deformation-only gap is small but consistently positive (3/3 seeds, interval excludes
+    0): training on deformable tissue gives about 6 points more held-out success than training with the same
+    indentation on rigid tissue. Rigid (SonoGym-style) training is slightly *better* than deformable training here,
+    unlike DEC-057's training-patient result. Kinematic and rigid deployments are reported in the eval files.
 
 ### `DEC-070`: Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED
 
@@ -2596,4 +2625,13 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Known before registration**: the laptop preliminary (DEC-051: no detectable effect at 2 patients, 300k steps).
 * **Implementation note**: the warp arm's buffer was fixed for many patients (DEC-066 addendum); values unchanged,
   parity-tested.
+* **Result** (27 Nov 2026; `results/nav_augment_20261127_124239.md`, inputs `results/vec_eval_nav_*_s3[12]_N16_*.json`):
+  - Evaluations: 57 runs of `eval_vec_policies.py --batch-patients 32` on the 2M checkpoints, server commit 3255749
+    plus the uncommitted DEC-066 fixes (`fem_multi.py` skin padding, `core.py` warp buffer; committed as 097376f and
+    d27690f), hence "-dirty". The first launch crashed on ts2_s0353 before producing any result (DEC-066 addendum);
+    two secondary rigid-deployment evaluations ran out of memory on a shared GPU and are re-run (not used here).
+  - Held-out success (mean of 3 seeds): none 0.312, **fem 0.278**, warp 0.327, imaging 0.305.
+  - fem − none **−0.033** [−0.058, −0.009]; fem − warp −0.049 [−0.078, −0.021]; fem − imaging −0.027 [−0.050, −0.004].
+  - **H2 FAIL, H3 FAIL**: FEM pre-deformation augmentation does not improve held-out navigation; it lowers it by about
+    3 points, and the non-physical warp is the best arm (not significantly above none).
 

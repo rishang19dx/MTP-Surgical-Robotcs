@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "script": "ReconstructionPipeline/evaluation/eval_vec_policies.py",
+    "args": {
+      "task": "nav",
+      "patients": "../patients_ts2/ts2_s0620,../patients_ts2/ts2_s1283,../patients_ts2/ts2_s0683,../patients_ts2/ts2_s1415",
+      "episodes": 16,
+      "ppo": [
+        "checkpoints/vec_ppo_s31/nav_aware_depth_s1_s31_N4_1999872_steps.zip"
+      ],
+      "deformation": "aware",
+      "bmode_physics": "depth",
+      "seed": 1000,
+      "out_dir": "/usershome/ds404_user5/ds404_work/MTP/results",
+      "batch_patients": 32,
+      "splits": "data/splits_v2.json",
+      "policies": ",",
+      "tag": "s31_N4_aware_s1_dep-aware_train"
+    },
+    "commit": "3255749",
+    "gpu": "NVIDIA RTX A6000"
+  },
+  "rows": [
+    {
+      "patient": "ts2_s0620",
+      "policy": "ppo:nav_aware_depth_s1_s31_N4_1999872_steps.zip",
+      "coverage": null,
+      "force_mean": 3.997666873368952,
+      "return": 33.82193795591593,
+      "success": 1.0,
+      "steps": 4.375,
+      "dist": 0.8677574828616343,
+      "yaw_err": 0.8521998234373314,
+      "target_force_mean": null,
+      "visibility_mean": null,
+      "coverage_std": null
+    },
+    {
+      "patient": "ts2_s1283",
+      "policy": "ppo:nav_aware_depth_s1_s31_N4_1999872_steps.zip",
+      "coverage": null,
+      "force_mean": 4.037315150823385,
+      "return": 34.00880394876003,
+      "success": 1.0,
+      "steps": 4.3125,
+      "dist": 1.2187953032553196,
+      "yaw_err": 2.8068238012492657,
+      "target_force_mean": null,
+      "visibility_mean": null,
+      "coverage_std": null
+    },
+    {
+      "patient": "ts2_s0683",
+      "policy": "ppo:nav_aware_depth_s1_s31_N4_1999872_steps.zip",
+      "coverage": null,
+      "force_mean": 3.9957174241897606,
+      "return": 38.04800559580326,
+      "success": 1.0,
+      "steps": 4.375,
+      "dist": 0.9621243835426867,
+      "yaw_err": 1.1594705590978265,
+      "target_force_mean": null,
+      "visibility_mean": null,
+      "coverage_std": null
+    },
+    {
+      "patient": "ts2_s1415",
+      "policy": "ppo:nav_aware_depth_s1_s31_N4_1999872_steps.zip",
+      "coverage": null,
+      "force_mean": 3.960898509799015,
+      "return": 33.23848153650761,
+      "success": 1.0,
+      "steps": 3.625,
+      "dist": 0.5873830530326813,
+      "yaw_err": 1.4519740218529478,
+      "target_force_mean": null,
+      "visibility_mean": null,
+      "coverage_std": null
+    }
+  ]
+}

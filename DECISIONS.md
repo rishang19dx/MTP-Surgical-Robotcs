@@ -57,7 +57,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-057` | Step 2: Navigation Transfer Across Tissue Models (rigid / kinematic / deformable) — PRE-REGISTERED | **Neither gap counts: do not move on** |
 | **Nov 2026** | `DEC-058` | P1 (force-choosing policy on the spine) Replaced by a Post-Hoc Force-Headroom Bound | **Not trained; headroom 0.3–1.1 mm, tracks detector bias** |
 | **Nov 2026** | `DEC-059` | Liver Target-Shift Headroom Bound — PRE-REGISTERED | **Pre-registered** |
-| **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-060` | Liver Headroom with Frictionless Sliding Against the Abdominal Wall — PRE-REGISTERED | **FAIL (0/10 ≥ 2 mm at every modulus; max 1.64 mm)** |
 | **Nov 2026** | `DEC-061` | Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED | **Calibration unreachable: tissue too stiff** |
 | **Nov 2026** | `DEC-062` | Fit the Fat Modulus to the Measured Vein Compression; Re-run Vein and Liver | **Fat 3.38 kPa; vein FAIL (no F50 ≤ 20 N); liver tied FAIL (0/10 ≥ 2 mm)** |
 | **Nov 2026** | `DEC-063` | Is the Liver Null a Box Artefact? Clamped-Wall Margin Sensitivity | **Inconclusive at 60 mm and at the registered 90 mm (R 1.44–1.52, 1/3 ≥ 1.5); all < 2 mm** |
@@ -2056,6 +2056,19 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Normals from a voxel mask.
   - No breathing, no organ separation.
   - All the DEC-059 limits apply.
+* **Result** (run 26–27 Nov 2026 on the A6000 server, commit 3255749; `results/liver_headroom_sliding_20261126_230145.md`):
+  **FAIL** — 10 measurable patients (s0006, s0034 not measurable: liver at the CT field-of-view edge), 0 reach 2 mm at
+  5 N at any liver modulus.
+  - Median |u| at 5 N, E_L 4.1 kPa: 0.31–1.45 mm (highest s0029 1.45, s0038 1.35); at 2.3 kPa the maximum is 1.64 mm.
+  - Against the DEC-059 tied model, sliding changes motion in both directions (s0004 0.95 → 0.82 mm, s0029 1.33 → 1.45,
+    s0038 1.27 → 1.35, s0015 unchanged at 0.31), consistent with the slab check at registration.
+  - At 10 N (DEC-047 caveat) two patients exceed 2 mm (s0029 2.21, s0038 2.06).
+  - Penalty sensitivity: a first launch omitted `--penalty/--moduli/--subjects`, so it re-ran the main study at the
+    registered penalty (identical numbers); that file was deleted unread as a study output and the registered
+    sensitivity (×30 and ×300, E_L 4.1, s0004/s0010/s0015) was started.
+  - Consequence (registered): "even with the liver sliding against the wall, a 5 N probe moves liver targets by less
+    than 2 mm under this model". With DEC-063's box bias (about 30–35 % low) the largest patients would sit near, not
+    clearly above, 2 mm.
 
 ### `DEC-061`: Groin Vein Compressibility Across Patients (calibrated soft lumen) — PRE-REGISTERED
 * **Date**: November 16, 2026 (branch `liver-sliding`). Committed **before** the lumen calibration ran and before
@@ -2525,6 +2538,15 @@ A chronological record of all architectural, research, algorithmic, and engineer
   scale showed no detectable effect); the pilot's training-return curve (sizing only).
 * **Limits stated now**: one task; T* is chosen on a 32-patient pilot, so N = 64 may be under-trained (reported if the
   64-patient return curve is still rising at T*); N = 256 needs patient streaming and is not part of this entry.
+* **T* fixed by the budget rule** (27 Nov; DEV evaluations `results/vec_eval_nav_*_budget_dev_*.md`, 27 DEV patients,
+  16 episodes, seed 1000; commit 3255749): DEV success by checkpoint (mean of seeds 0/1) 1M 0.376, **2M 0.451**,
+  3M 0.392, 4M 0.248, 5M 0.046, 6M 0.061 (random 0.042, blind 0.088, oracle 1.000). Only 2M is within 0.02 of the
+  best, so **T* = 2M (checkpoint 1,999,872 steps)**.
+  - Disclosed: both pilot seeds COLLAPSE after about 3.5M steps. Training return falls from about 36 (2–3M) to 9–11
+    (5M) and episodes lengthen from about 7 to 28 steps, so this is training instability, not only overfitting
+    (plausibly the constant learning rate with zero entropy bonus of the DEC-049 settings). The T* checkpoint is
+    before the collapse. Every S3.1/S3.2/S3.3 run uses its 2M checkpoint; runs trained on to 6M are not evaluated.
+  - Pilot wall time 3.5 h for 6M steps (about 475 env-steps/s per run with 11 runs sharing the host).
 * **Deviation (27 Nov, before any S3.1/S3.3 run started; timing only)**: to save wall time the runs start before the
   pilot has fixed T*. Every run trains to 6M steps and saves a checkpoint every 1M; the evaluated policy is the
   checkpoint at T*, and runs may be stopped once past T*. This equals training to T*: PPO here uses a constant

@@ -70,7 +70,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **H2 and H3 FAIL (FEM augmentation −0.03 vs none)** |
 | **Nov 2026** | `DEC-071` | Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov) | **Accepted (design); build gated** |
 | **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **H1c FAIL (0.290 vs 0.504 at N=64; under-fitted at 2M, train success 0.352)** |
-| **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated (3.275 kPa); gate held: solver stalls at AP ratio 0.36 on the phantom, full collapse unreachable** |
 | **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **Pre-registered** |
 
 ---
@@ -2729,6 +2729,16 @@ A chronological record of all architectural, research, algorithmic, and engineer
     calibrated. The calibration therefore uses h = 2 mm, the same mesh size as the gate.
   * The calibration and the gate then use the same discretisation; the phantom fit is mesh-specific and is not
     claimed at 1 mm.
+* **Calibration result (28 Nov 2026, `results/vein_nl_calibration_20261127_182946.md` / `.json`, commit ee43c5f)**:
+  **converged**, fat modulus **3.275 kPa** (effective), AP ratio 0.5000 at 1.87 N. Every grid value below 3.14 kPa
+  (0.30–2.24 kPa) stalled before 1.87 N: the Newton solve fails as the lumen tets invert.
+* **Gate NOT run: solver limit found first (28 Nov, phantom only, no patient vein swept)**: the calibrated phantom
+  (3.275 kPa, h = 2 mm), swept with the gate's settings (0.5 mm increments, caps 40 N / 40 mm, stop at AP ratio
+  ≤ 0.1), stalls at d = 8.33 mm, 2.65 N, **AP ratio 0.36**, after 6 failed step halvings (one-off check, scratch
+  script, not a results file). Full collapse (≤ 0.1), the gate's quantity, is out of reach of this solver even on the
+  phantom. Each patient vein would likely stall too, giving Fc = inf, so the gate would FAIL by construction
+  (invariant 6). It is held until a decision on the lumen model (for example, lumen as a cavity with wall self-contact
+  instead of a 0.1 kPa solid), under a new pre-registration.
 
 
 ### `DEC-074`: N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED

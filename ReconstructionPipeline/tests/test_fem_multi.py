@@ -73,6 +73,27 @@ def test_queries_match_per_patient(patients):
     assert bool((res["F"] > 0).any()) and bool((res["F"] == 0).any()), "batch must mix contact and no contact"
 
 
+PARTIAL = os.path.join(ROOT, "data", "patients_ts2", "ts2_s0353")   # 491 skin nodes instead of 864 (DEC-065 flag)
+
+
+def test_partial_skin_patient_matches(patients):
+    """A patient with fewer skin nodes batches with full ones (padding never referenced)."""
+    if not os.path.isdir(PARTIAL):
+        pytest.skip("ts2_s0353 not available")
+    from mtp_gym.core import PatientSim
+    from ReconstructionPipeline.simulation.fem_multi import MultiPatientFEMSolver
+    group = patients + [PatientSim(PARTIAL, DEV)]
+    assert len({p.solver.skin_ref.shape[0] for p in group}) > 1
+    mp = MultiPatientFEMSolver([p.solver for p in group])
+    pid, T, d = _batch(group, 12, seed=1)
+    es = torch.full((len(pid),), group[0].model.e_scale, dtype=torch.float64, device=DEV)
+    res = mp.contact(pid, T, d, es)
+    for i, ps in enumerate(group):
+        r = (pid == i).nonzero()[:, 0]
+        ref = ps.solver.solve(T[r], d[r], e_scale=es[r], field=False, stiffness=False)
+        torch.testing.assert_close(res["F"][r].double(), ref.reaction_force_n.double(), rtol=1e-4, atol=1e-5)
+
+
 @pytest.mark.parametrize("mode,augment", [("aware", None), ("rigid", None), ("aware", "fem"), ("aware", "warp")])
 def test_env_matches_per_patient_path(patients, mode, augment):
     from mtp_gym.core import UltrasoundVectorEnv

@@ -2434,6 +2434,11 @@ A chronological record of all architectural, research, algorithmic, and engineer
   patient's buffer now holds rows for its own envs only (`_warp_row`). Values are unchanged; `test_fem_multi.py` now
   also checks batched-vs-per-patient parity with `augment="fem"` and `"warp"` (20 passed with `test_augmentation` and
   `test_gym_api`).
+* **Addendum (27 Nov, differing skin-node counts)**: ts2_s0353 (flagged, partial skin coverage) has 491 skin nodes
+  instead of 864, and the solver refused to batch it. Skin arrays are now padded to the largest patient
+  (`skin_to_free` with −1); candidates always come from a patient's own skin columns, so padding is never read.
+  New parity test `test_partial_skin_patient_matches` (7 passed in `test_fem_multi.py`). The S3.1–S3.3 test-set
+  evaluations that crashed on this patient were re-run after the fix; no evaluation result was produced before it.
 
 ### `DEC-067`: Muscle Thickness Under Force at Scale (S1.1), Stiffness Sensitivity (S1.2), Spine Headroom Gate (S1.3) — PRE-REGISTERED
 

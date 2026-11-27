@@ -74,7 +74,7 @@ class MultiPatientFEMSolver:
             m = s.model
             same = (s.dt == s0.dt and s.dev == s0.dev and s.max_iters == s0.max_iters and s.kpa == s0.kpa
                     and m.h == m0.h and m.beta == m0.beta and m.max_indent_fraction == m0.max_indent_fraction
-                    and m.NX == m0.NX and m.NZ == m0.NZ and s.skin_ref.shape == s0.skin_ref.shape
+                    and m.NX == m0.NX and m.NZ == m0.NZ
                     and torch.equal(s.ls, s0.ls) and torch.equal(s.es, s0.es))
             if not same:
                 raise ValueError("MultiPatientFEMSolver: patients differ in probe/mesh constants; batch them apart")
@@ -94,10 +94,12 @@ class MultiPatientFEMSolver:
         self.b_nx = torch.tensor([b.shape[1] for b in bt], dtype=L, device=dev)
         self.C = _pad_stack([s.C for s in solvers])                                   # (P, 3Sf_max, 3Sf_max)
         self.column_skin = torch.stack([s.column_skin for s in solvers])               # (P, NX, NZ)
-        self.skin_to_free = torch.stack([s.skin_to_free for s in solvers])             # (P, S)
-        self.skin_ref = torch.stack([s.skin_ref for s in solvers])                     # (P, S, 3)
+        # skin-node count may differ (partial skin coverage, e.g. ts2_s0353): pad; candidates always come from a
+        # patient's own skin columns, so padded skin nodes are never referenced
+        self.skin_to_free = _pad_stack([s.skin_to_free for s in solvers], fill=-1)     # (P, S_max)
+        self.skin_ref = _pad_stack([s.skin_ref for s in solvers])                      # (P, S_max, 3)
         self.lat_origin = torch.stack([s.lat_origin for s in solvers])                 # (P, 3)
-        self.S = int(s0.skin_ref.shape[0])
+        self.S = int(self.skin_ref.shape[1])
 
     # ------------------------------------------------------------ geometry
     def _skin_height(self, pid, x, z):

@@ -27,7 +27,7 @@ cavity face it hits through the cavity (segment midpoint in a removed cell) is i
 weights (like the probe footprint, fixed per pose so Newton sees a smooth energy). Gap g = s b . (sum_j w_j x_j - x_p)
 in the deformed configuration (reference gap g0 > 0); energy k/2 max(0, -g)^2 with the probe's k. Valid while the walls
 slide little relative to each other across the cavity (transverse compression); `cavity_ratio` gives the AP ratio
-g / g0 of the pairs near a line along b.
+g / g0 of the pairs near a line along b that span the full AP diameter there.
 
 Solver: indentation increments from first contact (warm start), Newton on elastic + contact energy with a sparse direct
 solve on the free dofs and backtracking line search keeping every J > 0; an increment that fails is halved (down to
@@ -48,6 +48,7 @@ from ReconstructionPipeline.simulation.fem_nonlinear import _psi
 from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel
 
 PENALTY = 100.0
+FULL_GAP = 0.8          # cavity_ratio: pairs spanning >= 0.8 x the site's largest reference gap (DEC-075)
 
 
 def _frame(T: np.ndarray):
@@ -185,7 +186,9 @@ class NeoHookeanContact:
 
     def cavity_ratio(self, u: np.ndarray, point: np.ndarray, radius: Optional[float] = None) -> float:
         """AP ratio of the cavity at the line through `point` along b: mean g / g0 (g clipped at 0) over the +b pairs
-        whose node lies within `radius` (default h) of that line in the reference configuration."""
+        whose node lies within `radius` (default h) of that line in the reference configuration and whose reference gap
+        g0 is at least `FULL_GAP` x the largest such g0 (the vessel's AP diameter there; pairs across a one-cell step of
+        the voxel cavity edge are left out, DEC-075)."""
         pr = self._pairs
         if pr is None or not len(pr["node"]):
             return float("nan")
@@ -195,6 +198,7 @@ class NeoHookeanContact:
         sel = (pr["sign"] > 0) & (lat <= (self.mesh.h if radius is None else radius) + 1e-9)
         if not sel.any():
             return float("nan")
+        sel &= pr["g0"] >= FULL_GAP * pr["g0"][sel].max()
         g = self._cavity_gap(u)[sel]
         return float(np.mean(np.maximum(g, 0.0) / pr["g0"][sel]))
 

@@ -2815,3 +2815,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
   * A pairs-only smoke test on the first 3 training veins (mesh and wall pairs built, NO sweep, so no force or collapse
     information): 92–114k tets, 5–9 pairs near each site line, with reference gaps of 12–16 mm (matching the 12–15 mm
     DEC-061 wall gaps) mixed with 2 mm edge-step pairs. That led to the 0.8 × largest-gap rule, set before any sweep.
+* **Calibration result (28 Nov 2026, `results/vein_cavity_calibration_20261127_194750.md` / `.json`, commit 6c83f07)**:
+  **converged**, fat modulus **4.886 kPa** (effective), AP ratio 0.5000 at 1.87 N. At 0.30–2.24 kPa the phantom
+  collapses fully (ratio 0.03–0.04) before reaching 1.87 N, and the sweep then stalls with the walls in contact. So
+  those runs have no ratio at 1.87 N, and the bracket (3.14 / 4.39 kPa) lies above them. Gate and meshcheck running.

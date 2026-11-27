@@ -69,7 +69,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Neither gap counts (deformation-only +0.058, CI [+0.030, +0.085]; SonoGym −0.035)** |
 | **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **H2 and H3 FAIL (FEM augmentation −0.03 vs none)** |
 | **Nov 2026** | `DEC-071` | Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov) | **Accepted (design); build gated** |
-| **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **H1c FAIL (0.290 vs 0.504 at N=64; under-fitted at 2M, train success 0.352)** |
+| **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2684,4 +2685,47 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Analysis**: `nav_scale_ext_analysis.py`, frozen with this commit (uses `nav_scale_analysis.boot_diff`).
 * **Known**: the DEC-068 results above; the PPO collapse after about 3.5M steps (T* = 2M is before it at N = 32).
 * **Limits**: whether 2M steps suffice at N = 238 is unknown; the training-return curve is reported.
+* **Result (27 Nov 2026, `results/nav_scale_ext_20261127_182743.md` / `.json`; evaluations
+  `results/vec_eval_nav_*_s31_N238_*`)**: **H1c FAIL.** Held-out success at N = 238 is **0.290** (seeds 0.304, 0.218,
+  0.349) against 0.504 at N = 64; s(238) − s(64) = **−0.214**, 95 % CI [−0.249, −0.179]. Success on the training
+  patients is **0.352** (N = 64: 0.964).
+* **Reading**: the drop comes with low training-patient success, so the N = 238 policy is under-fitted at T* = 2M; it
+  is not over-fitted. The training return (`checkpoints/vec_ppo_s31/*_N238.json`, gitignored; mean episode return at
+  1M / 2M steps) is still rising at 2M: 23.4 / 28.9, 25.9 / 27.8 and 26.9 / 32.5 for seeds 0/1/2. N = 64 is at
+  33.0–33.2 / 34.6–35.2 (flat after 1M). This study cannot separate two causes: the fixed budget (about 2 envs per
+  patient instead of 8) and the sharded env (different worker seeds and patient blocks). So the result is "N = 238
+  at 2M steps is worse", not "more patients hurt". A longer run at N = 238 would test the budget explanation, under
+  its own pre-registration, given the PPO collapse after about 3.5M steps (DEC-067 pilot). DEC-068's curve
+  (0.10 → 0.50 for N = 1 → 64) is unchanged.
+
+### `DEC-073`: Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED
+
+* **Date**: 27 Nov 2026. Committed before the calibration and the gate run. Design: DEC-071 (user decisions).
+* **Model**: `simulation/fem_contact_nl.py` `NeoHookeanContact` (commit 4f9f0f5): compressible Neo-Hookean on the
+  linear model's mesh and material rule, frictionless penalty probe contact (×100 E_muscle h per column) re-solved on
+  the deformed skin, footprint from the reference skin, displacement-controlled sweep. Tests: gradient vs finite
+  differences; at 0.5 mm on the flat phantom 0.522 N vs 0.589 N linear (−11 %); monotone vein collapse.
+* **Data**: groin veins from TotalSegmentator v2 (`data/vein_ts2`, `import_vein_ts2.py`, the DEC-061 crop and frame;
+  `results/vein_ts2_import_20261127_131024.json`: 1037 veins from 528 subjects). Vein split: a vein inherits its
+  subject's `splits_v2` split; other subjects, sorted by id, are test at i % 3 == 1.
+* **Calibration** (`vein_nl_study.py calibrate`): Sato & Karino 2022 phantom at **h = 2 mm** (the gate's mesh size; see
+  Known), near-empty lumen 0.1 kPa,
+  Poisson 0 (DEC-062); fit the fat modulus so that the 5 mm vein's AP ratio at 1.87 N is 0.50 ± 0.01 (two parallel
+  12-point log grids in [0.3, 12] kPa, then log-linear interpolation and a confirming run).
+* **Gate** (`vein_nl_study.py gate`): the first 40 measurable TRAINING veins in sorted name order (DEC-061
+  measurability and site), h = 2 mm, DEC-061 ROI; sweep to full collapse (AP ratio ≤ 0.1) with caps 40 N and 40 mm.
+  **PASS iff the median full-collapse pressure Fc / 450 mm² is within a factor 2 of 82 mmHg = 10.93 kPa** (the DEC-061
+  "plausible" rule, fixed 16 Nov; Eitminavičius et al. 2026), with ≥ 8 measurable veins. Test veins are not used.
+* **Consequence**: PASS → the large-strain model may be used for the vein study (DEC-061's F50-spread gate on test
+  veins), under its own pre-registration. FAIL → the vein route is closed with this model; reported.
+* **Known before registration**: the linear-model results (DEC-061/062: no F50 ≤ 20 N; femoral check implausible);
+  a pipeline smoke test (one vein swept to 1 mm only, which gives no collapse information); two phantom diagnoses at
+  E_fat = 3.38 kPa (the DEC-062 linear fit), run to choose the calibration mesh:
+  * **h = 2 mm**: converges to 1.87 N, AP ratio **0.514** at 1.87 N, min J in the lumen 0.19, 72 s. The fitted modulus
+    is therefore expected near 3.38 kPa; this was seen before registration.
+  * **h = 1 mm** (first planned): stalls at d = 4.97 mm, **1.70 N** (ratio 0.464, lumen min J 0.12) after 1 h 45 min.
+    The line search shrinks to α ≈ 1e-6 as the lumen tets invert, so it cannot reach the 1.87 N target and cannot be
+    calibrated. The calibration therefore uses h = 2 mm, the same mesh size as the gate.
+  * The calibration and the gate then use the same discretisation; the phantom fit is mesh-specific and is not
+    claimed at 1 mm.
 

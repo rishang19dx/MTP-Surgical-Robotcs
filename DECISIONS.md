@@ -68,6 +68,8 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-068` | Navigation Generalisation vs Number of Training Patients (S3.1, H1 at scale) — PRE-REGISTERED | **H1 FAIL on H1a (N=4 0.002 below N=1); H1b pass (+0.40, 0.10 → 0.50 held-out)** |
 | **Nov 2026** | `DEC-069` | Navigation Transfer Across Tissue Models on Held-Out Patients (S3.3, DEC-057 at scale) — PRE-REGISTERED | **Neither gap counts (deformation-only +0.058, CI [+0.030, +0.085]; SonoGym −0.035)** |
 | **Nov 2026** | `DEC-070` | Does FEM Augmentation Improve Held-Out Navigation? (S3.2, H2/H3 at scale) — PRE-REGISTERED | **H2 and H3 FAIL (FEM augmentation −0.03 vs none)** |
+| **Nov 2026** | `DEC-071` | Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov) | **Accepted (design); build gated** |
+| **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2637,4 +2639,49 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - fem − none **−0.033** [−0.058, −0.009]; fem − warp −0.049 [−0.078, −0.021]; fem − imaging −0.027 [−0.050, −0.004].
   - **H2 FAIL, H3 FAIL**: FEM pre-deformation augmentation does not improve held-out navigation; it lowers it by about
     3 points, and the non-physical warp is the best arm (not significantly above none).
+
+### `DEC-071`: Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov)
+
+* **Date**: 27 Nov 2026. **Status**: design accepted after the QUIZME grilling; implementation gated by the
+  validation below; no patient study may use the model before the gate passes.
+* **Context**: no task so far shows deformation changing robot behaviour by a pre-registered margin (DEC-060, 063,
+  067, 069, 070). DEC-062 found that in the linear FEM no groin vein reaches 50 % collapse by 20 N, and that one fat
+  modulus cannot fit both the popliteal and the femoral data: "vein collapse needs large-strain" mechanics.
+* **User decisions (QUIZME, 27 Nov)**:
+  1. **Target**: the groin vein first (DEC-061's F50 spread), not the liver at 5–15 N or the spine above 5 N.
+  2. **Lumen model**: soft-lumen material (near-empty lumen as a very soft compressible Neo-Hookean region, Poisson
+     ≈ 0, as DEC-061/062), no wall self-contact, no fluid. Probe contact **re-solved on the deformed skin**
+     (displacement-controlled rigid probe face, frictionless penalty contact in the deformed configuration), not the
+     DEC-047 shortcut of applying linear contact forces.
+  3. **Validation gate**: calibrate on Sato & Karino 2022 (popliteal, 5 mm vein 11.5 mm deep, halved at 1.87 N) only;
+     the gate is then a **held-out prediction** of the femoral data (Eitminavičius et al. 2026: median full femoral
+     collapse at 82 mmHg = 10.9 kPa of external pressure). Tolerance: the DEC-061 "plausible" rule, fixed on 16 Nov —
+     the median predicted collapse pressure over measurable patient veins within a factor 2 of 10.9 kPa.
+* **Build plan**: extend `simulation/fem_nonlinear.py` (Neo-Hookean, adaptive load steps, Newton with line search)
+  with (a) a rigid finite probe face, displacement-controlled, with penalty contact against skin nodes in the deformed
+  configuration (force = sum of contact forces); (b) per-region materials (soft lumen); (c) a finer local mesh (h ≤ 2
+  mm, as the linear vein study). Tests first: linearisation equals the linear model at small load (as DEC-047), a
+  slab Hertz-like check, and convergence at the forces of the study. Runs offline (CPU, many patients in parallel);
+  the 1 kHz loop and the gym are not changed (invariant 2).
+* **Then, under its own pre-registration**: the DEC-061 gate (F50 spread P90/P10 ≥ 2 over ≥ 8 measurable veins) on
+  TotalSegmentator v2 groin veins (509 subjects have both iliac-vein groin ends in the FOV, DEC-065). It is a re-run
+  of a failed gate after adding physics; the justification (DEC-062's reading) predates this entry and is disclosed.
+
+### `DEC-072`: Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED
+
+* **Date**: 27 Nov 2026. Committed before the run.
+* **Question**: DEC-068 showed held-out success rising 0.10 → 0.31 → 0.50 for 4 → 16 → 64 training patients. Does it
+  keep rising with every eligible training patient?
+* **N**: the whole DEC-068 pool (new train patients minus DEV and flagged) is **238** patients, not 256 as first
+  planned; N = 238 is the last nested set of `nav_scale_sets.py` (unchanged).
+* **Unchanged from DEC-068 (user decision, 27 Nov)**: PPO settings, 512 envs, `aware`, T* = 2M (checkpoint
+  1,999,872), seeds 0/1/2, evaluation on the 137 test patients and on the training patients.
+* **New: sharded env** (`mtp_gym/sharded.py`): 238 patients do not fit one GPU (~0.45 GB each), so the 512 envs are
+  split over K worker processes, one GPU each, each holding its contiguous block of patients; the learner is a single
+  SB3 PPO as before. Envs per patient: about 2 (64 patients had 8). Worker env seeds are seed + 1000 k.
+* **Prediction (H1c)**: s(238) − s(64) ≥ 0.05, with the paired bootstrap 95 % interval over test patients excluding 0
+  (seeds averaged per patient; DEC-068's s(64) runs are the baseline, not re-run).
+* **Analysis**: `nav_scale_ext_analysis.py`, frozen with this commit (uses `nav_scale_analysis.boot_diff`).
+* **Known**: the DEC-068 results above; the PPO collapse after about 3.5M steps (T* = 2M is before it at N = 32).
+* **Limits**: whether 2M steps suffice at N = 238 is unknown; the training-return curve is reported.
 

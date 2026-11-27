@@ -88,17 +88,33 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "checkpoints", "vec_ppo"))
     ap.add_argument("--save-every", type=int, default=0,
                     help="also save a checkpoint every this many env steps (<run>_<steps>_steps.zip; DEC-067 budget pilot)")
+    ap.add_argument("--shards", type=int, default=1,
+                    help="split envs and patients over this many worker processes, one GPU each (DEC-072); the GPUs "
+                         "are CUDA_VISIBLE_DEVICES in order")
     args = ap.parse_args(argv)
 
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(args.seed)
-    patients = [PatientSim(p, dev) for p in patient_dirs(args.patients)]
+    pdirs = patient_dirs(args.patients)
     es = tuple(float(v) for v in args.e_scale_range.split(",")) if args.e_scale_range else None
-    env = UltrasoundVectorEnv(args.num_envs, make_task(args.task), patients, deformation_mode=args.deformation,
-                              bmode_physics=args.bmode_physics, max_steps=args.max_steps or DEFAULT_MAX_STEPS[args.task],
-                              e_scale_range=es, seed=args.seed,
-                              augment=None if args.augment == "none" else args.augment)
-    venv = VecMonitor(SB3VecEnv(env))
+    env_kwargs = dict(deformation_mode=args.deformation, bmode_physics=args.bmode_physics,
+                      max_steps=args.max_steps or DEFAULT_MAX_STEPS[args.task], e_scale_range=es,
+                      augment=None if args.augment == "none" else args.augment)
+    if args.shards > 1:
+        from mtp_gym.sharded import ShardedSB3VecEnv
+        K = args.shards
+        if args.num_envs % K or len(pdirs) < K:
+            raise SystemExit("--num-envs must divide by --shards, and each shard needs a patient")
+        blocks = [list(b) for b in np.array_split(np.array(pdirs, dtype=object), K)]
+        specs = [{"patients": b, "num_envs": args.num_envs // K, "task": args.task, "seed": args.seed + 1000 * k,
+                  "env_kwargs": env_kwargs} for k, b in enumerate(blocks)]
+        gpus = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")
+        venv = VecMonitor(ShardedSB3VecEnv(specs, gpus))
+        patients = None
+    else:
+        patients = [PatientSim(p, dev) for p in pdirs]
+        env = UltrasoundVectorEnv(args.num_envs, make_task(args.task), patients, seed=args.seed, **env_kwargs)
+        venv = VecMonitor(SB3VecEnv(env))
     venv.seed(args.seed)
     model = PPO("MultiInputPolicy", venv, n_steps=args.n_steps, batch_size=args.batch_size, learning_rate=args.lr,
                 gamma=0.99, gae_lambda=0.95, ent_coef=0.0, device=dev, seed=args.seed, verbose=0)
@@ -121,7 +137,8 @@ def main(argv=None):
     except Exception:
         commit = "unknown"
     meta = {"run": run, "args": vars(args), "commit": commit, "wall_s": wall,
-            "env_steps_per_s": args.timesteps / wall, "patients": [p.name for p in patients],
+            "env_steps_per_s": args.timesteps / wall, "patients": [p.name for p in patients] if patients else [os.path.relpath(p, ROOT) for p in pdirs],
+            "shards": args.shards,
             "gpu": torch.cuda.get_device_name() if dev.type == "cuda" else "cpu", "curve": cb.curve}
     json.dump(meta, open(os.path.join(args.out_dir, run + ".json"), "w"), indent=2)
     last = cb.curve[-1] if cb.curve else {}

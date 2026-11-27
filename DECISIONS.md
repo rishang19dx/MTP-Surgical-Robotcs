@@ -2066,6 +2066,9 @@ A chronological record of all architectural, research, algorithmic, and engineer
   - Penalty sensitivity: a first launch omitted `--penalty/--moduli/--subjects`, so it re-ran the main study at the
     registered penalty (identical numbers, which is how the error was noticed); that mislabelled duplicate was deleted and the registered
     sensitivity (×30 and ×300, E_L 4.1, s0004/s0010/s0015) was started.
+  - **Penalty sensitivity result** (`results/liver_headroom_sliding_sens_20261127_120850.md` ×30 and `…_121749.md`
+    ×300, E_L 4.1 kPa): median |u| at 5 N s0004 0.82 / 0.82, s0010 0.96 / 0.96, s0015 0.31 / 0.31 mm — identical to
+    the registered ×100 run to 0.01 mm. The DEC-060 result does not depend on the penalty factor.
   - Consequence (registered): "even with the liver sliding against the wall, a 5 N probe moves liver targets by less
     than 2 mm under this model". With DEC-063's box bias (about 30–35 % low) the largest patients would sit near, not
     clearly above, 2 mm.

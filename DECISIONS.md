@@ -2064,7 +2064,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
     s0038 1.27 → 1.35, s0015 unchanged at 0.31), consistent with the slab check at registration.
   - At 10 N (DEC-047 caveat) two patients exceed 2 mm (s0029 2.21, s0038 2.06).
   - Penalty sensitivity: a first launch omitted `--penalty/--moduli/--subjects`, so it re-ran the main study at the
-    registered penalty (identical numbers); that file was deleted unread as a study output and the registered
+    registered penalty (identical numbers, which is how the error was noticed); that mislabelled duplicate was deleted and the registered
     sensitivity (×30 and ×300, E_L 4.1, s0004/s0010/s0015) was started.
   - Consequence (registered): "even with the liver sliding against the wall, a 5 N probe moves liver targets by less
     than 2 mm under this model". With DEC-063's box bias (about 30–35 % low) the largest patients would sit near, not

@@ -16,13 +16,13 @@ from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel
 H = 2.0
 
 
-def _model(lumen_e_eff=None):
+def _model(lumen_e_eff=None, precompute=True):
     data, lumen = vc.phantom()
     lo = np.array([-vc.HALF_X, 0.0, -vc.HALF_Z])
     hi = np.array([vc.HALF_X, vc.SKIN_Y + 4.0, vc.HALF_Z])
     reg = {} if lumen_e_eff is None else {"region_modulus": (lumen, lumen_e_eff / SHARED_E_SCALE, vc.NU_LUMEN)}
     m = FEMTissueModel(data, roi_min_mm=lo, roi_max_mm=hi, element_size_mm=H, cache_dir=None,
-                       device=torch.device("cpu"), verbose=False, **reg)
+                       device=torch.device("cpu"), verbose=False, precompute=precompute, **reg)
     m.set_parameters(e_scale=SHARED_E_SCALE)
     return m
 
@@ -63,8 +63,17 @@ def test_small_indentation_force_close_to_linear_model(slab):
     assert abs(f_nl - f_lin) <= 0.25 * f_lin
 
 
+def test_mesh_only_model_gives_the_same_force(slab):
+    """precompute=False (DEC-071) builds the same mesh and materials: identical large-strain force."""
+    lite = _model(precompute=False)
+    assert lite.G_lat is None
+    f = [NeoHookeanContact(mm).sweep(mm.dorsal_pose(0.0, 0.0), d_max_mm=0.5, step_mm=0.25)["curve"][-1]["force_n"]
+         for mm in (slab, lite)]
+    assert abs(f[0] - f[1]) <= 1e-9 * max(f[0], 1e-9), f
+
+
 def test_vein_collapses_monotonically():
-    m = _model(lumen_e_eff=vc.E_LUMEN_VOID)
+    m = _model(lumen_e_eff=vc.E_LUMEN_VOID, precompute=False)
     nh = NeoHookeanContact(m)
     T = m.dorsal_pose(0.0, 0.0)
     yc = vc.SKIN_Y - vc.DEPTH_MM

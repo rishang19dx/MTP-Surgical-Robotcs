@@ -223,6 +223,7 @@ class FEMTissueModel:
         sliding_region: Optional[np.ndarray] = None,
         sliding_penalty: float = 100.0,
         sliding_mode: str = "normal",
+        precompute: bool = True,
     ):
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.verbose = verbose
@@ -303,6 +304,12 @@ class FEMTissueModel:
             key_params.update(er=self.e_region,
                               rm=hashlib.sha1(np.packbits(self._region_mask).tobytes()).hexdigest()[:16])
         self.cache_key = hashlib.sha1(json.dumps(key_params, sort_keys=True).encode()).hexdigest()[:20]
+        if not precompute:
+            # DEC-071: mesh, materials and skin geometry only, for the offline large-strain solver
+            # (fem_contact_nl.NeoHookeanContact); no linear compliance or field, so force/field queries are unavailable.
+            self.C_base = self.G_lat = None
+            self.cache_path, self.loaded_from_cache = None, False
+            return
         loaded = False
         path = None
         if self._slide_mask is not None:

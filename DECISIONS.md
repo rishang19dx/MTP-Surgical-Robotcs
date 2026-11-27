@@ -71,6 +71,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-071` | Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov) | **Accepted (design); build gated** |
 | **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **H1c FAIL (0.290 vs 0.504 at N=64; under-fitted at 2M, train success 0.352)** |
 | **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2729,3 +2730,38 @@ A chronological record of all architectural, research, algorithmic, and engineer
   * The calibration and the gate then use the same discretisation; the phantom fit is mesh-specific and is not
     claimed at 1 mm.
 
+
+### `DEC-074`: N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED
+
+* **Date**: 28 Nov 2026. Committed before any run.
+* **Question**: DEC-072 found held-out success 0.290 at N = 238 vs 0.504 at N = 64, with training-patient success
+  0.352 and the return still rising at 2M. Two causes were not separated: (a) the sharded env (new code, worker
+  seeds seed + 1000 k, contiguous patient blocks); (b) the fixed budget, which gives each patient 2M / 238 ≈ 8.4k
+  steps instead of 2M / 64 ≈ 31k.
+* **Arm S (sharding control)**: N = 64, the same nested set as DEC-068, 512 envs, `aware`, DEC-068 PPO settings,
+  seeds 0/1/2, T = 2M (checkpoint 1,999,872), **sharded over K = 8 workers**. Compared with DEC-068's unsharded N = 64
+  (not re-run).
+* **Arm L (budget)**: N = 238, the same settings, K = 8, seeds 0/1/2, **8M steps** (8M / 238 ≈ 33.6k steps per patient,
+  about the N = 64 level). Checkpoints every 999,936 steps. Evaluated at T = 2, 4, 6, 8 (× 999,936) on the 137 test
+  patients and the 238 training patients (16 episodes per patient, as DEC-068).
+* **K = 8, not DEC-072's 4**: other users' jobs leave 15–38 GB free per GPU (28 Nov), and a 4-way shard of 238 patients
+  needs about 30 GB. Both arms use K = 8, so the S-vs-L comparison holds the env implementation fixed. Arm L at 2M vs
+  DEC-072 (K = 4, 0.290) is reported as a K check, not tested.
+* **Checkpoint for arm L, chosen without test data**: T_sel = the T with the highest seed-mean training-patient success
+  (ties: the smaller T). This also guards against the PPO collapse after about 3.5M steps (DEC-067 pilot).
+* **Outcomes** (`nav_budget_shard_analysis.py`, frozen with this commit; paired bootstrap over test patients with
+  seeds averaged per patient, B = 10,000, seed 0):
+  * **Shard effect** d_S = s(S64) − s(U64): SHARD-HARMFUL iff d_S ≤ −0.05 and CI upper < 0; SHARD-HELPFUL iff
+    d_S ≥ +0.05 and CI lower > 0; SHARD-EQUIVALENT iff the CI lies inside [−0.05, +0.05]; else INCONCLUSIVE.
+  * **H1d**: s(L238, T_sel) − s(S64) ≥ 0.05 and CI lower > 0 (more patients help once the budget per patient matches,
+    with the same env code). Secondary, reported: against unsharded U64.
+  * **FIT**: training-patient success at T_sel ≥ 0.90; if not, arm L is still under-fitted at 8M and H1d is read as a
+    lower bound.
+  * **Collapse**, per seed: training-patient success at a later T more than 0.20 below that seed's best.
+* **Reading fixed in advance**: SHARD-HARMFUL → the DEC-072 drop is at least partly an env artefact; FIT with H1d
+  FAIL → more patients do not help at matched experience per patient; FIT with H1d PASS → the DEC-072 drop was the
+  budget.
+* **Known before registration**: DEC-068, DEC-072 (results above) and the DEC-072 training-return curves. No arm S or
+  arm L run exists.
+* **Compute**: arm L about 3–4 h per seed on 8 shared GPUs, run one seed at a time; arm S and the 30 evaluations fit
+  around it.

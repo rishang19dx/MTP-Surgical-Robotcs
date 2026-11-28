@@ -139,3 +139,44 @@ def test_cavity_lumen_collapses_fully():
     R = np.array([r[1] for r in rows])
     assert res["converged"] and R[-1] <= 0.1
     assert np.all(np.diff(F) > 0) and np.all(np.diff(R) <= 1e-6)
+
+
+def test_rounded_edge_contact_gradient_and_profile(slab):
+    """DEC-077: with a rounded probe edge the contact gradient matches finite differences, and columns under the
+    rounded edge are set back by r - sqrt(r^2 - q^2) (0 on the flat part, r at the footprint boundary)."""
+    nh = NeoHookeanContact(slab, edge_radius_mm=3.0)
+    T = slab.dorsal_pose(0.0, 0.0)
+    w, h = nh._edge(T)
+    assert set(np.unique(w)) <= {0.0, 1.0} and h.min() >= 0 and h[w > 0].max() <= 3.0 + 1e-9
+    o, ex, _, ez = __import__("ReconstructionPipeline.simulation.fem_contact_nl", fromlist=["_frame"])._frame(T)
+    r = nh.skin_ref - o
+    flat = (np.abs(r @ ex) <= 0.5 * nh.L - 3.0) & (np.abs(r @ ez) <= 0.5 * nh.W - 3.0)
+    assert np.all(h[flat] == 0) and np.all(w[flat] == 1)
+    d = float(slab.first_contact_indentation(T)) + 2.0
+    u = np.zeros(nh.n)
+    u[nh.fidx] = np.random.default_rng(2).normal(0, 0.05, len(nh.fidx))
+    p, w, _ = nh._contact(u, T, d)
+    g, _, _, _ = nh.grad_hess(u, T, d, w)
+    edge_cols = np.nonzero((p > 0) & (h > 0.2))[0]
+    assert len(edge_cols) > 0
+    for k in [3 * int(nh.skin[edge_cols[0]]) + 1, 3 * int(nh.skin[edge_cols[-1]]) + 1]:
+        e = np.zeros(nh.n)
+        e[k] = 1e-6
+        fd = (nh.energy(u + e, T, d, w) - nh.energy(u - e, T, d, w)) / 2e-6
+        assert abs(fd - g[k]) <= 1e-4 * max(1.0, abs(g[k])), (k, fd, g[k])
+
+
+def test_projected_hessian_is_psd_and_fallback_keeps_the_answer(slab):
+    """DEC-077: the projected element Hessians are PSD, and enabling the fallback leaves a converged sweep unchanged."""
+    nh = NeoHookeanContact(slab, psd_fallback=True)
+    T = slab.dorsal_pose(0.0, 0.0)
+    d = float(slab.first_contact_indentation(T)) + 1.0
+    u = np.zeros(nh.n)
+    u[nh.fidx] = np.random.default_rng(3).normal(0, 0.2, len(nh.fidx))
+    _, K, _, _ = nh.grad_hess(u, T, d, None, psd=True)
+    Kf = K[nh.fidx][:, nh.fidx]
+    v = np.random.default_rng(4).normal(size=(Kf.shape[0], 8))
+    assert np.all(np.einsum("ij,ij->j", v, Kf @ v) >= -1e-9)
+    f = [NeoHookeanContact(slab, psd_fallback=fb).sweep(T, d_max_mm=1.0, step_mm=0.5)["curve"][-1]["force_n"]
+         for fb in (False, True)]
+    assert abs(f[0] - f[1]) <= 1e-6 * f[0], f

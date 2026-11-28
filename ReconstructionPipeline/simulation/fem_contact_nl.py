@@ -29,6 +29,18 @@ in the deformed configuration (reference gap g0 > 0); energy k/2 max(0, -g)^2 wi
 slide little relative to each other across the cavity (transverse compression); `cavity_ratio` gives the AP ratio
 g / g0 of the pairs near a line along b that span the full AP diameter there.
 
+Rounded probe edge (DEC-077, `edge_radius_mm` = r > 0): instead of the sharp face with a one-spacing linear taper, the
+probe is a rounded rectangle: flat over (L - 2r) x (W - 2r), then a quarter circle of radius r out to the L x W
+footprint. For a skin column at reference lateral excess q (distance beyond the flat part, in the face plane) the
+face lies h(q) = r - sqrt(r^2 - q^2) further back, so p = max(0, -((x - c) . b + h)), with weight 1 for q < r and 0
+beyond; h is fixed per pose from the reference positions, like the footprint. The force direction stays b (no
+lateral contact force on the curved edge, as the flat-face model). DEC-075 found the patient solves failing at the
+sharp edge.
+
+Projected-Newton fallback (DEC-077, `psd_fallback=True`): when the line search finds no decrease along the exact
+Newton step, the step is recomputed once with every tet's 12 x 12 Hessian projected onto its positive-semidefinite
+part (eigenvalues clamped at 0) and the line search retried; the converged state is the same (only the step changes).
+
 Solver: indentation increments from first contact (warm start), Newton on elastic + contact energy with a sparse direct
 solve on the free dofs and backtracking line search keeping every J > 0; an increment that fails is halved (down to
 min_step_mm), as the adaptive load stepping of DEC-047.
@@ -61,7 +73,7 @@ def _frame(T: np.ndarray):
 
 class NeoHookeanContact:
     def __init__(self, model: FEMTissueModel, e_scale: Optional[float] = None, penalty: float = PENALTY,
-                 cavity: bool = False):
+                 cavity: bool = False, edge_radius_mm: float = 0.0, psd_fallback: bool = False):
         m = model.mesh
         dt = torch.float64
         self.model, self.mesh = model, m
@@ -113,6 +125,11 @@ class NeoHookeanContact:
         self.k = float(penalty) * model.e_muscle * 1e-3 * es * m.h
         self.L, self.W = model.face_dims
         self.taper = m.h
+        self.edge_r = float(edge_radius_mm)
+        self.psd_fallback = bool(psd_fallback)
+        if self.edge_r * 2 >= min(self.L, self.W):
+            raise ValueError("edge_radius_mm must be below half the face width")
+        self.stats = {"psd_steps": 0}
 
     # ------------------------------------------------------------------ cavity
     @staticmethod
@@ -213,10 +230,24 @@ class NeoHookeanContact:
         return 0.5 * self.k * float((q * q).sum()), nd, cf, q[act]
 
     # ------------------------------------------------------------------ contact
+    def _edge(self, T: np.ndarray):
+        """Rounded-edge weight (1 inside the rounded footprint, else 0) and face set-back h per skin column."""
+        o, ex, _, ez = _frame(T)
+        r = self.skin_ref - o
+        R = self.edge_r
+        qa = np.maximum(0.0, np.abs(r @ ex) - (0.5 * self.L - R))
+        qe = np.maximum(0.0, np.abs(r @ ez) - (0.5 * self.W - R))
+        q = np.sqrt(qa * qa + qe * qe)
+        inside = q < R
+        h = np.where(inside, R - np.sqrt(np.maximum(R * R - q * q, 0.0)), 0.0)
+        return inside.astype(np.float64), h
+
     def footprint(self, T: np.ndarray) -> np.ndarray:
         """Footprint weight of every skin column from its REFERENCE position (fixed for a pose, so the contact energy
         is a smooth function of u and Newton converges; lateral sliding of a few mm against a 45 x 10 mm face changes
         the footprint only at the taper)."""
+        if self.edge_r > 0:
+            return self._edge(T)[0]
         o, ex, _, ez = _frame(T)
         r = self.skin_ref - o
         wl = np.clip((0.5 * self.L - np.abs(r @ ex)) / self.taper + 0.5, 0.0, 1.0)
@@ -230,7 +261,8 @@ class NeoHookeanContact:
         x = self.skin_ref + u.reshape(-1, 3)[self.skin]
         if w is None:
             w = self.footprint(T)
-        p = np.maximum(0.0, -((x - c) @ b))
+        h = self._edge(T)[1] if self.edge_r > 0 else 0.0
+        p = np.maximum(0.0, -((x - c) @ b + h))
         return p, w, b
 
     def _elastic(self, u: torch.Tensor):
@@ -249,12 +281,16 @@ class NeoHookeanContact:
             e += self._cavity_terms(u)[0]
         return e
 
-    def grad_hess(self, u: np.ndarray, T, d, w):
+    def grad_hess(self, u: np.ndarray, T, d, w, psd: bool = False):
         ut = torch.as_tensor(u)
         xe = self._elastic(ut)
         ge = self._g(xe, self.Dm_inv, self.V, self.mu, self.lam).reshape(-1, 12)
         g = torch.zeros(self.n, dtype=torch.float64).index_add_(0, self.dofs.reshape(-1), ge.reshape(-1)).numpy()
-        He = self._h(xe, self.Dm_inv, self.V, self.mu, self.lam).reshape(-1)
+        He = self._h(xe, self.Dm_inv, self.V, self.mu, self.lam).reshape(-1, 12, 12)
+        if psd:
+            ev, Q = torch.linalg.eigh(0.5 * (He + He.transpose(1, 2)))
+            He = (Q * ev.clamp_min(0.0)[:, None, :]) @ Q.transpose(1, 2)
+        He = He.reshape(-1)
         K = sps.coo_matrix((He.numpy(), (self.rows, self.cols)), shape=(self.n, self.n)).tocsr()
         p, w, b = self._contact(u, T, d, w)
         act = np.nonzero(p > 0)[0]
@@ -297,11 +333,19 @@ class NeoHookeanContact:
                 return u, it + 1, res
             if res < tol:
                 return u, it + 1, res
-            du = np.zeros(self.n)
-            du[fi] = spla.spsolve(K[fi][:, fi].tocsc(), -gf)
-            e0, a = self.energy(u, T, d, w), 1.0
-            while a > 1e-6 and not (self.energy(u + a * du, T, d, w) <= e0 + 1e-12 * abs(e0)):
-                a *= 0.5
+            e0 = self.energy(u, T, d, w)
+            for psd in ((False, True) if self.psd_fallback else (False,)):
+                if psd:
+                    _, K, _, _ = self.grad_hess(u, T, d, None, psd=True)
+                    K = K + sps.identity(self.n, format="csr") * (1e-12 * float(abs(K.diagonal()[fi]).mean()))
+                du = np.zeros(self.n)
+                du[fi] = spla.spsolve(K[fi][:, fi].tocsc(), -gf)
+                a = 1.0
+                while a > 1e-6 and not (self.energy(u + a * du, T, d, w) <= e0 + 1e-12 * abs(e0)):
+                    a *= 0.5
+                if a > 1e-6:
+                    self.stats["psd_steps"] += int(psd)
+                    break
             if a <= 1e-6:
                 return u, it + 1, res
             u = u + a * du

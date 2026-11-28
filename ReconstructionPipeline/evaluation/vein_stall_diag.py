@@ -1,12 +1,12 @@
 """DEC-075 addendum, POST-HOC diagnosis of the DEC-075 patient stall (TRAINING veins already swept by the gate; test veins untouched).
 
-    ./.venv/bin/python ReconstructionPipeline/evaluation/vein_stall_diag.py <vein name> <e_fat_eff_kpa>   (run from ~/ds404_work/MTP)
+    ./.venv/bin/python ReconstructionPipeline/evaluation/vein_stall_diag.py <vein name> <e_fat_eff_kpa> [<edge_radius_mm> <psd 0|1>]   (run from ~/ds404_work/MTP)
 
 Repeats the gate sweep (cavity lumen, h = 2 mm, DEC-061 ROI). At the first failed increment it re-runs Newton on that
 increment with instrumentation and prints, per iteration: residual, line-search step, min J and where it is (material,
 depth below skin, distance to the probe face edge, distance to the vein, box faces), the dofs with the largest
 residual (same location breakdown), and the contact state (probe penetration, active columns, wall pairs active).
-Writes <vein>_diag.json next to the script; summarised by hand into results/vein_cavity_stall_diag_20261128.json / .md.
+Writes <vein>_r<r>_p<psd>_diag.json into $DIAG_OUT (default: the working directory); summarised by hand into results/vein_cavity_stall_diag_20261128.json / .md.
 """
 import json
 import os
@@ -27,6 +27,8 @@ from ReconstructionPipeline.simulation.fem_contact_nl import NeoHookeanContact, 
 from ReconstructionPipeline.simulation.fem_tissue import FEMTissueModel  # noqa: E402
 
 name, e_fat = sys.argv[1], float(sys.argv[2])
+edge_r = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+psd = bool(int(sys.argv[4])) if len(sys.argv) > 4 else False
 data, vein, fov = vs.load(os.path.join("data", "vein_ts2", name))
 site, _ = vs.site_and_path(data, vein, fov)
 ox, oy, oz = data["origin_mm"]
@@ -37,7 +39,7 @@ m = FEMTissueModel(data, roi_min_mm=lo, roi_max_mm=hi, element_size_mm=vs.H_MM, 
                    device=torch.device("cpu"), verbose=False, precompute=False, e_fat_kpa=e_fat / SHARED_E_SCALE,
                    region_modulus=(vein, E_LUMEN_VOID / SHARED_E_SCALE, NU_LUMEN))
 m.set_parameters(e_scale=SHARED_E_SCALE)
-nh = NeoHookeanContact(m, cavity=True)
+nh = NeoHookeanContact(m, cavity=True, edge_radius_mm=edge_r, psd_fallback=psd)
 T = m.dorsal_pose(site["x"], site["z"])
 o, ex, b, ez = _frame(T)
 X = nh.X.numpy()
@@ -107,7 +109,9 @@ while dd < 40:
         u, dd = u_try, dd + step
         F = nh.force(u, T, d0 + dd)
         hist.append((round(dd, 3), round(F, 3), round(nh.cavity_ratio(u, vein_c), 3)))
-        print("ok", hist[-1], f"{time.time() - t0:.0f}s", flush=True)
+        print("ok", hist[-1], f"{time.time() - t0:.0f}s psd_steps {nh.stats['psd_steps']}", flush=True)
+        if hist[-1][2] <= 0.1 or F >= 40:
+            break
         step = min(0.5, step * 1.5)
         continue
     step /= 2
@@ -115,6 +119,12 @@ while dd < 40:
         continue
     break
 out["curve"] = hist
+out["edge_radius_mm"], out["psd_fallback"], out["psd_steps"] = edge_r, psd, nh.stats["psd_steps"]
+out["collapsed"] = bool(hist and hist[-1][2] <= 0.1)
+if out["collapsed"] or (hist and hist[-1][1] >= 40):
+    json.dump(out, open(os.path.join(os.environ.get("DIAG_OUT", "."), f"{name}_r{edge_r:g}_p{int(psd)}_diag.json"), "w"), indent=1)
+    print("reached", "collapse" if out["collapsed"] else "force cap", hist[-1])
+    sys.exit(0)
 out["at_last_converged"] = snapshot(u, d0 + dd, "last converged")
 # instrumented Newton on the failing increment
 dfail = d0 + dd + 1 / 32
@@ -148,4 +158,4 @@ for itn in range(12):
 out["failing_increment_newton"] = it_log
 out["at_failure"] = snapshot(uu, dfail, "inside failing increment")
 print(json.dumps({k: out[k] for k in ("at_last_converged", "at_failure")}, indent=1))
-json.dump(out, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}_diag.json"), "w"), indent=1)
+json.dump(out, open(os.path.join(os.environ.get("DIAG_OUT", "."), f"{name}_r{edge_r:g}_p{int(psd)}_diag.json"), "w"), indent=1)

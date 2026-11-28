@@ -71,7 +71,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-071` | Large-Strain FEM for Groin-Vein Collapse: Design (QUIZME, user decisions 27 Nov) | **Accepted (design); build gated** |
 | **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **H1c FAIL (0.290 vs 0.504 at N=64; under-fitted at 2M, train success 0.352)** |
 | **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated (3.275 kPa); gate not run (solid lumen stalls at AP ratio 0.36); superseded by DEC-075** |
-| **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **SHARD-EQUIVALENT; H1d PASS (N=238 at 8M 0.576 vs N=64 0.500; the DEC-072 drop was the budget)** |
 | **Nov 2026** | `DEC-075` | Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated 4.886 kPa; gate FAIL: all 40 patient sweeps stall at ~1.5 N with AP ratio 0.96 (solver limit)** |
 | **Nov 2026** | `DEC-076` | Reconstruction at Server Scale, With the Navigation Lessons (R1/R2) — PRE-REGISTERED | **Pre-registered** |
 
@@ -2777,6 +2777,18 @@ A chronological record of all architectural, research, algorithmic, and engineer
   arm L run exists.
 * **Compute**: arm L about 3–4 h per seed on 8 shared GPUs, run one seed at a time; arm S and the 30 evaluations fit
   around it.
+* **Result (28 Nov 2026, `results/nav_budget_shard_20261128_115100.md` / `.json`; evaluations
+  `results/vec_eval_nav_*_s34_*`)**: **SHARD-EQUIVALENT, FIT, H1d PASS.**
+  * **Shard effect**: sharded N = 64 (arm S) 0.500 vs unsharded 0.504, d_S = −0.004, CI [−0.030, +0.022], inside ±0.05.
+  * **Arm L**: held-out 0.291 / 0.450 / 0.528 / **0.576** at 2/4/6/8M, train 0.356 / 0.653 / 0.831 / **0.900**. T_sel =
+    8M; FIT holds at the threshold (0.900); no seed collapsed. Arm L at 2M (K = 8) gives 0.291 vs DEC-072's 0.290
+    (K = 4).
+  * **H1d**: s(L238, 8M) − s(S64) = **+0.076**, CI [+0.045, +0.107]. Secondary against unsharded N = 64: +0.071,
+    CI [+0.036, +0.107].
+  * **Reading (as fixed in advance)**: the DEC-072 drop was the budget, not the sharded env. With experience per
+    patient matched, 238 training patients beat 64 on held-out patients (0.58 vs 0.50).
+  * **Limits**: the train success at T_sel is exactly at the FIT bar and the curve was still rising at 8M, so 0.576
+    may be a lower bound. PPO stability past 8M is untested. One task.
 
 ### `DEC-075`: Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED
 

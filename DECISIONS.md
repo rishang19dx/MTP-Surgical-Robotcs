@@ -73,6 +73,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated (3.275 kPa); gate not run (solid lumen stalls at AP ratio 0.36); superseded by DEC-075** |
 | **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **Pre-registered** |
 | **Nov 2026** | `DEC-075` | Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated 4.886 kPa; gate FAIL: all 40 patient sweeps stall at ~1.5 N with AP ratio 0.96 (solver limit)** |
+| **Nov 2026** | `DEC-076` | Reconstruction at Server Scale, With the Navigation Lessons (R1/R2) — PRE-REGISTERED | **Pre-registered** |
 
 ---
 
@@ -2831,3 +2832,43 @@ A chronological record of all architectural, research, algorithmic, and engineer
   registered consequence, the vein route closes with this model. A solver fix (e.g. finding which tets invert at the
   stall) would be post-hoc and would need a new pre-registration. The training veins are now seen; the test veins are
   still untouched.
+
+### `DEC-076`: Reconstruction at Server Scale, With the Navigation Lessons (R1/R2) — PRE-REGISTERED
+
+* **Date**: 28 Nov 2026. Committed before any DEC-076 training run. User request 28 Nov: "design server-run
+  reconstruction task from the learnings of our navigation task".
+* **Question**: on the laptop (DEC-051: 2 patients, 300k steps, 1 seed) learned reconstruction did not beat random
+  (PPO Cov@3 0.316–0.337, random 0.340, scripted raster 0.428). Navigation went from 0.10 to 0.58 held-out success
+  once it had many patients and a budget that grew with them (DEC-068, DEC-074). Does reconstruction do the same, and
+  does learned scanning then beat the scripted raster on unseen patients?
+* **Lessons carried over from navigation, each fixed now**:
+  1. Many training patients: nested sets N ∈ {16, 64, 238} from `nav_scale_sets.py` (the DEC-068/072 sets; N = 1
+     and 4 are left out: navigation showed no learning there, and they cost the same compute).
+  2. Budget grows with N: N = 16 and 64 train to 4M steps, N = 238 to 8M (at least about 34k steps per patient at
+     every N, the level at which N = 238 navigation fitted, DEC-074). Checkpoints every 999,936 steps.
+  3. The checkpoint is chosen on training patients only: T_sel(N) = the checkpoint with the highest seed-mean
+     training-patient Cov@3 (ties: the smaller T). This also guards against the late PPO collapse (DEC-068 pilot).
+  4. N = 238 uses the sharded env, K = 8 (DEC-074; arm S, the sharding control, is reported there); N = 16 and 64
+     run unsharded, as DEC-068.
+* **Unchanged**: `MTP/Recon` task with the coverage-gain reward (DEC-046), 72 steps per episode, `aware`
+  deformation, depth B-mode, no augmentation, DEC-049 PPO settings, 512 envs, seeds 0/1/2.
+* **Evaluation**: every checkpoint on the 137 test patients of `data/splits_v2.json` and on its own training patients,
+  16 episodes per patient, deterministic, seed 1000, deployed `aware`, `--batch-patients 32`, tags
+  `s35_N<N>_T<T>_s<seed>_<test|train>`. Baselines once on the test patients (`random`, `scripted` raster), tag
+  `s35_baselines_test`.
+* **Analysis** (`recon_scale_analysis.py`, frozen with this commit; seeds averaged per patient; paired bootstrap over
+  test patients, B = 10,000, seed 0); c(N) = held-out Cov@3 at T_sel(N):
+  * **R1 (more patients help)**: c(238) − c(16) ≥ 0.05 and CI lower > 0.
+  * **R2 (learned scanning beats the raster on unseen patients)**: c(238) − c(raster) ≥ 0.05 and CI lower > 0.
+  * Reported: the coverage curves over T (test and train) per N, the train − test gap, PPO vs raster mean sensed
+    force (a PPO that presses harder could gain coverage from force, not scanning: reported, not corrected), random,
+    per-seed values, collapse per run (train Cov@3 at a later T more than 0.10 below that run's best).
+* **Known before registration**: DEC-051 (above); the navigation results; a pipeline smoke test (16 patients, 100k
+  steps, 1 seed, a 4-patient evaluation written outside `results/`, not used) for errors and throughput only.
+* **Compute** (smoke: 1,083 env-steps/s for one 16-patient run on a shared A6000; DEC-074 arm L: 8M steps at N = 238
+  in 1 h 40 min to 2 h): N = 16/64, six runs of 4M, two per GPU via the scheduler, about 1.5 h wall; N = 238 seeds one
+  at a time on 8 GPUs, about 5–6 h; 97 evaluations, about 1–2 h. In all about 8–9 h; runs share the GPUs with other
+  users. Driver: `run076.sh` (server scratch, infrastructure only).
+* **Smoke disclosure**: in the smoke evaluation one of the 4 patients had coverage 0 for every policy, including the
+  raster. Some patients may have a target the probe cannot reach; this is common to all policies and enters the
+  paired comparison unchanged.

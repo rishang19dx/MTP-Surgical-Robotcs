@@ -2832,6 +2832,20 @@ A chronological record of all architectural, research, algorithmic, and engineer
   registered consequence, the vein route closes with this model. A solver fix (e.g. finding which tets invert at the
   stall) would be post-hoc and would need a new pre-registration. The training veins are now seen; the test veins are
   still untouched.
+* **Addendum, POST-HOC stall diagnosis (28 Nov 2026, `results/vein_cavity_stall_diag_20261128.md` / `.json`, script
+  `vein_stall_diag.py`)**: 4 gate veins (training veins, stalls 0.27–2.69 N) re-swept with instrumentation.
+  * **Where**: at the lateral edge of the rigid flat probe face, in superficial fat 1–2 mm under the skin, every time.
+    The lowest-J tet lies 0–1 mm from the face edge, and the 20 lowest-J tets are all fat, 14–20 of them under the face.
+    They are 35–51 mm from the vein. The vein walls never touch.
+  * **How**: no tet inverts, not even for the full Newton step. The line search rejects every step because the energy
+    rises ("energy_up") at a small relative residual (7.7e-5 to 4.6e-3). So the failure is not the lumen and not
+    inversion: the Newton direction stops being a descent direction at the sharp probe edge. This is consistent with
+    an indefinite Neo-Hookean tangent in the edge-compressed fat and/or the contact switching at the footprint taper.
+  * **Geometry**: the patient veins are 22–38 mm deep and 14–18 mm across (the Sato phantom: 11.5 mm and 5 mm).
+  * **Implication**: the blocker is the probe-edge contact singularity in soft superficial fat, shared by the linear
+    model's probe geometry (a sharp-edged rigid face). Candidate fixes (none tried; each needs a new
+    pre-registration): a rounded probe edge (real probes are rounded), a projected-Newton (PSD-clamped) tangent with a
+    fallback to gradient steps, and edge mesh refinement.
 
 ### `DEC-076`: Reconstruction at Server Scale, With the Navigation Lessons (R1/R2) — PRE-REGISTERED
 

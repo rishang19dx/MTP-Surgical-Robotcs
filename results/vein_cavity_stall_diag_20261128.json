@@ -1,0 +1,657 @@
+{
+ "meta": {
+  "script": "ReconstructionPipeline/evaluation/vein_stall_diag.py",
+  "what": "DEC-075 post-hoc stall diagnosis, 4 training veins already swept by the gate, fat 4.886 kPa, h = 2 mm, cavity lumen",
+  "server_commit": "3b4abb7"
+ },
+ "veins": [
+  {
+   "vein": "ts2_s0000_left",
+   "depth_top_mm": 22.0,
+   "diameter_mm": 16.0,
+   "stall": [
+    10.562,
+    2.056,
+    0.953
+   ],
+   "minJ": 0.19318854467651897,
+   "minJ_mat": "fat",
+   "minJ_dist_face_edge": 0.0,
+   "minJ_dist_skin": 1.8,
+   "low20": {
+    "fat": 20,
+    "under_face": 19,
+    "near_edge": 13,
+    "near_vein": 0
+   },
+   "wall_pairs_active": 0,
+   "newton": [
+    {
+     "it": 0,
+     "rel_res": 1.0,
+     "alpha": 1.0,
+     "max_du_mm": 0.13978392816613439,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 1,
+     "rel_res": 0.002295280833936125,
+     "alpha": 1.0,
+     "max_du_mm": 0.13988908094637056,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 2,
+     "rel_res": 0.004595848603946386,
+     "alpha": 9.5367431640625e-07,
+     "max_du_mm": 0.12713975199806538,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    }
+   ],
+   "top_residual_nodes": [
+    {
+     "node": 4741,
+     "g": 0.0025,
+     "skin": false,
+     "under_face": false,
+     "lat": -23.0,
+     "ele": -0.5,
+     "depth_from_probe_origin": -7.0,
+     "dist_skin": 1.0,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 35.6,
+     "dist_box_side": 8.0
+    },
+    {
+     "node": 4723,
+     "g": 0.0021,
+     "skin": false,
+     "under_face": false,
+     "lat": -23.0,
+     "ele": -0.5,
+     "depth_from_probe_origin": -5.0,
+     "dist_skin": 2.9,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 34.1,
+     "dist_box_side": 10.0
+    },
+    {
+     "node": 5422,
+     "g": 0.0013,
+     "skin": true,
+     "under_face": true,
+     "lat": -21.0,
+     "ele": -4.5,
+     "depth_from_probe_origin": -9.0,
+     "dist_skin": 2.0,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 36.1,
+     "dist_box_side": 6.0
+    },
+    {
+     "node": 4759,
+     "g": 0.001,
+     "skin": true,
+     "under_face": false,
+     "lat": -23.0,
+     "ele": -0.5,
+     "depth_from_probe_origin": -9.0,
+     "dist_skin": 1.0,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 37.2,
+     "dist_box_side": 6.0
+    },
+    {
+     "node": 5402,
+     "g": 0.001,
+     "skin": false,
+     "under_face": true,
+     "lat": -21.0,
+     "ele": -0.5,
+     "depth_from_probe_origin": -7.0,
+     "dist_skin": 0.1,
+     "dist_face_edge": 1.5,
+     "dist_cavity": 34.4,
+     "dist_box_side": 8.0
+    }
+   ]
+  },
+  {
+   "vein": "ts2_s0004_left",
+   "depth_top_mm": 38.0,
+   "diameter_mm": 15.0,
+   "stall": [
+    8.938,
+    1.117,
+    0.972
+   ],
+   "minJ": 0.35904513786469416,
+   "minJ_mat": "fat",
+   "minJ_dist_face_edge": 0.0,
+   "minJ_dist_skin": 1.5,
+   "low20": {
+    "fat": 20,
+    "under_face": 20,
+    "near_edge": 15,
+    "near_vein": 0
+   },
+   "wall_pairs_active": 0,
+   "newton": [
+    {
+     "it": 0,
+     "rel_res": 1.0,
+     "alpha": 1.0,
+     "max_du_mm": 0.03959475470404979,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 1,
+     "rel_res": 0.00028814504557181516,
+     "alpha": 9.5367431640625e-07,
+     "max_du_mm": 0.060635611425771875,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    }
+   ],
+   "top_residual_nodes": [
+    {
+     "node": 14172,
+     "g": 0.0003,
+     "skin": true,
+     "under_face": true,
+     "lat": 21.0,
+     "ele": 3.5,
+     "depth_from_probe_origin": -7.9,
+     "dist_skin": 1.4,
+     "dist_face_edge": 1.5,
+     "dist_cavity": 48.7,
+     "dist_box_side": 8.0
+    },
+    {
+     "node": 9709,
+     "g": 0.0,
+     "skin": true,
+     "under_face": true,
+     "lat": 5.0,
+     "ele": -0.5,
+     "depth_from_probe_origin": -3.9,
+     "dist_skin": 1.9,
+     "dist_face_edge": 4.5,
+     "dist_cavity": 42.0,
+     "dist_box_side": 12.0
+    },
+    {
+     "node": 11348,
+     "g": 0.0,
+     "skin": true,
+     "under_face": true,
+     "lat": 11.0,
+     "ele": -4.5,
+     "depth_from_probe_origin": -5.9,
+     "dist_skin": 0.9,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 44.4,
+     "dist_box_side": 10.0
+    },
+    {
+     "node": 14176,
+     "g": 0.0,
+     "skin": true,
+     "under_face": true,
+     "lat": 21.0,
+     "ele": -4.5,
+     "depth_from_probe_origin": -7.9,
+     "dist_skin": 0.9,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 48.7,
+     "dist_box_side": 8.0
+    },
+    {
+     "node": 14742,
+     "g": 0.0,
+     "skin": true,
+     "under_face": false,
+     "lat": 23.0,
+     "ele": 3.5,
+     "depth_from_probe_origin": -7.9,
+     "dist_skin": 0.9,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 49.4,
+     "dist_box_side": 8.0
+    }
+   ]
+  },
+  {
+   "vein": "ts2_s0028_right",
+   "depth_top_mm": 37.0,
+   "diameter_mm": 14.0,
+   "stall": [
+    5.125,
+    0.268,
+    0.995
+   ],
+   "minJ": 0.5743041643443771,
+   "minJ_mat": "fat",
+   "minJ_dist_face_edge": 0.0,
+   "minJ_dist_skin": 1.5,
+   "low20": {
+    "fat": 20,
+    "under_face": 14,
+    "near_edge": 17,
+    "near_vein": 0
+   },
+   "wall_pairs_active": 0,
+   "newton": [
+    {
+     "it": 0,
+     "rel_res": 1.0,
+     "alpha": 1.0,
+     "max_du_mm": 0.1270897508840766,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 1,
+     "rel_res": 0.000509832469693289,
+     "alpha": 1.0,
+     "max_du_mm": 0.07312849942449057,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 2,
+     "rel_res": 0.00025782598096581367,
+     "alpha": 9.5367431640625e-07,
+     "max_du_mm": 0.46328131950046225,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    }
+   ],
+   "top_residual_nodes": [
+    {
+     "node": 4341,
+     "g": 0.0001,
+     "skin": true,
+     "under_face": false,
+     "lat": -23.0,
+     "ele": -4.5,
+     "depth_from_probe_origin": -11.9,
+     "dist_skin": 1.4,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 52.0,
+     "dist_box_side": 6.0
+    },
+    {
+     "node": 4332,
+     "g": 0.0001,
+     "skin": false,
+     "under_face": false,
+     "lat": -23.0,
+     "ele": -2.5,
+     "depth_from_probe_origin": -9.9,
+     "dist_skin": 0.0,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 50.2,
+     "dist_box_side": 8.0
+    },
+    {
+     "node": 4340,
+     "g": 0.0,
+     "skin": true,
+     "under_face": false,
+     "lat": -23.0,
+     "ele": -2.5,
+     "depth_from_probe_origin": -11.9,
+     "dist_skin": 2.0,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 52.0,
+     "dist_box_side": 6.0
+    },
+    {
+     "node": 4960,
+     "g": 0.0,
+     "skin": false,
+     "under_face": true,
+     "lat": -21.0,
+     "ele": -2.5,
+     "depth_from_probe_origin": -9.9,
+     "dist_skin": 0.9,
+     "dist_face_edge": 1.5,
+     "dist_cavity": 49.4,
+     "dist_box_side": 8.0
+    },
+    {
+     "node": 4968,
+     "g": 0.0,
+     "skin": true,
+     "under_face": true,
+     "lat": -21.0,
+     "ele": -2.5,
+     "depth_from_probe_origin": -11.9,
+     "dist_skin": 2.8,
+     "dist_face_edge": 1.5,
+     "dist_cavity": 51.3,
+     "dist_box_side": 6.0
+    }
+   ]
+  },
+  {
+   "vein": "ts2_s0095_left",
+   "depth_top_mm": 29.0,
+   "diameter_mm": 18.0,
+   "stall": [
+    11.379,
+    2.689,
+    0.886
+   ],
+   "minJ": 0.3218411183769337,
+   "minJ_mat": "fat",
+   "minJ_dist_face_edge": 1.0,
+   "minJ_dist_skin": 1.1,
+   "low20": {
+    "fat": 20,
+    "under_face": 20,
+    "near_edge": 15,
+    "near_vein": 0
+   },
+   "wall_pairs_active": 0,
+   "newton": [
+    {
+     "it": 0,
+     "rel_res": 1.0,
+     "alpha": 1.0,
+     "max_du_mm": 0.09445690557096043,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 1,
+     "rel_res": 0.0006021186768158707,
+     "alpha": 1.0,
+     "max_du_mm": 0.026960240972933175,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 2,
+     "rel_res": 4.2710689233303246e-05,
+     "alpha": 1.0,
+     "max_du_mm": 0.037786933956835585,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": []
+    },
+    {
+     "it": 3,
+     "rel_res": 7.689486150868962e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.045560865719629175,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 4,
+     "rel_res": 7.689368821444203e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.04556166708108082,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 5,
+     "rel_res": 7.689251492707755e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.04556246854778276,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 6,
+     "rel_res": 7.689134166680479e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.04556327012006287,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 7,
+     "rel_res": 7.689016842979454e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.045564071797839584,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 8,
+     "rel_res": 7.688899520381725e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.04556487358096007,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 9,
+     "rel_res": 7.688782198747781e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.04556567546941364,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 10,
+     "rel_res": 7.688664880701516e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.045566477463490435,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    },
+    {
+     "it": 11,
+     "rel_res": 7.688547562613474e-05,
+     "alpha": 1.52587890625e-05,
+     "max_du_mm": 0.045567279563132085,
+     "full_step_inverts_tets": 0,
+     "full_step_inverted_mats": [
+      0,
+      0
+     ],
+     "first_rejections": [
+      "energy_up",
+      "energy_up",
+      "energy_up"
+     ]
+    }
+   ],
+   "top_residual_nodes": [
+    {
+     "node": 15088,
+     "g": 0.0001,
+     "skin": true,
+     "under_face": false,
+     "lat": 9.0,
+     "ele": 5.5,
+     "depth_from_probe_origin": -4.9,
+     "dist_skin": 1.9,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 33.1,
+     "dist_box_side": 4.0
+    },
+    {
+     "node": 15075,
+     "g": 0.0,
+     "skin": false,
+     "under_face": false,
+     "lat": 9.0,
+     "ele": 5.5,
+     "depth_from_probe_origin": -2.9,
+     "dist_skin": 0.1,
+     "dist_face_edge": 0.5,
+     "dist_cavity": 31.2,
+     "dist_box_side": 6.0
+    },
+    {
+     "node": 15089,
+     "g": 0.0,
+     "skin": true,
+     "under_face": true,
+     "lat": 9.0,
+     "ele": 3.5,
+     "depth_from_probe_origin": -4.9,
+     "dist_skin": 1.9,
+     "dist_face_edge": 1.5,
+     "dist_cavity": 32.8,
+     "dist_box_side": 4.0
+    },
+    {
+     "node": 15090,
+     "g": 0.0,
+     "skin": true,
+     "under_face": true,
+     "lat": 9.0,
+     "ele": 1.5,
+     "depth_from_probe_origin": -4.9,
+     "dist_skin": 2.0,
+     "dist_face_edge": 3.5,
+     "dist_cavity": 32.5,
+     "dist_box_side": 4.0
+    },
+    {
+     "node": 15784,
+     "g": 0.0,
+     "skin": false,
+     "under_face": true,
+     "lat": 11.0,
+     "ele": 1.5,
+     "depth_from_probe_origin": -2.9,
+     "dist_skin": 0.1,
+     "dist_face_edge": 3.5,
+     "dist_cavity": 30.9,
+     "dist_box_side": 6.0
+    }
+   ]
+  }
+ ]
+}

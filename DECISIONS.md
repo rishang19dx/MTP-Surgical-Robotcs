@@ -72,7 +72,7 @@ A chronological record of all architectural, research, algorithmic, and engineer
 | **Nov 2026** | `DEC-072` | Navigation With All 238 Eligible Training Patients (S3.1 extension) — PRE-REGISTERED | **H1c FAIL (0.290 vs 0.504 at N=64; under-fitted at 2M, train success 0.352)** |
 | **Nov 2026** | `DEC-073` | Large-Strain Vein Model: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated (3.275 kPa); gate not run (solid lumen stalls at AP ratio 0.36); superseded by DEC-075** |
 | **Nov 2026** | `DEC-074` | N = 238 Navigation: Sharded Env or Training Budget? (DEC-072 follow-up) — PRE-REGISTERED | **Pre-registered** |
-| **Nov 2026** | `DEC-075` | Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Pre-registered** |
+| **Nov 2026** | `DEC-075` | Cavity Lumen With Wall Contact: Calibration (Sato) and Held-Out Femoral Gate — PRE-REGISTERED | **Calibrated 4.886 kPa; gate FAIL: all 40 patient sweeps stall at ~1.5 N with AP ratio 0.96 (solver limit)** |
 
 ---
 
@@ -2818,4 +2818,16 @@ A chronological record of all architectural, research, algorithmic, and engineer
 * **Calibration result (28 Nov 2026, `results/vein_cavity_calibration_20261127_194750.md` / `.json`, commit 6c83f07)**:
   **converged**, fat modulus **4.886 kPa** (effective), AP ratio 0.5000 at 1.87 N. At 0.30–2.24 kPa the phantom
   collapses fully (ratio 0.03–0.04) before reaching 1.87 N, and the sweep then stalls with the walls in contact. So
-  those runs have no ratio at 1.87 N, and the bracket (3.14 / 4.39 kPa) lies above them. Gate and meshcheck running.
+  those runs have no ratio at 1.87 N, and the bracket (3.14 / 4.39 kPa) lies above them.
+* **Mesh check (reported, `results/vein_cavity_meshcheck_20261127_195715.md`)**: at h = 1 mm the calibrated phantom gives
+  AP ratio 0.432 at 1.87 N (0.50 at h = 2 mm); the fit is mesh-dependent by about 0.07 in ratio.
+* **Gate result (28 Nov 2026, `results/vein_cavity_gate_20261127_195716.md` / `.json`)**: **FAIL**. 56 training veins
+  tried, 40 measurable. **All 40 sweeps stalled** (solver failure) before full collapse, at a median 1.51 N and 9.7 mm
+  indentation (range 0.27–2.69 N), with the AP ratio still at a median **0.96** (0.82–0.99). No vein reached F50.
+  Median Fc = inf.
+* **Reading**: the cavity removes the lumen stall on the phantom, but in patient anatomy the solver fails much
+  earlier and away from the vein: the vessel has barely compressed when Newton stops. So this is a solver limit on
+  patient meshes, not a measured collapse pressure; no plausibility statement about veins follows from it. By the
+  registered consequence, the vein route closes with this model. A solver fix (e.g. finding which tets invert at the
+  stall) would be post-hoc and would need a new pre-registration. The training veins are now seen; the test veins are
+  still untouched.
